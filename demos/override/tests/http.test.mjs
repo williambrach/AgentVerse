@@ -1,0 +1,36 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createApp } from '../server/index.mjs';
+import { Investigation } from '../server/session.mjs';
+import { modelConfig } from '../server/interviews.mjs';
+
+test('HTTP access protects state and exports; malformed requests and cross-site writes are rejected', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'override-http-'));
+  const app = createApp({ investigation: new Investigation({ dataDir: dir, config: modelConfig({}) }), accessCode: 'colleague-code' });
+  await new Promise(resolve => app.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { await new Promise(resolve => app.close(resolve)); rmSync(dir, { recursive: true, force: true }); });
+  const base = `http://127.0.0.1:${app.address().port}`;
+  assert.equal((await fetch(`${base}/api/state`)).status, 401);
+  assert.equal((await fetch(`${base}/api/events`)).status, 401);
+  const login = await fetch(`${base}/api/access`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: 'colleague-code' }) });
+  assert.equal(login.status, 200);
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const headers = { 'Content-Type': 'application/json', Cookie: cookie };
+  assert.equal((await fetch(`${base}/api/start`, { method: 'POST', headers, body: '[]' })).status, 400);
+  assert.equal((await fetch(`${base}/api/start`, { method: 'POST', headers: { ...headers, 'Sec-Fetch-Site': 'cross-site' }, body: '{}' })).status, 403);
+  const start = await fetch(`${base}/api/start`, { method: 'POST', headers, body: '{}' });
+  assert.equal(start.status, 200);
+  const state = await start.json();
+  assert.equal(state.mode, 'rehearsal');
+  assert.equal(state.records.length, 0);
+  assert.equal(state.debrief, null);
+  const exported = await fetch(`${base}/api/events`, { headers: { Cookie: cookie } });
+  assert.equal(exported.status, 200);
+  assert.match(exported.headers.get('content-disposition'), /attachment/);
+  assert.equal((await exported.text()).trim().split('\n').length, 2);
+  assert.equal((await fetch(`${base}/.env`)).status, 404);
+  assert.equal((await fetch(`${base}/server/case.mjs`)).status, 404);
+});

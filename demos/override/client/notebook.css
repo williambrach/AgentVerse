@@ -1,0 +1,94 @@
+/* Paper, binding and motion layered over the original GBA dialogue palette. */
+.dossier {
+  position: relative;
+  isolation: isolate;
+  padding-left: 12px;
+  background: #c3cfce;
+  box-shadow: 0 0 0 2px #b6cbd2, 3px 4px 0 #fffdec, 4px 5px 0 #9eacb3,
+    6px 8px 0 #f2edd9, 7px 9px 0 #a6b2b6, 0 16px 30px -15px #233c5660;
+}
+.dossier::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 12px;
+  z-index: 2;
+  pointer-events: none;
+  border-right: 1px solid #73909d;
+  background: repeating-linear-gradient(0deg, transparent 0 22px, #f3f5de 22px 25px, #718b99 25px 27px, transparent 27px 49px), linear-gradient(90deg, #3c5d76, #6f8b9c 45%, #486c85);
+  box-shadow: 3px 0 6px #3b526522;
+}
+.dossier-top { min-height: 64px; padding: 12px 18px; gap: 10px; background: linear-gradient(#eaf0ef, #dce6e8); box-shadow: inset 0 2px #fffef0; }
+.notebook-label { min-width: 0; flex: 1; }
+.notebook-label > .eyebrow { display: block; font-size: 7px; letter-spacing: 1px; }
+#notebook-section { display: block; font: 10px var(--mono); color: #375a74; margin-top: 7px; }
+.notebook-index { align-self: stretch; display: grid; place-items: center; border: 1px solid #b9c8ca; background: #fffbed; box-shadow: 1px 2px 0 #b8c5c9; padding: 0 6px; font: 8px var(--mono); color: #6d8291; }
+.dossier-top .icon-button { border-radius: 3px; }
+#panel { position: relative; overflow: hidden; background: #d9d6c5; perspective: 1200px; }
+.notebook-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #aabebf transparent;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #b6bba52b, transparent 18px), repeating-linear-gradient(0deg, transparent 0 27px, #8aaca410 27px 28px), #fffdef;
+  box-shadow: inset 1px 0 #fff, inset -1px 0 #d3d7c8;
+}
+.page-turn-shade { position: absolute; inset: 0; background: linear-gradient(110deg, transparent 20%, #57667535 47%, #fffdea60 53%, transparent 78%); opacity: 0; pointer-events: none; }
+.notebook-page .panel-heading { position: relative; background: linear-gradient(110deg, #fffef2 60%, #f1efdc); }
+.notebook-page .panel-heading::after { content: ''; position: absolute; top: 0; right: 0; width: 22px; height: 22px; background: linear-gradient(225deg, #d4d9cc 49%, #f9f7e6 50%); filter: drop-shadow(-1px 2px 1px #384b6420); }
+.notebook-page .notebook-content { padding-left: 22px; padding-right: 22px; }
+.notebook-page .evidence-card {
+  box-shadow: inset 0 0 0 2px #fff, 1px 3px 0 #d9d8c9, 0 6px 12px -8px #38506855;
+  transition: transform 170ms ease, box-shadow 170ms ease, border-color 170ms ease;
+}
+.notebook-page .evidence-card::before { content: ''; position: absolute; top: -5px; right: 16px; width: 29px; height: 9px; background: #e8dab0a6; border: 1px solid #c6b98955; transform: rotate(3deg); pointer-events: none; }
+.notebook-page .evidence-card.selected { border-color: #5e8799; box-shadow: inset 3px 0 #648c9f, 1px 3px 0 #bdcfc5, 0 7px 14px -8px #38506855; }
+.notebook-page .evidence-card.selected::before { background: #acc8b9bd; border-color: #829f8f80; }
+.selected-banner { background: #e7efdc; border: 1px solid #a9bf9d; box-shadow: 1px 3px 0 #d5dec8; }
+.presented-record { position: relative; box-shadow: 1px 3px 0 #ccd5c5; transform-origin: top left; }
+.presented-record::after { content: ''; position: absolute; top: 5px; right: 7px; width: 7px; height: 15px; border: 2px solid #8a9e9d; border-radius: 5px; transform: rotate(14deg); pointer-events: none; }
+.presented-record b { padding-right: 16px; }
+.briefing-note { box-shadow: 1px 3px 0 #d8ddc7; transform: rotate(-.5deg); }
+.interview-transcript { gap: 17px; }
+.speech { position: relative; transform-origin: bottom left; }
+.speech.character { box-shadow: inset 0 0 0 2px #e1e9eb, 2px 3px 0 #c5d0cc; }
+.speech.investigator { box-shadow: 2px 3px 0 #d2dcc7; transform-origin: bottom right; }
+.speech.character::after { content: ''; position: absolute; left: -6px; bottom: 12px; width: 8px; height: 8px; background: #fffef0; border-left: 2px solid #7c98af; border-bottom: 2px solid #7c98af; transform: rotate(45deg); }
+.speech.waiting { border-style: dashed; background: #f6f6e8; box-shadow: none; }
+.speech.waiting::after { display: none; }
+.thinking { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.thinking .thinking-dots { display: inline-flex; gap: 4px; animation: none; }
+.thinking-dots i { width: 4px; height: 4px; display: block; background: #6c8d9c; animation: notebook-dot 1.2s ease-in-out infinite; }
+.thinking-dots i:nth-child(2) { animation-delay: .15s; }
+.thinking-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes notebook-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .35; } 30% { transform: translateY(-4px); opacity: 1; } }
+.dossier button { transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease; }
+.dossier button:not(:disabled):active { transform: translateY(2px); }
+.dossier .primary-button svg, .present-to svg { transition: transform 180ms ease; }
+.dossier .primary-button:not(:disabled):hover svg, .present-to button:hover svg { transform: translateX(3px); }
+.interview-compose textarea { transition: box-shadow 180ms ease, border-color 180ms ease; }
+.interview-compose textarea:focus { border-color: #527e9c; outline: 0; box-shadow: 0 0 0 3px #7ca2b629, inset 0 2px 4px #526e880c; }
+@media (hover: hover) {
+  .notebook-page .evidence-card:hover { transform: translateY(-2px); border-color: #91abb7; box-shadow: inset 0 0 0 2px #fff, 1px 4px 0 #d9d8c9, 0 10px 16px -9px #38506855; }
+  .dossier .primary-button:not(:disabled):hover { transform: translateY(-1px); box-shadow: inset 0 2px #799db4, 0 3px #b9c7c6; }
+}
+@media (max-width: 560px) {
+  .dossier-top { padding: 12px 14px; }
+  .notebook-page .notebook-content { padding: 20px 17px; }
+  .notebook-label > .eyebrow { font-size: 6px; }
+  .interview-transcript { padding: 20px 17px; }
+}
+@media (min-width: 901px) and (max-height: 850px) {
+  .notebook-page .interview-heading { padding: 14px 20px; }
+  .notebook-page .interview-compose { padding: 12px 18px 14px; }
+  .notebook-page .presented-record { max-height: 78px; }
+  .notebook-page .interview-transcript { min-height: 80px; padding: 16px 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dossier button, .dossier .evidence-card { transform: none !important; }
+}

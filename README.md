@@ -1,5 +1,7 @@
 <h1 align="center"> 🤖 AgentVerse 🪐 </h1>
 
+> **The Override demo — The Banana Mystery:** A 2–3 minute monkey detective game with original sprites. Find three clues, ask three monkeys, and decide who knowingly broke the picnic rule. [Run the standalone demo](demos/override/README.md). [Deploy the demo](demos/override/DEPLOY.md).
+
 <!--
 <h3 align="center">
     <p>A Framework for Multi-LLM Environment Simulation</p>

@@ -1,0 +1,136 @@
+import { test, expect } from '@playwright/test';
+
+async function fresh(page) {
+  await page.goto('/');
+  await page.locator('#begin-button').click();
+  await expect(page.locator('#intro')).toHaveCount(0);
+  await page.locator('#reset-button').click();
+  await page.locator('#confirm-reset').click();
+  await expect(page.locator('#confirm-reset')).toHaveCount(0);
+}
+async function go(page, location, heading) {
+  await page.locator(`nav [data-go="${location}"]`).click();
+  await expect(page.locator('#panel h2')).toHaveText(heading, { timeout: 12_000 });
+}
+
+test('walk the grove, find three clues, ask all monkeys, submit a quick verdict, export and reset', async ({ page }) => {
+  const errors = [], failedAssets = [], assetRequests = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('response', response => { if (response.url().includes('/assets/') && response.status() >= 400) failedAssets.push(response.url()); });
+  page.on('request', request => { if (request.url().includes('/assets/')) assetRequests.push(request.url()); });
+  await fresh(page);
+  await expect(page.locator('canvas')).toBeVisible();
+  await expect(page.locator('#mode-badge')).toHaveText('SCRIPTED REHEARSAL');
+  await go(page, 'replay', 'Follow the banana trail.');
+  await page.locator('#reveal-button').click();
+  await expect(page.locator('.evidence-card')).toHaveCount(3);
+  await expect(page.locator('#reveal-button')).toHaveCount(0);
+  await page.locator('#record-message button').click();
+  await go(page, 'momo', 'Momo');
+  await expect(page.locator('#present-evidence')).toHaveValue('message');
+  await page.locator('[data-quick-question]').click();
+  await expect(page.locator('.speech.character').last()).toContainText('made up the permission');
+  await page.getByRole('button', { name: 'Next: ask Pip' }).click();
+  await expect(page.locator('#panel h2')).toHaveText('Pip', { timeout: 12_000 });
+  await page.locator('[data-quick-question]').click();
+  await expect(page.locator('.speech.character').last()).toContainText('Momo told me');
+  await page.locator('#question').fill('So you believed Momo had permission?');
+  await page.locator('#present-evidence').selectOption('bell');
+  await expect(page.locator('#question')).toHaveValue('So you believed Momo had permission?');
+  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await expect(page.locator('.speech.investigator')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Next: ask Nori' }).click();
+  await expect(page.locator('#panel h2')).toHaveText('Nori', { timeout: 12_000 });
+  await page.locator('[data-quick-question]').click();
+  await expect(page.locator('.speech.character').last()).toContainText('assumed snack time');
+  await page.screenshot({ path: 'test-results/banana-interview-desktop.png', fullPage: true });
+  await page.getByRole('button', { name: 'Ready to make your guess?' }).click();
+  await expect(page.locator('#panel h2')).toHaveText('Who knew it was wrong?', { timeout: 12_000 });
+  await page.locator('[name="suspect"][value="momo"]').check();
+  await page.locator('#confidence').selectOption('95');
+  // The fast demo path deliberately leaves both optional fields empty.
+  await page.getByRole('button', { name: 'See what happened' }).click();
+  await expect(page.locator('#panel h2')).toHaveText('Momo made up the permission.');
+  await expect(page.locator('.verdict-summary')).toContainText('You spotted');
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#debrief-export').click();
+  const download = await downloadPromise;
+  const stream = await download.createReadStream();
+  let text = '';
+  for await (const chunk of stream) text += chunk;
+  const events = text.trim().split('\n').map(JSON.parse);
+  expect(events.every(e => e.caseVersion === 'banana-authored-v1.0.0')).toBe(true);
+  expect(events.filter(e => e.type === 'story_revealed')).toHaveLength(1);
+  expect(events.some(e => e.type === 'interview_answer' && e.selectedEvidence === 'bell')).toBe(true);
+  expect(events.find(e => e.type === 'verdict_submitted').verdict).toMatchObject({ suspect: 'momo', explanation: '', evidenceIds: [], confidence: 95 });
+  await page.screenshot({ path: 'test-results/banana-debrief-desktop.png', fullPage: true });
+  await page.locator('#debrief-reset').click();
+  await page.locator('#confirm-reset').click();
+  await expect(page.locator('#panel h2')).toHaveText('A bunch of trouble.');
+  const state = await (await page.request.get('/api/state')).json();
+  expect(state.session.id).not.toBe(events[0].sessionId);
+  expect(state.session.interviews).toEqual({ momo: [], pip: [], nori: [] });
+  expect(state.records).toEqual([]);
+  expect(errors).toEqual([]);
+  expect(failedAssets).toEqual([]);
+  expect(assetRequests.some(url => url.includes('pokemon'))).toBe(false);
+  expect(assetRequests.some(url => url.includes('banana/monkeys.png'))).toBe(true);
+});
+
+test('mobile, reduced motion, failed interview retry and server restart recovery', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await fresh(page);
+  await expect(page.locator('#skip-walking')).toBeChecked();
+  await go(page, 'replay', 'Follow the banana trail.');
+  await page.locator('#reveal-button').click();
+  await go(page, 'pip', 'Pip');
+  await page.locator('#question').fill('Who told you the keeper said yes?');
+  await page.route('**/api/interview', route => route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'Provider unavailable. Please retry.' }) }));
+  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('Provider unavailable');
+  await expect(page.locator('#question')).toHaveValue('Who told you the keeper said yes?');
+  await page.unroute('**/api/interview');
+  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await expect(page.locator('.speech.investigator')).toHaveCount(1);
+  await expect(page.locator('#toast')).toBeHidden();
+  expect(await page.locator('.dossier').evaluate(el => el.getAnimations({ subtree: true }).length)).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth === innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/banana-interview-mobile.png', fullPage: true });
+  const prior = await (await page.request.get('/api/state')).json();
+  await page.route('**/api/state', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ...prior, session: null, records: [], debrief: null }) }));
+  await page.route('**/api/visit', route => route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Start the case first.' }) }));
+  await page.locator('nav [data-go="report"]').click();
+  await expect(page.locator('#begin-button')).toHaveText('Let’s investigate');
+  await expect(page.locator('#panel h2')).toHaveText('A bunch of trouble.');
+});
+
+test('compact notebook keeps drafts and reading position when showing a clue', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await fresh(page);
+  await page.locator('#skip-walking').check();
+  await go(page, 'replay', 'Follow the banana trail.');
+  await page.locator('#reveal-button').click();
+  await go(page, 'evidence', 'Show them what you found.');
+  const record = page.locator('#record-bell');
+  await record.scrollIntoViewIfNeeded();
+  const scroller = page.locator('.notebook-page');
+  const before = await scroller.evaluate(el => el.scrollTop);
+  expect(before).toBeGreaterThan(100);
+  await record.getByRole('button').click();
+  await expect(record).toHaveClass(/selected/);
+  expect(await scroller.evaluate(el => el.scrollTop)).toBeGreaterThan(before - 50);
+  await expect(record).toBeInViewport();
+  await go(page, 'pip', 'Pip');
+  await page.locator('#question').fill('Did you check with the keeper?');
+  await page.locator('#present-evidence').selectOption('rule');
+  await expect(page.locator('#question')).toHaveValue('Did you check with the keeper?');
+  await go(page, 'nori', 'Nori');
+  await go(page, 'pip', 'Pip');
+  await expect(page.locator('#question')).toHaveValue('Did you check with the keeper?');
+  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await expect(page.locator('.speech.investigator')).toHaveCount(1);
+  await expect(page.locator('#question')).toHaveValue('');
+  await expect.poll(() => scroller.evaluate(el => el.scrollTop)).toBe(0);
+  expect(await scroller.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+});

@@ -1,0 +1,86 @@
+/* Handheld RPG dialogue frames. Original character art is in banana.css. */
+:root {
+  --ink: #30465a;
+  --paper: #fffef0;
+  --muted: #697987;
+  --line: #bbc9cf;
+  --green: #376c91;
+  background: #e5eddd;
+  color: var(--ink);
+}
+.topbar { background: #faf9ec; border-bottom: 3px solid #829daa; }
+.wordmark { color: #304d65; }
+.mark { border-radius: 50%; border: 3px solid #31465b; width: 34px; height: 34px; font-size: 0; background: linear-gradient(#d76c61 0 44%, #31465b 44% 56%, #fffef0 56%); }
+.mark span { left: 9px; top: 9px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #31465b; background: #fffef0; transform: none; }
+h1, h2, h3, .wordmark, .room-nav button > span { font-family: var(--mono); }
+h1 { font-size: 25px; letter-spacing: -1.3px; }
+.world-column .eyebrow, .eyebrow { color: #667e8f; }
+.world-heading { margin-bottom: 22px; }
+.station-frame { border: 4px solid #526e88; border-radius: 7px; box-shadow: 0 0 0 2px #f8faf0, 0 0 0 4px #a5b9c1; background: #78b850; }
+.station-topline, .station-bottomline { background: #e8eef0; color: #3e5870; border-color: #9bafbd; box-shadow: inset 0 2px #fffef0; padding: 12px 17px; }
+.station-topline { border-bottom-width: 3px; }
+.station-bottomline { border-top-width: 3px; }
+.station-topline #elapsed, .floor-label { color: #4b6982; }
+.live-dot { background: #729c54; }
+#station canvas { image-rendering: pixelated; }
+.dossier { border: 4px solid #526e88; border-radius: 7px; box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px #b6cbd2; }
+.dossier-top { background: #e8eef0; border-bottom: 2px solid #a9bcca; }
+.panel-heading { background: #fffef0; border-bottom-color: #cbd5d4; }
+.panel-heading h2 { font-size: 22px; letter-spacing: -1px; color: #304d65; }
+.panel-heading > p { color: #657682; }
+.room-nav button { border: 2px solid #9cafb9; border-radius: 5px; box-shadow: inset 0 2px #fff; background: #fffef0; color: #49647c; }
+.room-nav button:hover { border-color: #597e99; background: #f3f8e8; }
+.room-nav button.active { border-color: #527e9c; background: #dcebf1; color: #2c5875; box-shadow: inset 0 0 0 2px #f8fcf3; }
+.room-nav small { color: #6c8390; font-family: 'DM Sans', sans-serif; }
+.primary-button { background: #426f91; border: 2px solid #2f536f; border-radius: 5px; box-shadow: inset 0 2px #799db4, 0 2px #b9c7c6; color: #fffef0; }
+.primary-button:hover { background: #315e80; }
+.secondary-button { border: 2px solid #8da6b7; color: #456780; background: #f7f9ed; border-radius: 5px; }
+.secondary-button:hover { background: #e2edf0; }
+.briefing-note { background: #e9f0da; border-left-color: #7e9e63; }
+.briefing-note p { color: #4b624a; }
+.task-list b { color: #486277; }
+.task-list span { color: #72818a; }
+.evidence-card { background: #fffef5; border: 2px solid #c1cecf; border-radius: 4px; box-shadow: inset 0 0 0 2px #fff; }
+.evidence-card h3 { font-size: 12px; color: #45617a; }
+.evidence-card > p { color: #5c7180; }
+.evidence-card.selected { border-color: #648c9f; background: #edf6ee; box-shadow: inset 3px 0 #648c9f; }
+.evidence-select { color: #527991; }
+.record-source { color: #7f919a; }
+.chapter-heading h3 { color: #42647c; font-size: 15px; }
+.interview-heading { background: #f7f8e8; border-bottom: 2px solid #b5c9d0; }
+.interview-heading h2 { color: #324f67; font-size: 25px; }
+.portrait, .portrait.pip, .portrait.nori { height: 76px; width: 70px; flex-shrink: 0; border: 2px solid #8ca7b2; border-radius: 3px; background: linear-gradient(#c5def0 55%, #a6ce81 55%); box-shadow: inset 0 0 0 3px #f7f9e8; }
+.pixel-person::before, .pixel-person::after { display: none; }
+.speech { border-radius: 5px; }
+.speech.character { background: #fffef0; border: 2px solid #7c98af; box-shadow: inset 0 0 0 2px #e1e9eb; color: #425c72; }
+.speech.investigator { background: #e7f0de; border-color: #b5c7a6; color: #526a45; }
+.speech > span { color: #71889a; }
+.interview-compose { background: #e8eef0; border-top: 3px solid #9eb4c3; box-shadow: inset 0 2px #fffef0; }
+.interview-compose > label { color: #5c7b91; }
+.interview-compose select, select, textarea { border-color: #a4bac7; color: #4d687d; background: #fffef0; }
+.interview-compose textarea { border: 2px solid #829fb3; }
+.interview-compose .presented-record { background: #f3f6e5; border-left-color: #8ea775; color: #6e835a; }
+.suggestions button { border-color: #afc4ce; background: #f5f8ed; color: #648497; }
+.compose-bottom small { color: #7c919e; }
+.report-form > label, .finding h3, .report-form legend { color: #4e7087; }
+.finding h3 { font-size: 14px; }
+.report-form textarea, .report-form select { background: #fffef4; }
+.report-form input[type=range] { accent-color: #507e9e; }
+.intro-card, .reset-card { background: #fffef0; border: 5px solid #587994; box-shadow: inset 0 0 0 3px #e0ebef, 0 0 0 3px #fafbed, 0 15px 60px #193b4730; border-radius: 8px; }
+.intro-card h2 { font-size: 42px; color: #355773; letter-spacing: -2px; }
+.intro-card h2 > span { color: #d67562; }
+.intro-lead { color: #617480; }
+.intro-lead em { color: #375d78; border-bottom-color: #93b3c0; }
+.modal-shade { background: #30484678; backdrop-filter: blur(3px); }
+.world-footer, .app-footer { color: #718475; }
+@media (max-width: 1200px) {
+  .world-heading h1 { font-size: 21px; }
+  .panel-heading h2 { font-size: 20px; }
+}
+@media (max-width: 560px) {
+  .station-frame, .dossier { border-width: 3px; }
+  .station-topline, .station-bottomline { padding: 10px 11px; }
+  .intro-card h2 { font-size: 35px; }
+  .wordmark { font-size: 10px; }
+  .world-heading h1 { font-size: 20px; }
+}
