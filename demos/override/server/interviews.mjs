@@ -1,33 +1,82 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { characters, knowledge, records, caseVersion, promptVersion } from './case.mjs';
+import { InterviewProviderError } from './errors.mjs';
 
-export class InterviewProviderError extends Error {
-  constructor(code, message, diagnostics = {}) {
-    super(message);
-    this.name = 'InterviewProviderError';
-    this.code = code;
-    this.diagnostics = diagnostics;
-  }
-}
+export { InterviewProviderError };
 
 function integerSetting(value, fallback, name, minimum, maximum) {
-  if (value === undefined || value === '') return fallback;
+  if (value === undefined || value === '' || value === null) return fallback;
   const number = Number(value);
   if (!Number.isInteger(number) || number < minimum || number > maximum) throw new Error(`${name} must be an integer between ${minimum} and ${maximum}.`);
   return number;
 }
 
+function checkBaseUrl(raw, label = 'The model endpoint') {
+  const baseUrl = String(raw).replace(/\/$/, '');
+  let parsed;
+  try { parsed = new URL(baseUrl); } catch { throw new Error(`${label} must have a valid baseUrl.`); }
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname))) {
+    throw new Error(`${label} must use HTTPS (HTTP is allowed for a local model).`);
+  }
+  return baseUrl;
+}
+
+// The hash covers everything but the key, so two machines with different keys but the same routing agree.
+const hashEndpoints = endpoints => createHash('sha256')
+  .update(JSON.stringify(endpoints.map(({ name, baseUrl, model, keyEnv, maxInFlight, tokenParam, timeoutMs, temperature }) => ({ name, baseUrl, model, keyEnv, maxInFlight, tokenParam, timeoutMs, temperature }))))
+  .digest('hex').slice(0, 16);
+
+export function loadEndpoints(env = process.env, readFile = path => readFileSync(path, 'utf8')) {
+  const path = env.OVERRIDE_ENDPOINTS;
+  let list;
+  try { list = JSON.parse(readFile(path)); } catch (error) { throw new Error(`OVERRIDE_ENDPOINTS could not be read as JSON (${path}): ${error.code || error.name}.`); }
+  if (!Array.isArray(list) || !list.length) throw new Error('OVERRIDE_ENDPOINTS must be a non-empty JSON array.');
+  const names = new Set();
+  const endpoints = list.map((raw, index) => {
+    if (!raw || typeof raw !== 'object') throw new Error(`Endpoint #${index + 1} must be an object.`);
+    const { name, model, keyEnv } = raw;
+    if (typeof name !== 'string' || !/^[A-Za-z0-9_-]{1,32}$/.test(name)) throw new Error(`Endpoint #${index + 1} needs a name of letters, digits, - or _.`);
+    if (names.has(name)) throw new Error(`Endpoint name ${name} is used twice.`);
+    names.add(name);
+    const label = `Endpoint ${name}`;
+    if (typeof model !== 'string' || !model.trim()) throw new Error(`${label} needs a model.`);
+    if (typeof keyEnv !== 'string' || !keyEnv.trim()) throw new Error(`${label} needs keyEnv, the name of its key variable.`);
+    const key = env[keyEnv]?.trim();
+    if (!key) throw new Error(`${label}: environment variable ${keyEnv} is not set.`);
+    const tokenParam = raw.tokenParam ?? 'max_completion_tokens';
+    if (!['max_completion_tokens', 'max_tokens'].includes(tokenParam)) throw new Error(`${label}: tokenParam must be max_completion_tokens or max_tokens.`);
+    const temperature = raw.temperature ?? null;
+    if (temperature !== null && !(typeof temperature === 'number' && temperature >= 0 && temperature <= 2)) throw new Error(`${label}: temperature must be a number between 0 and 2.`);
+    return {
+      name, baseUrl: checkBaseUrl(raw.baseUrl ?? '', label), model: model.trim(), key, keyEnv,
+      maxInFlight: integerSetting(raw.maxInFlight, 50, `${label}: maxInFlight`, 1, 1000), tokenParam,
+      timeoutMs: integerSetting(raw.timeoutMs, 25_000, `${label}: timeoutMs`, 1000, 120_000), temperature,
+    };
+  });
+  return { endpoints, hash: hashEndpoints(endpoints) };
+}
+
 export function modelConfig(env = process.env) {
   const key = env.OVERRIDE_LLM_API_KEY?.trim();
   const model = env.OVERRIDE_LLM_MODEL?.trim();
-  if (Boolean(key) !== Boolean(model)) throw new Error('Set both OVERRIDE_LLM_API_KEY and OVERRIDE_LLM_MODEL, or leave both empty for rehearsal mode.');
-  const baseUrl = (env.OVERRIDE_LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-  const parsed = new URL(baseUrl);
-  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname))) {
-    throw new Error('The model endpoint must use HTTPS (HTTP is allowed for a local model).');
-  }
   const maxCompletionTokens = integerSetting(env.OVERRIDE_LLM_MAX_COMPLETION_TOKENS, 2048, 'OVERRIDE_LLM_MAX_COMPLETION_TOKENS', 256, 8192);
   const timeoutMs = integerSetting(env.OVERRIDE_LLM_TIMEOUT_MS, 60_000, 'OVERRIDE_LLM_TIMEOUT_MS', 1000, 120_000);
-  return { mode: key ? 'live' : 'rehearsal', key, model: model || null, baseUrl, promptVersion, maxCompletionTokens, timeoutMs };
+  const maxInFlight = integerSetting(env.OVERRIDE_LLM_MAX_IN_FLIGHT, 200, 'OVERRIDE_LLM_MAX_IN_FLIGHT', 1, 10_000);
+  const failover = {
+    failures: integerSetting(env.OVERRIDE_LLM_FAILOVER_FAILURES, 5, 'OVERRIDE_LLM_FAILOVER_FAILURES', 1, 1000),
+    windowMs: integerSetting(env.OVERRIDE_LLM_FAILOVER_WINDOW_MS, 30_000, 'OVERRIDE_LLM_FAILOVER_WINDOW_MS', 1000, 600_000),
+  };
+  const shared = { promptVersion, maxCompletionTokens, timeoutMs, maxInFlight, failover };
+  if (env.OVERRIDE_ENDPOINTS) {
+    const { endpoints, hash } = loadEndpoints(env);
+    return { mode: 'live', endpoints, endpointsHash: hash, model: endpoints[0].model, ...shared };
+  }
+  if (Boolean(key) !== Boolean(model)) throw new Error('Set both OVERRIDE_LLM_API_KEY and OVERRIDE_LLM_MODEL, or leave both empty for rehearsal mode.');
+  const baseUrl = checkBaseUrl(env.OVERRIDE_LLM_BASE_URL || 'https://api.openai.com/v1');
+  if (!key) return { mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, ...shared };
+  const endpoints = [{ name: 'a', baseUrl, model, key, keyEnv: 'OVERRIDE_LLM_API_KEY', maxInFlight, tokenParam: 'max_completion_tokens', timeoutMs, temperature: null }];
+  return { mode: 'live', endpoints, endpointsHash: hashEndpoints(endpoints), model, ...shared };
 }
 
 export function buildMessages(session, characterId, question) {
@@ -54,52 +103,11 @@ ${visible.map(r => `${r.id} | ${r.source} | ${r.text}`).join('\n')}`;
   ];
 }
 
-export async function answerInterview(config, session, characterId, question, fetcher = fetch, onAttempt = () => {}) {
-  if (config.mode === 'rehearsal') return rehearsalAnswer(session, characterId, question);
-  const initialBudget = config.maxCompletionTokens ?? 2048;
-  const budgets = [...new Set([initialBudget, Math.min(initialBudget * 2, 8192)])];
-  const messages = buildMessages(session, characterId, question);
-  // One deadline covers both attempts. Reasoning models use this completion
-  // budget for hidden reasoning as well as the visible character response.
-  const signal = AbortSignal.timeout(config.timeoutMs ?? 60_000);
-  for (const [index, budget] of budgets.entries()) {
-    let response;
-    let data;
-    const started = Date.now();
-    try {
-      response = await fetcher(`${config.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.key}` },
-        body: JSON.stringify({ model: config.model, messages, max_completion_tokens: budget }),
-        signal,
-      });
-      if (response.ok) data = await response.json();
-    } catch (error) {
-      if (signal.aborted || ['TimeoutError', 'AbortError'].includes(error.name)) throw new InterviewProviderError('timeout', 'The interview service took too long to answer. Your question is saved; please retry.');
-      if (error instanceof SyntaxError) throw new InterviewProviderError('invalid_response', 'The interview service returned an unreadable response. Please retry.');
-      throw new InterviewProviderError('connection_failed', 'Could not connect to the interview service. Check the server connection and retry.');
-    }
-    if (!response.ok) {
-      const diagnostics = { providerStatus: response.status };
-      if ([401, 403].includes(response.status)) throw new InterviewProviderError('credentials_rejected', `The interview service rejected the server’s API credentials (HTTP ${response.status}). Update the configured key and retry.`, diagnostics);
-      if (response.status === 429) throw new InterviewProviderError('rate_limited', 'The interview service is busy or rate-limited (HTTP 429). Please retry shortly.', diagnostics);
-      throw new InterviewProviderError('request_failed', `The interview service returned HTTP ${response.status}. ${response.status >= 500 ? 'It may be temporarily unavailable; please retry.' : 'Check the configured endpoint and model.'}`, diagnostics);
-    }
-    const choice = data?.choices?.[0];
-    const answer = choice?.message?.content;
-    const finishReason = ['stop', 'length', 'content_filter', 'tool_calls'].includes(choice?.finish_reason) ? choice.finish_reason : null;
-    const completionTokens = Number.isInteger(data?.usage?.completion_tokens) ? data.usage.completion_tokens : null;
-    const diagnostics = { providerStatus: response.status, finishReason, completionTokens };
-    // Research metadata contains only counts/status, never provider bodies or
-    // hidden reasoning. Each attempt is linked to the original question.
-    onAttempt({ ...diagnostics, attempt: index + 1, completionTokenLimit: budget, durationMs: Date.now() - started });
-    if (finishReason === 'length') {
-      if (index + 1 < budgets.length) continue;
-      throw new InterviewProviderError('completion_limit', 'The model reached its response limit before finishing. Please retry or increase the server’s interview token limit.', diagnostics);
-    }
-    if (typeof answer !== 'string' || !answer.trim() || answer.length > 6000) throw new InterviewProviderError('empty_or_invalid_answer', 'The interview service returned an unusable answer. Please retry your question.', diagnostics);
-    return answer.trim();
-  }
+export async function answerInterview(config, session, characterId, question, router, context = {}) {
+  if (config.mode === 'rehearsal') return { answer: rehearsalAnswer(session, characterId, question), provenance: null };
+  const { sessionId, questionEventId, onAttempt } = context;
+  const { content, provenance } = await router.complete({ messages: buildMessages(session, characterId, question), sessionId, questionEventId, onAttempt });
+  return { answer: content, provenance };
 }
 
 // Explicitly labeled, deterministic rehearsal. This is never a silent live fallback.
