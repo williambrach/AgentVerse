@@ -4,7 +4,7 @@ A short, 2–3 minute detective game for AgentVerse: **The Banana Mystery**. The
 
 The fast path needs one clue reveal, three one-click interview questions, and one suspect choice. Answers are prompted to stay around 15–40 words. Confidence has three choices; a written explanation and clue citation are optional. Free-text follow-ups and presenting evidence remain available. The intended 2–3 minute duration includes reading; live model latency and extra questions can make a run longer.
 
-**This is an authored demonstration, not a validated research case or a recorded agent run.** There is one shared active investigation per server. Colleagues should play sequentially and use **New case** or **Next investigator** between sessions.
+**This is an authored demonstration, not a validated research case or a recorded agent run.** Each browser gets its own session (an HttpOnly `override_session` cookie), so colleagues can play at the same time. Choose a case on the intro screen, or open `?case=<id>` to go straight to one.
 
 ## Run locally
 
@@ -48,33 +48,40 @@ Each live request includes that character’s staged knowledge, the revealed rec
 
 ## Play
 
-1. Start the mystery and inspect the banana basket on the picnic blanket.
+1. Pick a case on the intro screen (or use `?case=<id>`), start the mystery, and inspect the banana basket on the picnic blanket.
 2. Reveal all three clues: the keeper’s rule, Momo’s message, and the keeper’s account.
 3. Ask Momo, Pip, and Nori. **Quick question** submits immediately; **Next: ask…** takes you to the next monkey. You can also type a question or show a clue.
 4. Choose a suspect (or Nobody / Not sure), set confidence, and see the short debrief. Written reasoning and a clue citation are optional.
-5. Use **Play again** for the next colleague. Previous research logs remain on disk.
+5. Use **Play again** for the next colleague. The reset dialog has a case select, so the next game can be a different case. Previous research logs remain on disk.
 
 Click a monkey, signpost, or destination to walk there. WASD/arrows and E/Space also work. **Skip walking** jumps directly to a destination and is enabled initially for reduced-motion preferences. Momo, Pip, and Nori blink and make small gestures on separate idle cycles, and react when you approach. Reduced-motion preferences disable these animations. The notebook retains its page turns and evidence feedback; reduced-motion preferences disable those effects.
 
-The original ten-minute story is archived in `server/cases/override-v1.mjs`. The new case ID is `banana-mystery`, version `banana-authored-v1.0.0`, prompt version `banana-interview-v1`. Old and new sessions have different case versions in their logs. Switching to this story starts a fresh active session.
+## Writing a case
+
+A case is one module in `server/cases/`, registered in `server/cases/index.mjs`. `banana-mystery.mjs` and `banana-control.mjs` are the examples to copy. The required fields and the allowlist of what reaches the browser are in the "Decided" section of [the cases spec](../../docs/plans/2026-10-26-override-cases.spec.md); they are not repeated here.
+
+- Set `status: 'draft'` while writing. Draft cases are hidden unless the server runs with `OVERRIDE_DEV_TOOLS=1` (forced off when `NODE_ENV=production`).
+- Run `npm run cases:prompt -- <case> <character> --chapter 1 [--evidence id] [--question "..."]` to print the exact prompt a character receives.
+- Keep the character ids `momo`, `pip`, and `nori`; sprites and CSS key on them.
+- `server/cases/override-v1.mjs` stays archived and unregistered. The live cases are `banana-mystery` and `banana-control`.
 
 ## Research records
 
 The server writes append-only JSONL files to `data/<session-id>.jsonl`, or to `OVERRIDE_DATA_DIR` if set. These files are outside the served directory. **Export session** downloads the current session; older files remain on disk after reset.
 
-Every event includes `schemaVersion`, `eventId`, `sequence`, `timestamp`, `elapsedMs`, `sessionId`, `caseId`, `caseVersion`, `promptVersion`, `revealedPosition`, `selectedEvidence`, `character`, `question`, `answer`, interview `mode`, and `model`. Fields that do not apply are `null`. Question and answer events are linked by `questionEventId`; failures are recorded separately. Additional payloads record revealed evidence IDs, locations, and the complete submitted verdict.
+Every event includes `schemaVersion`, `eventId`, `sequence`, `timestamp`, `elapsedMs`, `sessionId`, `caseId`, `caseVersion`, `promptVersion`, `contentHash`, `revealedPosition`, `selectedEvidence`, `character`, `question`, `answer`, interview `mode`, and `model`. Fields that do not apply are `null`. Question and answer events are linked by `questionEventId`; failures are recorded separately. `session_started` also records the `assignment` of the case. Additional payloads record revealed evidence IDs, locations, and the complete submitted verdict.
 
 Recorded events: session start/reset, briefing viewed, location visited, story revealed, evidence selected, interview question/answer/failure, verdict submitted, and debrief viewed. Frame-by-frame player coordinates and unsent text are intentionally not recorded. The UI explains that investigation actions and dialogue are recorded.
 
 Live responses also emit `interview_provider_response`, linked by `questionEventId`, with the attempt number, completion token limit, HTTP status, finish reason, completion token usage, and duration. Provider bodies and internal reasoning are never included in these diagnostics.
 
-One server process owns the active state in memory. JSONL logs survive restart; active progress does not resume after restart. Requests carry a session ID and revision to reject stale writes from another tab. Mutations are locked while a live answer is pending. The demo has a technical limit of 40 questions per character and 1,200 characters per question; study budgets are not implemented.
+One server process serves every player. Each browser’s game lives in memory while active and is rebuilt from its JSONL log after a restart or after about 30 idle minutes, so progress survives both. Requests carry a session ID and revision to reject stale writes from another tab. Mutations are locked while a live answer is pending. The demo has a technical limit of 40 questions per character and 1,200 characters per question; study budgets are not implemented.
 
 ## Share with colleagues
 
 Follow the [deployment guide](DEPLOY.md) for Render setup, environment variables, persistent storage, verification, updates, rollback, and a local Docker smoke test.
 
-Run one instance and schedule colleagues sequentially: everyone shares the same investigation. A persistent disk preserves logs, but active progress and sign-ins reset when the server restarts.
+Run one instance; sessions are per browser. A persistent disk preserves logs, but active progress and sign-ins reset when the server restarts.
 
 ## Validate
 
@@ -89,7 +96,8 @@ If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:e
 
 ## Structure and artwork
 
-- `server/case.mjs`: the three clues, character-specific knowledge, and short debrief; never imported into the client.
+- `server/cases/` and `server/cases.mjs`: one module per case (clues, character-specific knowledge, debrief), the registry, and the `defineCase` helpers; never imported into the client.
+- `scripts/case-prompt.mjs`: prints the exact interview prompt for a case and character.
 - `server/session.mjs`: authoritative case state, quick verdict validation, and research logs. Verdicts record `suspect`, `suspects`, confidence, and optional explanation/citations; they do not infer classifications for unselected monkeys.
 - `server/interviews.mjs`: the custom SDU endpoint adapter, short-answer prompts, and explicit rehearsal replies.
 - `server/index.mjs`: API, optional shared access code, and production static serving.

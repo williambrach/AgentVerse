@@ -1,5 +1,7 @@
 # Plan: multiple cases for The Override
 
+Status: Steps 0–4 implemented on `superlite/override-cases` (2026-10-26).
+
 Revised 2026-10-26. This replaces [LEVELS_PLAN.md](LEVELS_PLAN.md), which stays for reference. The review that produced this version is summarised in [What changed](#what-changed-and-why).
 
 ## Goal
