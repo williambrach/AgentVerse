@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "start": "node --env-file-if-exists=.env server/index.mjs",
     "test": "node --test tests/*.test.mjs",
+    "loadtest": "node tests/loadtest.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": { "phaser": "3.90.0" },
