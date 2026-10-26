@@ -1,0 +1,32 @@
+- start 29a0d90
+- unblocked: dispatched T0 T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 at 15:09:03; waiting on fixes: none
+- Ruling: the synthesized Wave 0 brief has an empty stub spec and the test command and .gitignore already exist, so it is a no-op; the plan's T0 (fixture copy) runs as a normal haiku task - cost if wrong: none
+- Ruling: port tasks copy from the prototype worktree path (not a branch), because the prototype's checkpoints stay uncommitted until the user says yes to autocommit - cost if wrong: none while the sandbox exists; it is discarded only after the port
+- tests fast passed=5 failed=0 skipped=0 seconds=0.2
+- checkpoint T0 58841a192e fixture
+- checkpoint T1 3f2c7bf1b0 cases helpers + registry
+- tests fast passed=3 failed=0 skipped=0 seconds=0.2
+- checkpoint T2 924e57a0e1 banana-control
+- tests fast passed=26 failed=0 skipped=0 seconds=0.3
+- checkpoint T3 226b7dcd56 session + interviews + dev option
+- note: T3 ported 25 session tests plus the dev test (26); expected count in the brief was off by one - no action
+- checkpoint T5 92df1ff51e client rendering
+- checkpoint T8 de2407a9ac cases:prompt script
+- checkpoint T4 32a86f556d routes + dev gating
+- Ruling: T6 poll skipped (byte copy, any idle sonnet qualifies); sent to the idle fresh implementer - cost if wrong: none
+- Ruling: integration reviews cover only the non-port code (T3 dev option, T4 gating, T8 script, T9 docs); byte-identical ports were reviewed in the prototype (server and client package reviews, final review) - cost if wrong: a port drift, caught by the diff checks each port ran
+- checkpoint T6 616204b1e0 picker + reset + deep link
+- tests full passed=41 failed=0 skipped=0 seconds=0.7
+- review: integration server/cli additions (T3 dev option, T4 gating, T8 script) reviewed; no defects; targeted 32/32, full run green
+- Ruling: scripts/case-prompt.mjs hardcodes the interviews map keys momo/pip/nori - the cast is fixed by the spec and enforced by defineCase - cost if wrong: the script needs one line when the cast ever changes
+- Ruling: the NODE_ENV=production gating has no automated test because it lives in the entry-point block (createApp stays unit-tested) - cost if wrong: a manual check at deploy time
+- checkpoint T7 26690888ed provenance e2e
+- checkpoint T9 f4dbffc48f README + plan status
+- Ruling: T10 poll skipped; sent to the idle implementer with the smallest context - cost if wrong: none
+- Ruling: the root .gitignore edit came from superlite's wave0 tooling, not a task; reverted so the branch holds only the feature (.superlite/ is excluded via .git/info/exclude by checkpoint) - cost if wrong: none
+- checkpoint T10 71e98534c0 seam check
+- tests full passed=41 failed=0 skipped=0 seconds=0.9
+- Ruling: packet item [1] (T0 docs out of scope) was resolved by committing the plan docs as d1f6699 before the T0 checkpoint - cost if wrong: none
+- Final review: CHANGES_REQUESTED with one finding (content-doc drift suspected from the T0 incident)
+- Ruling: finding closed by direct verification: content doc §B == server/cases/banana-control.mjs and §C == tests/fixtures/minimal-case.mjs byte for byte, every §A line present in banana-mystery.mjs, and all three identical to the prototype copies; the incident was the coordinator's own uncommitted doc copy, not a T0 edit - cost if wrong: none
+- freeze: fast 41/41, build ok, e2e 23/23 (seam report docs/plans/2026-10-26-override-cases.seam.md)
