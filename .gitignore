@@ -175,3 +175,17 @@ data/toolbench
 logs/
 ci_smoke_test_output/
 .env
+
+# superlite: dependency, build and cache folders
+.superlite/
+Thumbs.db
+*.swp
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+demos/override/node_modules/
+demos/override/dist/
+demos/override/data/
+demos/override/test-results/
+demos/override/playwright-report/
