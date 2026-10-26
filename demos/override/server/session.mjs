@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { caseId, caseVersion, characters, chapters, records, debrief, promptVersion } from './case.mjs';
-import { answerInterview, InterviewProviderError } from './interviews.mjs';
+import { answerInterview } from './interviews.mjs';
+import { appendJsonl, dataPaths, readJsonl } from './dataset.mjs';
 
 export class RequestError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -16,8 +17,9 @@ const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 export function replay(events) {
   let s = null;
   for (const e of events) {
-    if (e.caseVersion !== caseVersion || e.type === 'session_reset') return null;
+    if (e.schemaVersion !== 2 || e.caseVersion !== caseVersion || e.type === 'session_reset') return null;
     if (e.type === 'session_started') {
+      if (s) return null;
       s = { id: e.sessionId, revision: 0, startedAt: new Date(Date.parse(e.timestamp) - e.elapsedMs).toISOString(),
         status: 'active', revealedPosition: 0, selectedEvidence: null,
         location: 'briefing', interviews: { momo: [], pip: [], nori: [] }, verdict: null };
@@ -33,21 +35,37 @@ export function replay(events) {
   return s;
 }
 
+// At most `limit` takes per `windowMs` per key; refused takes are not counted.
+class Window {
+  constructor(limit, windowMs) { this.limit = limit; this.windowMs = windowMs; this.hits = []; }
+  take(now = Date.now()) {
+    while (this.hits.length && now - this.hits[0] >= this.windowMs) this.hits.shift();
+    if (this.hits.length >= this.limit) return false;
+    this.hits.push(now);
+    return true;
+  }
+}
+
 // One independent investigation per player, keyed by session ID. Idle games
 // leave memory and are rebuilt from their log on the next request, so progress
 // also survives a restart.
 export class Investigations {
-  constructor({ dataDir, config, answer = answerInterview, idleMs = 30 * 60_000 }) {
-    this.dataDir = resolve(dataDir);
-    mkdirSync(this.dataDir, { recursive: true, mode: 0o700 });
+  constructor({ dataDir, config, router = null, answer = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {} }) {
+    this.paths = dataPaths(dataDir);
     this.config = config;
-    this.answer = answer;
+    this.router = router;
+    this.answer = answer || ((cfg, session, characterId, question, ctx) => answerInterview(cfg, session, characterId, question, this.router, ctx));
     this.idleMs = idleMs;
+    this.meta = meta;
+    this.onEvent = onEvent;
     this.games = new Map();
+    this.pending = new Set();
+    this.paused = false;
+    this.newGames = new Window(20, 1000);
   }
 
   create(session = null) {
-    return new Investigation({ dataDir: this.dataDir, config: this.config, answer: this.answer, session });
+    return new Investigation({ dataDir: this.paths.root, config: this.config, answer: this.answer, session, meta: this.meta, onEvent: this.onEvent });
   }
 
   find(sessionId) {
@@ -55,10 +73,7 @@ export class Investigations {
     let game = this.games.get(sessionId);
     if (!game) {
       let session;
-      try {
-        const lines = readFileSync(resolve(this.dataDir, `${sessionId}.jsonl`), 'utf8').trim().split('\n');
-        session = replay(lines.map(line => JSON.parse(line)));
-      } catch { return null; }
+      try { session = replay(readJsonl(resolve(this.paths.sessions, `${sessionId}.jsonl`), { repair: true })); } catch { return null; }
       if (!session) return null;
       game = this.create(session);
       this.games.set(sessionId, game);
@@ -75,11 +90,17 @@ export class Investigations {
     const now = Date.now();
     for (const [id, game] of this.games) if (!game.busy && now - game.touched > this.idleMs) this.games.delete(id);
     const game = this.find(sessionId) || this.create();
-    const view = await game.mutate(action, input);
-    // A reset gives the player a new session ID; the previous log stays on disk.
-    if (game.session.id !== sessionId) this.games.delete(sessionId);
-    this.games.set(game.session.id, game);
-    return view;
+    if (action === 'start' && this.paused) throw new RequestError(503, 'New games are paused. Try again shortly.');
+    if ((action === 'start' || action === 'reset') && !this.newGames.take(now)) throw new RequestError(429, 'Too many new games right now. Try again in a moment.');
+    const run = game.mutate(action, input);
+    this.pending.add(run);
+    try {
+      const view = await run;
+      // A reset gives the player a new session ID; the previous log stays on disk.
+      if (game.session.id !== sessionId) this.games.delete(sessionId);
+      this.games.set(game.session.id, game);
+      return view;
+    } finally { this.pending.delete(run); }
   }
 
   export(sessionId) {
@@ -87,13 +108,34 @@ export class Investigations {
     if (!game) throw new RequestError(404, 'There is no session to export.');
     return game.export();
   }
+
+  setPaused(paused) { this.paused = Boolean(paused); }
+
+  stats() {
+    const byStage = { started: 0, clues: 0, interviewed: 0, verdict: 0 };
+    let waiting = 0;
+    for (const game of this.games.values()) {
+      const s = game.session;
+      if (game.busy) waiting++;
+      if (!s) continue;
+      byStage[s.status === 'closed' ? 'verdict' : characters.every(c => s.interviews[c.id].length) ? 'interviewed' : s.revealedPosition ? 'clues' : 'started']++;
+    }
+    return { games: this.games.size, waiting, paused: this.paused, byStage };
+  }
+
+  async idle() {
+    while (this.pending.size) await Promise.allSettled([...this.pending]);
+  }
 }
 
 export class Investigation {
-  constructor({ dataDir, config, answer = answerInterview, session = null }) {
-    this.dataDir = resolve(dataDir);
+  constructor({ dataDir, config, answer = null, session = null, meta = {}, onEvent = () => {} }) {
+    this.paths = dataPaths(dataDir);
     this.config = config;
-    this.answer = answer;
+    this.answer = answer || ((cfg, s, characterId, question, ctx) => answerInterview(cfg, s, characterId, question, null, ctx));
+    this.meta = meta;
+    this.onEvent = onEvent;
+    this.asked = new Window(6, 60_000);
     this.session = session;
     this.busy = false;
     this.touched = Date.now();
@@ -102,7 +144,7 @@ export class Investigation {
   log(type, details = {}, state = this.session) {
     const now = Date.now();
     const event = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       eventId: randomUUID(),
       sessionId: state.id,
       caseId,
@@ -122,10 +164,14 @@ export class Investigation {
       ...details,
     };
     // Write before acknowledging a mutation. Failed writes must not silently lose data.
-    appendFileSync(resolve(this.dataDir, `${state.id}.jsonl`), `${JSON.stringify(event)}\n`, { mode: 0o600 });
+    appendJsonl(this.file(state.id), event, 'session');
+    this.wrote = state.id;
     state.revision += 1;
+    try { this.onEvent(event); } catch { /* observers must not break the game */ }
     return event;
   }
+
+  file(id) { return resolve(this.paths.sessions, `${id}.jsonl`); }
 
   view() {
     const s = this.session;
@@ -148,6 +194,7 @@ export class Investigation {
   async mutate(action, input = {}) {
     if (this.busy) throw new RequestError(409, 'An interview is still in progress. Wait for the answer, then try again.');
     this.busy = true;
+    this.wrote = null;
     const before = this.session ? structuredClone(this.session) : null;
     try {
       if (action === 'start') {
@@ -184,7 +231,14 @@ export class Investigation {
     } catch (error) {
       // Rejected input must not partially alter progress. Interview failures are
       // intentionally logged and preserve the resulting sequence counter.
-      if (!error.logged) this.session = before;
+      if (!error.logged) {
+        this.session = before;
+        // A multi-event action may have written some events before failing; memory
+        // must match the log or the next event would repeat a sequence number.
+        if (this.wrote) {
+          try { this.session = replay(readJsonl(this.file(this.wrote))); } catch { this.session = before; }
+        }
+      }
       throw error;
     } finally { this.busy = false; }
   }
@@ -195,7 +249,7 @@ export class Investigation {
       status: 'active', revealedPosition: 0, selectedEvidence: null,
       location: 'briefing', interviews: { momo: [], pip: [], nori: [] }, verdict: null,
     };
-    this.log('session_started');
+    this.log('session_started', { env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, ...this.meta });
     this.log('briefing_viewed');
   }
 
@@ -206,18 +260,22 @@ export class Investigation {
     if (s.revealedPosition === 0) throw new RequestError(400, 'Inspect the banana basket before asking the monkeys.');
     if (typeof input.question !== 'string' || input.question.trim().length < 3 || input.question.length > 1200) throw new RequestError(400, 'Ask a question between 3 and 1,200 characters.');
     if (s.interviews[character.id].length >= 40) throw new RequestError(400, 'This demo supports 40 questions per character. Submit your findings or start a new session.');
+    if (!this.asked.take()) throw new RequestError(429, 'Slow down: at most 6 questions per minute.');
     const question = input.question.trim();
     const evidence = s.selectedEvidence;
     const asked = this.log('interview_question', { character: character.id, question });
     try {
-      const answer = await this.answer(this.config, structuredClone(s), character.id, question, undefined, diagnostics => {
-        this.log('interview_provider_response', { character: character.id, question, questionEventId: asked.eventId, ...diagnostics });
+      const result = await this.answer(this.config, structuredClone(s), character.id, question, {
+        sessionId: s.id, questionEventId: asked.eventId,
+        onAttempt: diagnostics => { this.log('interview_provider_response', { character: character.id, question, questionEventId: asked.eventId, ...diagnostics }); },
       });
-      const answered = this.log('interview_answer', { character: character.id, question, answer, questionEventId: asked.eventId });
+      const answer = typeof result === 'string' ? result : result.answer;
+      const provenance = typeof result === 'string' ? null : result.provenance ?? null;
+      const answered = this.log('interview_answer', { character: character.id, question, answer, questionEventId: asked.eventId, provenance });
       s.interviews[character.id].push({ question, answer, evidence, revealedPosition: s.revealedPosition, timestamp: answered.timestamp });
     } catch (error) {
-      const providerError = error instanceof InterviewProviderError;
-      this.log('interview_failed', { character: character.id, question, questionEventId: asked.eventId, reason: providerError ? error.code : 'provider_or_storage_error', ...(providerError ? error.diagnostics : {}) });
+      const providerError = error?.name === 'InterviewProviderError';
+      this.log('interview_failed', { character: character.id, question, questionEventId: asked.eventId, reason: providerError ? error.code : 'provider_or_storage_error', ...(providerError ? error.diagnostics : {}), provenance: error?.provenance ?? null });
       const failure = new RequestError(502, providerError ? error.message : 'The interview could not complete. Check the server’s storage and retry.');
       failure.logged = true;
       throw failure;
@@ -247,6 +305,6 @@ export class Investigation {
 
   export() {
     if (!this.session) throw new RequestError(404, 'There is no session to export.');
-    return readFileSync(resolve(this.dataDir, `${this.session.id}.jsonl`), 'utf8');
+    return readFileSync(this.file(this.session.id), 'utf8');
   }
 }
