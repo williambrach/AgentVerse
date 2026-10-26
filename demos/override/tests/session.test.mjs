@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Investigation } from '../server/session.mjs';
+import { Investigation, Investigations } from '../server/session.mjs';
 import { modelConfig, buildMessages, answerInterview, InterviewProviderError } from '../server/interviews.mjs';
 
 function setup(t, options = {}) {
@@ -130,6 +130,57 @@ test('a pending answer blocks resets and concurrent mutations', async t => {
   finish('Momo told me.');
   assert.equal((await pending).session.interviews.pip.length, 1);
   await act('reset');
+});
+
+test('a restarted server restores each player’s game from its log, but not reset or foreign sessions', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'override-test-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const games = new Investigations({ dataDir: dir, config: modelConfig({}) });
+  const act = async (id, action, input = {}) => {
+    const s = games.find(id)?.session;
+    return games.mutate(id, action, { sessionId: s?.id, revision: s?.revision, ...input });
+  };
+  const id = (await act(undefined, 'start')).session.id;
+  await act(id, 'visit', { location: 'momo' }); await act(id, 'reveal');
+  await act(id, 'evidence', { evidenceId: 'bell' });
+  for (const character of ['momo', 'pip', 'nori']) await act(id, 'interview', { character, question: 'What happened?' });
+  await act(id, 'evidence', { evidenceId: null });
+  const active = games.view(id);
+  const closedId = (await act(undefined, 'start')).session.id;
+  await act(closedId, 'reveal');
+  for (const character of ['momo', 'pip', 'nori']) await act(closedId, 'interview', { character, question: 'Why?' });
+  const closed = await act(closedId, 'verdict', { suspect: 'momo', confidence: 90, evidenceIds: ['message'] });
+  const resetId = (await act(undefined, 'start')).session.id;
+  const fresh = (await act(resetId, 'reset')).session.id;
+
+  const restarted = new Investigations({ dataDir: dir, config: modelConfig({}) });
+  assert.deepEqual(restarted.view(id), active);
+  assert.deepEqual(restarted.view(closedId), closed);
+  assert.equal(restarted.view(resetId).session, null);
+  assert.equal(restarted.view(fresh).session.revision, 2);
+  assert.equal(restarted.view('../secrets').session, null);
+  // The restored game continues with the same revision and sequence counters.
+  const s = restarted.find(id).session;
+  await restarted.mutate(id, 'interview', { sessionId: id, revision: s.revision, character: 'pip', question: 'And then?' });
+  const events = restarted.export(id).trim().split('\n').map(JSON.parse);
+  assert.ok(events.every((e, i) => e.sequence === i + 1));
+  assert.equal(restarted.find(id).session.interviews.pip.length, 2);
+  // A torn final line from a crash is not restored as a partial game.
+  appendFileSync(join(dir, `${fresh}.jsonl`), '{"schemaVersion":1,"eventId"');
+  assert.equal(new Investigations({ dataDir: dir, config: modelConfig({}) }).view(fresh).session, null);
+});
+
+test('idle games leave memory and return intact on the next request', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'override-test-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const games = new Investigations({ dataDir: dir, config: modelConfig({}), idleMs: 0 });
+  const first = (await games.mutate(undefined, 'start')).session;
+  await new Promise(resolve => setTimeout(resolve, 5));
+  const second = (await games.mutate(undefined, 'start')).session;
+  assert.deepEqual([...games.games.keys()], [second.id]);
+  const view = await games.mutate(first.id, 'reveal', { sessionId: first.id, revision: first.revision });
+  assert.equal(view.session.revealedPosition, 1);
+  assert.equal(view.session.startedAt, first.startedAt);
 });
 
 test('custom OpenAI-compatible endpoint keeps credentials server-side and validates responses', async () => {

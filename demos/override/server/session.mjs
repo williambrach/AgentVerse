@@ -8,17 +8,99 @@ export class RequestError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
-export class Investigation {
-  constructor({ dataDir, config, answer = answerInterview }) {
+const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+// Rebuild a session from its append-only log. Every event carries the clue and
+// evidence state at the time it was written. Logs from another case version,
+// reset sessions, and gaps in the sequence are not restored.
+export function replay(events) {
+  let s = null;
+  for (const e of events) {
+    if (e.caseVersion !== caseVersion || e.type === 'session_reset') return null;
+    if (e.type === 'session_started') {
+      s = { id: e.sessionId, revision: 0, startedAt: new Date(Date.parse(e.timestamp) - e.elapsedMs).toISOString(),
+        status: 'active', revealedPosition: 0, selectedEvidence: null,
+        location: 'briefing', interviews: { momo: [], pip: [], nori: [] }, verdict: null };
+    }
+    if (!s || e.sessionId !== s.id || e.sequence !== s.revision + 1) return null;
+    s.revision = e.sequence;
+    s.revealedPosition = e.revealedPosition;
+    s.selectedEvidence = e.selectedEvidence;
+    if (e.type === 'location_visited') s.location = e.location;
+    if (e.type === 'interview_answer') s.interviews[e.character].push({ question: e.question, answer: e.answer, evidence: e.selectedEvidence, revealedPosition: e.revealedPosition, timestamp: e.timestamp });
+    if (e.type === 'verdict_submitted') { s.verdict = e.verdict; s.status = 'closed'; }
+  }
+  return s;
+}
+
+// One independent investigation per player, keyed by session ID. Idle games
+// leave memory and are rebuilt from their log on the next request, so progress
+// also survives a restart.
+export class Investigations {
+  constructor({ dataDir, config, answer = answerInterview, idleMs = 30 * 60_000 }) {
     this.dataDir = resolve(dataDir);
     mkdirSync(this.dataDir, { recursive: true, mode: 0o700 });
     this.config = config;
     this.answer = answer;
-    this.session = null;
+    this.idleMs = idleMs;
+    this.games = new Map();
+  }
+
+  create(session = null) {
+    return new Investigation({ dataDir: this.dataDir, config: this.config, answer: this.answer, session });
+  }
+
+  find(sessionId) {
+    if (!sessionIdPattern.test(sessionId || '')) return null;
+    let game = this.games.get(sessionId);
+    if (!game) {
+      let session;
+      try {
+        const lines = readFileSync(resolve(this.dataDir, `${sessionId}.jsonl`), 'utf8').trim().split('\n');
+        session = replay(lines.map(line => JSON.parse(line)));
+      } catch { return null; }
+      if (!session) return null;
+      game = this.create(session);
+      this.games.set(sessionId, game);
+    }
+    game.touched = Date.now();
+    return game;
+  }
+
+  view(sessionId) {
+    return (this.find(sessionId) || this.create()).view();
+  }
+
+  async mutate(sessionId, action, input = {}) {
+    const now = Date.now();
+    for (const [id, game] of this.games) if (!game.busy && now - game.touched > this.idleMs) this.games.delete(id);
+    const game = this.find(sessionId) || this.create();
+    const view = await game.mutate(action, input);
+    // A reset gives the player a new session ID; the previous log stays on disk.
+    if (game.session.id !== sessionId) this.games.delete(sessionId);
+    this.games.set(game.session.id, game);
+    return view;
+  }
+
+  export(sessionId) {
+    const game = this.find(sessionId);
+    if (!game) throw new RequestError(404, 'There is no session to export.');
+    return game.export();
+  }
+}
+
+export class Investigation {
+  constructor({ dataDir, config, answer = answerInterview, session = null }) {
+    this.dataDir = resolve(dataDir);
+    this.config = config;
+    this.answer = answer;
+    this.session = session;
     this.busy = false;
+    this.touched = Date.now();
   }
 
   log(type, details = {}, state = this.session) {
+    const now = Date.now();
     const event = {
       schemaVersion: 1,
       eventId: randomUUID(),
@@ -27,8 +109,8 @@ export class Investigation {
       caseVersion,
       promptVersion,
       sequence: state.revision + 1,
-      timestamp: new Date().toISOString(),
-      elapsedMs: Date.now() - Date.parse(state.startedAt),
+      timestamp: new Date(now).toISOString(),
+      elapsedMs: now - Date.parse(state.startedAt),
       type,
       revealedPosition: state.revealedPosition,
       selectedEvidence: state.selectedEvidence,
@@ -131,8 +213,8 @@ export class Investigation {
       const answer = await this.answer(this.config, structuredClone(s), character.id, question, undefined, diagnostics => {
         this.log('interview_provider_response', { character: character.id, question, questionEventId: asked.eventId, ...diagnostics });
       });
-      this.log('interview_answer', { character: character.id, question, answer, questionEventId: asked.eventId });
-      s.interviews[character.id].push({ question, answer, evidence, revealedPosition: s.revealedPosition, timestamp: new Date().toISOString() });
+      const answered = this.log('interview_answer', { character: character.id, question, answer, questionEventId: asked.eventId });
+      s.interviews[character.id].push({ question, answer, evidence, revealedPosition: s.revealedPosition, timestamp: answered.timestamp });
     } catch (error) {
       const providerError = error instanceof InterviewProviderError;
       this.log('interview_failed', { character: character.id, question, questionEventId: asked.eventId, reason: providerError ? error.code : 'provider_or_storage_error', ...(providerError ? error.diagnostics : {}) });

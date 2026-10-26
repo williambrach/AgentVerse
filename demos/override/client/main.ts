@@ -91,7 +91,7 @@ function shell() {
       </section>
       <aside class="dossier" aria-label="Investigation notebook"><div class="dossier-top"><div class="notebook-label"><span class="eyebrow">INVESTIGATOR’S NOTEBOOK</span><span id="notebook-section">Case briefing</span></div><span class="notebook-index" id="notebook-index" aria-hidden="true">01 / 07</span><button class="icon-button" data-go="briefing" aria-label="View briefing">${icon('report')}</button></div><div id="panel"></div></aside>
     </main>
-    <footer class="app-footer"><span>AGENTVERSE <span class="slash">/</span> BANANA MYSTERY</span><span>Authored demo · 2–3 minutes · One investigator at a time</span><button id="export-button">Export session ${icon('arrow')}</button></footer>
+    <footer class="app-footer"><span>AGENTVERSE <span class="slash">/</span> BANANA MYSTERY</span><span>Authored demo · 2–3 minutes · Your own case</span><button id="export-button">Export session ${icon('arrow')}</button></footer>
     <div id="toast" role="alert" hidden></div>
     <div id="overlay-root"></div>
   `;
@@ -163,7 +163,7 @@ function render() {
   document.querySelector('#replay-count')!.textContent = session?.revealedPosition ? '3 clues found' : 'Find 3 clues';
   document.querySelector('#evidence-count')!.textContent = `${state.records.length} / 3 found`;
   const heard = session ? ids.filter(id => session.interviews[id].length).length : 0;
-  document.querySelector('#quick-progress')!.textContent = session?.status === 'closed' ? 'Mystery solved · Ready for the next investigator' : !session?.revealedPosition ? '1. Inspect the basket to find 3 clues' : heard < 3 ? `2. Ask the monkeys · ${heard} / 3 heard` : '3. Ready to make your guess';
+  document.querySelector('#quick-progress')!.textContent = session?.status === 'closed' ? 'Mystery solved · Play again for a new case' : !session?.revealedPosition ? '1. Inspect the basket to find 3 clues' : heard < 3 ? `2. Ask the monkeys · ${heard} / 3 heard` : '3. Ready to make your guess';
   document.querySelectorAll<HTMLButtonElement>('[data-go]').forEach(button => {
     button.disabled = busy || !session || introVisible;
     button.classList.toggle('active', button.dataset.go === panel);
