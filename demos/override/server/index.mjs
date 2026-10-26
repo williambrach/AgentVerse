@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Investigations, RequestError } from './session.mjs';
 import { buildMessages, modelConfig } from './interviews.mjs';
-import { characters } from './case.mjs';
+import { cases } from './cases/index.mjs';
 import { LlmRouter } from './llm.mjs';
 import { appendJsonl, dataPaths, lastRecord, readJsonl, setWriteObserver } from './dataset.mjs';
 import { WindowCounter, clientAddress, signToken, verifyToken } from './identity.mjs';
@@ -44,7 +44,7 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname.startsWith('/api/')) {
         const name = url.pathname.slice('/api/'.length);
-        route = ['health', 'access', 'state', 'events', ...actions].includes(name) ? `/api/${name}` : '/api/other';
+        route = ['health', 'access', 'cases', 'state', 'events', ...actions].includes(name) ? `/api/${name}` : '/api/other';
         if (url.pathname === '/api/health' && req.method === 'GET') return json(res, 200, { ok: true });
         if (req.method === 'POST') {
           if (req.headers['sec-fetch-site'] === 'cross-site') throw new RequestError(403, 'Cross-site requests are not allowed.');
@@ -77,6 +77,7 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
         if (!validToken(req)) throw new RequestError(401, 'Enter the demo access code to continue.');
         // Each browser owns one investigation through its session cookie.
         const sessionId = cookie(req, 'override_session');
+        if (url.pathname === '/api/cases' && req.method === 'GET') return json(res, 200, { cases: investigations.catalog() });
         if (url.pathname === '/api/state' && req.method === 'GET') return json(res, 200, investigations.view(sessionId));
         if (url.pathname === '/api/events' && req.method === 'GET') {
           const body = investigations.export(sessionId);
@@ -111,6 +112,13 @@ function appVersion(env) {
   } catch { return { appCommit: 'unknown', appDirty: null }; }
 }
 
+// Dev tools expose draft cases to the catalog and to start/reset. Never in production.
+function devTools(env) {
+  const wanted = env.OVERRIDE_DEV_TOOLS === '1';
+  if (wanted && env.NODE_ENV === 'production') { console.log('Dev tools are off in production.'); return false; }
+  return wanted;
+}
+
 const portOf = (value, fallback) => (value === undefined || value === '' ? fallback : Number(value));
 const sleep = ms => new Promise(resolve => { setTimeout(resolve, ms).unref(); });
 
@@ -130,7 +138,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     failover: config.failover, restore: lastRecord(paths.system, r => r.type === 'llm_active'), onSystem, onTrace, onEvent: e => observeLlmEvent(metrics, e),
   }) : null;
   const investigations = new Investigations({
-    dataDir, config, router, meta: { env: envName, ...appVersion(env), endpointsHash: config.endpointsHash },
+    dataDir, config, router, dev: devTools(env), meta: { env: envName, ...appVersion(env), endpointsHash: config.endpointsHash },
     onEvent: e => observeGameEvent(metrics, e),
   });
   bindCollectors(registry, { router, investigations, dataDir });
@@ -151,9 +159,12 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
 
   let admin = null;
   if (env.OVERRIDE_ADMIN_TOKEN) {
+    // The probe asks the first registered case's first character its quick question.
+    const probeCase = cases[0];
+    const probeCharacter = probeCase.characters[0];
     admin = createAdmin({
       token: env.OVERRIDE_ADMIN_TOKEN, router, investigations, registry, dataDir,
-      probeMessages: buildMessages({ revealedPosition: 1, selectedEvidence: null, interviews: { momo: [], pip: [], nori: [] } }, 'momo', characters[0].quickQuestion),
+      probeMessages: buildMessages(probeCase, { revealedPosition: 1, selectedEvidence: null, interviews: Object.fromEntries(probeCase.characters.map(c => [c.id, []])) }, probeCharacter.id, probeCharacter.quickQuestion),
       readSystem: () => readJsonl(paths.system).slice(-20), onSystem,
     });
     try {

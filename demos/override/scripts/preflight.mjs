@@ -4,7 +4,11 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { LlmRouter } from '../server/llm.mjs';
 import { buildMessages, modelConfig } from '../server/interviews.mjs';
-import { characters } from '../server/case.mjs';
+import { cases } from '../server/cases/index.mjs';
+
+// Preflight exercises the first registered case.
+const kase = cases[0];
+const { characters } = kase;
 
 const CLUES = [null, 'rule', 'message', 'bell'];
 const FOLLOW_UPS = ['What did you know at the time?', 'Who told you, and did you check?'];
@@ -40,7 +44,7 @@ async function fidelityFor(router, characterId, clue) {
   for (const question of [character.quickQuestion, ...FOLLOW_UPS]) {
     let row;
     try {
-      const { content } = await router.complete({ messages: buildMessages(session, characterId, question) });
+      const { content } = await router.complete({ messages: buildMessages(kase, session, characterId, question) });
       row = { character: characterId, clue, question, ok: true, words: words(content), flags: flagsFor(characterId, question, content), answer: content };
       session.interviews[characterId].push({ question, answer: content, evidence: clue });
     } catch (error) {
@@ -56,7 +60,7 @@ async function fidelityFor(router, characterId, clue) {
 async function capacityRun(router, steps) {
   const characterId = characters[0].id;
   const session = { revealedPosition: 1, selectedEvidence: null, interviews: { momo: [], pip: [], nori: [] } };
-  const messages = buildMessages(session, characterId, characters[0].quickQuestion);
+  const messages = buildMessages(kase, session, characterId, characters[0].quickQuestion);
   const results = [];
   for (const concurrency of steps) {
     const latencies = []; let errors = 0;

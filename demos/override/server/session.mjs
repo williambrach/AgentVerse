@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { caseId, caseVersion, characters, chapters, records, debrief, promptVersion } from './case.mjs';
-import { answerInterview } from './interviews.mjs';
+import { publicView, listCases, findCase } from './cases.mjs';
+import { cases as registry } from './cases/index.mjs';
+import { answerInterview, promptVersion } from './interviews.mjs';
 import { appendJsonl, dataPaths, readJsonl } from './dataset.mjs';
 
 export class RequestError extends Error {
@@ -12,17 +13,21 @@ export class RequestError extends Error {
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // Rebuild a session from its append-only log. Every event carries the clue and
-// evidence state at the time it was written. Logs from another case version,
+// evidence state at the time it was written. The first event names the case;
+// logs for an unregistered or re-versioned case, logs from another schema,
 // reset sessions, and gaps in the sequence are not restored.
-export function replay(events) {
+export function replay(events, cases) {
+  const first = events[0];
+  const kase = first && cases.find(c => c.id === first.caseId && c.version === first.caseVersion);
+  if (!kase) return null;
   let s = null;
   for (const e of events) {
-    if (e.schemaVersion !== 2 || e.caseVersion !== caseVersion || e.type === 'session_reset') return null;
+    if (e.schemaVersion !== 2 || e.caseId !== kase.id || e.caseVersion !== kase.version || e.type === 'session_reset') return null;
     if (e.type === 'session_started') {
       if (s) return null;
       s = { id: e.sessionId, revision: 0, startedAt: new Date(Date.parse(e.timestamp) - e.elapsedMs).toISOString(),
-        status: 'active', revealedPosition: 0, selectedEvidence: null,
-        location: 'briefing', interviews: { momo: [], pip: [], nori: [] }, verdict: null };
+        status: 'active', caseId: kase.id, revealedPosition: 0, selectedEvidence: null,
+        location: 'briefing', interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])), verdict: null };
     }
     if (!s || e.sessionId !== s.id || e.sequence !== s.revision + 1) return null;
     s.revision = e.sequence;
@@ -48,24 +53,30 @@ class Window {
 
 // One independent investigation per player, keyed by session ID. Idle games
 // leave memory and are rebuilt from their log on the next request, so progress
-// also survives a restart.
+// also survives a restart. Each game plays one registered case.
 export class Investigations {
-  constructor({ dataDir, config, router = null, answer = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {} }) {
+  constructor({ dataDir, config, router = null, answer = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {}, cases = registry, dev = false }) {
     this.paths = dataPaths(dataDir);
     this.config = config;
     this.router = router;
-    this.answer = answer || ((cfg, session, characterId, question, ctx) => answerInterview(cfg, session, characterId, question, this.router, ctx));
+    this.answer = answer || ((cfg, kase, session, characterId, question, ctx) => answerInterview(cfg, kase, session, characterId, question, this.router, ctx));
     this.idleMs = idleMs;
     this.meta = meta;
     this.onEvent = onEvent;
+    this.cases = cases;
+    this.dev = dev;
     this.games = new Map();
     this.pending = new Set();
     this.paused = false;
     this.newGames = new Window(20, 1000);
   }
 
-  create(session = null) {
-    return new Investigation({ dataDir: this.paths.root, config: this.config, answer: this.answer, session, meta: this.meta, onEvent: this.onEvent });
+  catalog() {
+    return listCases(this.cases, { dev: this.dev });
+  }
+
+  create(session, kase) {
+    return new Investigation({ dataDir: this.paths.root, config: this.config, answer: this.answer, kase, session, meta: this.meta, onEvent: this.onEvent });
   }
 
   find(sessionId) {
@@ -73,9 +84,9 @@ export class Investigations {
     let game = this.games.get(sessionId);
     if (!game) {
       let session;
-      try { session = replay(readJsonl(resolve(this.paths.sessions, `${sessionId}.jsonl`), { repair: true })); } catch { return null; }
+      try { session = replay(readJsonl(resolve(this.paths.sessions, `${sessionId}.jsonl`), { repair: true }), this.cases); } catch { return null; }
       if (!session) return null;
-      game = this.create(session);
+      game = this.create(session, this.cases.find(c => c.id === session.caseId));
       this.games.set(sessionId, game);
     }
     game.touched = Date.now();
@@ -83,16 +94,21 @@ export class Investigations {
   }
 
   view(sessionId) {
-    return (this.find(sessionId) || this.create()).view();
+    return (this.find(sessionId) || this.create(null, this.cases[0])).view();
   }
 
   async mutate(sessionId, action, input = {}) {
     const now = Date.now();
     for (const [id, game] of this.games) if (!game.busy && now - game.touched > this.idleMs) this.games.delete(id);
-    const game = this.find(sessionId) || this.create();
+    let kase;
+    if (['start', 'reset'].includes(action) && input.caseId !== undefined) {
+      kase = findCase(this.cases, input.caseId, { dev: this.dev });
+      if (!kase) throw new RequestError(400, 'Unknown case.');
+    }
+    const game = this.find(sessionId) || this.create(null, kase || this.cases[0]);
     if (action === 'start' && this.paused) throw new RequestError(503, 'New games are paused. Try again shortly.');
     if ((action === 'start' || action === 'reset') && !this.newGames.take(now)) throw new RequestError(429, 'Too many new games right now. Try again in a moment.');
-    const run = game.mutate(action, input);
+    const run = game.mutate(action, input, { kase, assignment: kase ? 'fixed' : 'default' });
     this.pending.add(run);
     try {
       const view = await run;
@@ -118,7 +134,7 @@ export class Investigations {
       const s = game.session;
       if (game.busy) waiting++;
       if (!s) continue;
-      byStage[s.status === 'closed' ? 'verdict' : characters.every(c => s.interviews[c.id].length) ? 'interviewed' : s.revealedPosition ? 'clues' : 'started']++;
+      byStage[s.status === 'closed' ? 'verdict' : game.kase.characters.every(c => s.interviews[c.id].length) ? 'interviewed' : s.revealedPosition ? 'clues' : 'started']++;
     }
     return { games: this.games.size, waiting, paused: this.paused, byStage };
   }
@@ -129,10 +145,11 @@ export class Investigations {
 }
 
 export class Investigation {
-  constructor({ dataDir, config, answer = null, session = null, meta = {}, onEvent = () => {} }) {
+  constructor({ dataDir, config, kase, answer = null, session = null, meta = {}, onEvent = () => {} }) {
     this.paths = dataPaths(dataDir);
+    this.kase = kase;
     this.config = config;
-    this.answer = answer || ((cfg, s, characterId, question, ctx) => answerInterview(cfg, s, characterId, question, null, ctx));
+    this.answer = answer || ((cfg, k, s, characterId, question, ctx) => answerInterview(cfg, k, s, characterId, question, null, ctx));
     this.meta = meta;
     this.onEvent = onEvent;
     this.asked = new Window(6, 60_000);
@@ -147,8 +164,9 @@ export class Investigation {
       schemaVersion: 2,
       eventId: randomUUID(),
       sessionId: state.id,
-      caseId,
-      caseVersion,
+      caseId: this.kase.id,
+      caseVersion: this.kase.version,
+      contentHash: this.kase.contentHash,
       promptVersion,
       sequence: state.revision + 1,
       timestamp: new Date(now).toISOString(),
@@ -175,12 +193,18 @@ export class Investigation {
 
   view() {
     const s = this.session;
+    const { records, debrief, answer } = this.kase;
+    let feedback;
+    if (s?.status === 'closed') {
+      const nobody = answer.culprits.length === 0;
+      const correct = nobody ? s.verdict.suspect === 'none' : answer.culprits.includes(s.verdict.suspect);
+      feedback = correct ? answer.feedback.correct : answer.feedback.other;
+    }
     return {
-      caseId, caseVersion, authored: true, mode: this.config.mode,
-      model: this.config.model, characters, chapters,
+      ...publicView(this.kase), authored: true, mode: this.config.mode, model: this.config.model,
       session: s ? structuredClone(s) : null,
       records: s ? records.filter(r => s.status === 'closed' || r.chapter <= s.revealedPosition) : [],
-      debrief: s?.status === 'closed' ? debrief : null,
+      debrief: s?.status === 'closed' ? { ...debrief, feedback } : null,
     };
   }
 
@@ -191,25 +215,29 @@ export class Investigation {
     }
   }
 
-  async mutate(action, input = {}) {
+  async mutate(action, input = {}, { kase = null, assignment = 'default' } = {}) {
     if (this.busy) throw new RequestError(409, 'An interview is still in progress. Wait for the answer, then try again.');
     this.busy = true;
     this.wrote = null;
     const before = this.session ? structuredClone(this.session) : null;
+    const beforeKase = this.kase;
     try {
       if (action === 'start') {
         if (this.session) throw new RequestError(409, 'A case is already active. Continue it or reset for the next investigator.');
-        this.start();
+        if (kase) this.kase = kase;
+        this.start(assignment);
       } else {
         this.ensureCurrent(input);
         const s = this.session;
+        const { records, characters } = this.kase;
         if (action === 'reset') {
           this.log('session_reset', { completed: s.status === 'closed' });
-          this.start();
+          if (kase) this.kase = kase;
+          this.start(assignment);
         } else {
           if (s.status !== 'active') throw new RequestError(409, 'This case is closed. Review the debrief or start a new session.');
           if (action === 'reveal') {
-            if (s.revealedPosition >= chapters.length) throw new RequestError(400, 'All three clues are already open.');
+            if (s.revealedPosition >= this.kase.chapters.length) throw new RequestError(400, 'All clues are already open.');
             s.revealedPosition += 1;
             this.log('story_revealed', { recordIds: records.filter(r => r.chapter === s.revealedPosition).map(r => r.id) });
           } else if (action === 'evidence') {
@@ -233,31 +261,33 @@ export class Investigation {
       // intentionally logged and preserve the resulting sequence counter.
       if (!error.logged) {
         this.session = before;
+        this.kase = beforeKase;
         // A multi-event action may have written some events before failing; memory
         // must match the log or the next event would repeat a sequence number.
         if (this.wrote) {
-          try { this.session = replay(readJsonl(this.file(this.wrote))); } catch { this.session = before; }
+          try { this.session = replay(readJsonl(this.file(this.wrote)), [this.kase]); } catch { this.session = before; }
         }
       }
       throw error;
     } finally { this.busy = false; }
   }
 
-  start() {
+  start(assignment = 'default') {
     this.session = {
       id: randomUUID(), revision: 0, startedAt: new Date().toISOString(),
-      status: 'active', revealedPosition: 0, selectedEvidence: null,
-      location: 'briefing', interviews: { momo: [], pip: [], nori: [] }, verdict: null,
+      status: 'active', caseId: this.kase.id, revealedPosition: 0, selectedEvidence: null,
+      location: 'briefing', interviews: Object.fromEntries(this.kase.characters.map(c => [c.id, []])), verdict: null,
     };
-    this.log('session_started', { env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, ...this.meta });
+    this.log('session_started', { assignment, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, ...this.meta });
     this.log('briefing_viewed');
   }
 
   async interview(input) {
     const s = this.session;
+    const { characters } = this.kase;
     const character = characters.find(c => c.id === input.character);
-    if (!character) throw new RequestError(400, 'Choose one of the three monkeys.');
-    if (s.revealedPosition === 0) throw new RequestError(400, 'Inspect the banana basket before asking the monkeys.');
+    if (!character) throw new RequestError(400, `Choose one of the ${characters.length} monkeys.`);
+    if (s.revealedPosition === 0) throw new RequestError(400, 'Inspect the basket before asking the monkeys.');
     if (typeof input.question !== 'string' || input.question.trim().length < 3 || input.question.length > 1200) throw new RequestError(400, 'Ask a question between 3 and 1,200 characters.');
     if (s.interviews[character.id].length >= 40) throw new RequestError(400, 'This demo supports 40 questions per character. Submit your findings or start a new session.');
     if (!this.asked.take()) throw new RequestError(429, 'Slow down: at most 6 questions per minute.');
@@ -265,7 +295,7 @@ export class Investigation {
     const evidence = s.selectedEvidence;
     const asked = this.log('interview_question', { character: character.id, question });
     try {
-      const result = await this.answer(this.config, structuredClone(s), character.id, question, {
+      const result = await this.answer(this.config, this.kase, structuredClone(s), character.id, question, {
         sessionId: s.id, questionEventId: asked.eventId,
         onAttempt: diagnostics => { this.log('interview_provider_response', { character: character.id, question, questionEventId: asked.eventId, ...diagnostics }); },
       });
@@ -284,7 +314,8 @@ export class Investigation {
 
   verdict(input) {
     const s = this.session;
-    if (!s.revealedPosition || characters.some(c => !s.interviews[c.id].length)) throw new RequestError(400, 'Inspect the clues and ask all three monkeys before choosing.');
+    const { characters, records } = this.kase;
+    if (!s.revealedPosition || characters.some(c => !s.interviews[c.id].length)) throw new RequestError(400, `Inspect the clues and ask all ${characters.length} monkeys before choosing.`);
     const choices = [...characters.map(c => c.id), 'none', 'uncertain'];
     if (!choices.includes(input.suspect)) throw new RequestError(400, 'Choose a monkey, nobody, or not sure.');
     if (!Number.isInteger(input.confidence) || input.confidence < 0 || input.confidence > 100) throw new RequestError(400, 'Confidence must be between 0 and 100.');

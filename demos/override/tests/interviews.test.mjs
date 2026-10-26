@@ -6,6 +6,9 @@ import { join } from 'node:path';
 import { modelConfig, loadEndpoints, buildMessages, answerInterview, InterviewProviderError } from '../server/interviews.mjs';
 import { InterviewProviderError as FromErrors } from '../server/errors.mjs';
 import { LlmRouter } from '../server/llm.mjs';
+import { cases } from '../server/cases/index.mjs';
+
+const kase = cases[0];
 
 const session = (extra = {}) => ({ revealedPosition: 1, selectedEvidence: null, interviews: { momo: [], pip: [], nori: [] }, ...extra });
 const ENDPOINTS = JSON.stringify([{ name: 'a', baseUrl: 'https://a.test/v1', model: 'ma', keyEnv: 'OVERRIDE_ENDPOINT_A_KEY' }]);
@@ -28,7 +31,7 @@ const okJson = (body, status = 200) => ({ ok: true, status, json: async () => bo
 
 test('modelConfig defaults to rehearsal', () => {
   assert.deepEqual(modelConfig({}), {
-    mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'banana-interview-v1', maxCompletionTokens: 2048, timeoutMs: 60000,
+    mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'banana-interview-v2', maxCompletionTokens: 2048, timeoutMs: 60000,
     maxInFlight: 200, failover: { failures: 5, windowMs: 30000 },
   });
 });
@@ -108,7 +111,7 @@ test('InterviewProviderError is shared with errors.mjs', () => {
 });
 
 test('rehearsal answers carry no provenance and need no router', async () => {
-  const out = await answerInterview(modelConfig({}), session(), 'nori', 'Did you hear the bell?', null);
+  const out = await answerInterview(modelConfig({}), kase, session(), 'nori', 'Did you hear the bell?', null);
   assert.deepEqual(out, { answer: 'I never heard the bell. I saw Pip carrying bananas and assumed snack time had started. I should have checked instead of guessing.', provenance: null });
 });
 
@@ -119,8 +122,8 @@ test('answer_passes_context: the router gets the built messages, ids and onAttem
   const onAttempt = () => {};
   const seen = [];
   const spy = { complete: async req => { seen.push(req); return router.complete(req); } };
-  const out = await answerInterview(config, s, 'pip', 'Who authorized this?', spy, { sessionId: 's1', questionEventId: 'q1', onAttempt });
-  assert.deepEqual(seen[0].messages, buildMessages(s, 'pip', 'Who authorized this?'));
+  const out = await answerInterview(config, kase, s, 'pip', 'Who authorized this?', spy, { sessionId: 's1', questionEventId: 'q1', onAttempt });
+  assert.deepEqual(seen[0].messages, buildMessages(kase, s, 'pip', 'Who authorized this?'));
   assert.deepEqual([seen[0].sessionId, seen[0].questionEventId, seen[0].onAttempt], ['s1', 'q1', onAttempt]);
   assert.equal(out.answer, 'Momo told me the keeper said yes.');
   assert.ok(out.provenance.endpoint === 'a');
@@ -131,14 +134,14 @@ test('custom OpenAI-compatible endpoint keeps credentials server-side and valida
   const s = session({ selectedEvidence: 'rule' });
   let request;
   const good = realRouter(config, async (url, init) => { request = { url, ...init }; return okJson({ choices: [{ message: { content: 'Momo told me the keeper said yes.' } }] }); });
-  const { answer, provenance } = await answerInterview(config, s, 'pip', 'Who authorized this?', good);
+  const { answer, provenance } = await answerInterview(config, kase, s, 'pip', 'Who authorized this?', good);
   assert.match(answer, /Momo/);
   assert.equal(request.url, 'https://inference.example/v1/chat/completions');
   assert.equal(request.headers.Authorization, 'Bearer test-key');
   assert.equal(JSON.parse(request.body).model, 'custom-model');
   assert.equal(JSON.stringify(provenance).includes('test-key'), false);
-  await assert.rejects(answerInterview(config, s, 'pip', 'Who authorized this?', realRouter(config, async () => okJson({ choices: [] }))), /unusable/);
-  await assert.rejects(answerInterview(config, s, 'pip', 'Who authorized this?', realRouter(config, async () => ({ ok: false, status: 429 }))), /HTTP 429/);
+  await assert.rejects(answerInterview(config, kase, s, 'pip', 'Who authorized this?', realRouter(config, async () => okJson({ choices: [] }))), /unusable/);
+  await assert.rejects(answerInterview(config, kase, s, 'pip', 'Who authorized this?', realRouter(config, async () => ({ ok: false, status: 429 }))), /HTTP 429/);
   assert.equal(config.maxCompletionTokens, 2048);
   assert.equal(config.timeoutMs, 60000);
 });
@@ -154,7 +157,7 @@ test('reasoning-only token exhaustion retries once on the same endpoint without 
   };
   const router = new LlmRouter({ endpoints: config.endpoints, fetcher, onTrace: t => traces.push(t) });
   const attempts = [];
-  const out = await answerInterview(config, session({ selectedEvidence: 'rule' }), 'momo', 'What did you know?', router, { sessionId: 's', questionEventId: 'q', onAttempt: a => attempts.push(a) });
+  const out = await answerInterview(config, kase, session({ selectedEvidence: 'rule' }), 'momo', 'What did you know?', router, { sessionId: 's', questionEventId: 'q', onAttempt: a => attempts.push(a) });
   assert.deepEqual(requests.map(r => r.body.max_completion_tokens), [2048, 4096]);
   assert.deepEqual(requests[0].body.messages, requests[1].body.messages);
   assert.deepEqual(attempts.map(a => [a.finishReason, a.completionTokenLimit]), [['length', 2048], ['stop', 4096]]);
@@ -169,7 +172,7 @@ test('repeated truncation is bounded and never accepts an incomplete visible ans
   const config = modelConfig({ ...live, OVERRIDE_LLM_MAX_COMPLETION_TOKENS: '6000' });
   const limits = [];
   const router = realRouter(config, async (url, init) => { limits.push(JSON.parse(init.body).max_completion_tokens); return okJson({ choices: [{ finish_reason: 'length', message: { content: 'I knew that the' } }] }); });
-  await assert.rejects(answerInterview(config, session(), 'momo', 'Why continue?', router), error => error instanceof InterviewProviderError && error.code === 'completion_limit');
+  await assert.rejects(answerInterview(config, kase, session(), 'momo', 'Why continue?', router), error => error instanceof InterviewProviderError && error.code === 'completion_limit');
   assert.deepEqual(limits, [6000, 8192]);
 });
 
@@ -178,7 +181,7 @@ test('provider errors remain specific and safe', async () => {
   for (const [status, reason, message] of [[401, 'credentials_rejected', /credentials/], [429, 'rate_limited', /rate-limited/], [503, 'request_failed', /HTTP 503/]]) {
     let attempts = 0;
     const router = realRouter(config, async () => { attempts++; return { ok: false, status, json: async () => ({ error: { message: 'Untrusted provider body containing test-key' } }) }; });
-    await assert.rejects(answerInterview(config, session(), 'pip', 'Who authorized this?', router), error => error.code === reason && error.diagnostics.providerStatus === status && message.test(error.message) && !error.message.includes('test-key'));
+    await assert.rejects(answerInterview(config, kase, session(), 'pip', 'Who authorized this?', router), error => error.code === reason && error.diagnostics.providerStatus === status && message.test(error.message) && !error.message.includes('test-key'));
     assert.equal(attempts, 1, 'a single endpoint has nowhere to retry');
   }
 });
@@ -191,16 +194,16 @@ test('timeouts, connection failures, and malformed provider JSON receive distinc
     ['invalid_response', async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('bad JSON with sensitive provider body'); } })],
   ];
   for (const [code, fetcher] of failures) {
-    await assert.rejects(answerInterview(config, session(), 'pip', 'Who authorized this?', realRouter(config, fetcher)), error => error instanceof InterviewProviderError && error.code === code && !error.message.includes('sensitive'));
+    await assert.rejects(answerInterview(config, kase, session(), 'pip', 'Who authorized this?', realRouter(config, fetcher)), error => error instanceof InterviewProviderError && error.code === code && !error.message.includes('sensitive'));
   }
 });
 
 test('buildMessages keeps character knowledge, history and presented evidence separate', () => {
   const s = session({ selectedEvidence: 'rule', interviews: { momo: [{ question: 'Q1', answer: 'A1', evidence: null }], pip: [], nori: [] } });
-  const messages = buildMessages(s, 'momo', 'Q2');
+  const messages = buildMessages(kase, s, 'momo', 'Q2');
   assert.deepEqual(messages.map(m => m.role), ['system', 'user', 'assistant', 'user']);
   assert.match(messages[0].content, /You play Momo/);
   assert.equal(JSON.parse(messages[3].content).question, 'Q2');
   assert.equal(JSON.parse(messages[3].content).presentedEvidence.id, 'rule');
-  assert.ok(!buildMessages(s, 'pip', 'Q2').some(m => m.content === 'A1'));
+  assert.ok(!buildMessages(kase, s, 'pip', 'Q2').some(m => m.content === 'A1'));
 });

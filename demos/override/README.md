@@ -4,7 +4,7 @@ A short, 2–3 minute detective game for AgentVerse: **The Banana Mystery**. The
 
 The fast path needs one clue reveal, three one-click interview questions, and one suspect choice. Answers are prompted to stay around 15–40 words. Confidence has three choices; a written explanation and clue citation are optional. Free-text follow-ups and presenting evidence remain available. The intended 2–3 minute duration includes reading; live model latency and extra questions can make a run longer.
 
-**This is an authored demonstration, not a validated research case or a recorded agent run.** Every browser gets its own independent game (a session cookie), so about 200 people can play at once on one server. A game resumes after a page reload or a server restart.
+**This is an authored demonstration, not a validated research case or a recorded agent run.** Every browser gets its own independent game (an HttpOnly `override_session` cookie), so about 200 people can play at once on one server, and a game resumes after a page reload or a server restart. Choose a case on the intro screen, or open `?case=<id>` to go straight to one.
 
 ## Run locally
 
@@ -48,15 +48,22 @@ Each live request includes that character’s staged knowledge, the revealed rec
 
 ## Play
 
-1. Start the mystery and inspect the banana basket on the picnic blanket.
+1. Pick a case on the intro screen (or use `?case=<id>`), start the mystery, and inspect the banana basket on the picnic blanket.
 2. Reveal all three clues: the keeper’s rule, Momo’s message, and the keeper’s account.
 3. Ask Momo, Pip, and Nori. **Quick question** submits immediately; **Next: ask…** takes you to the next monkey. You can also type a question or show a clue.
 4. Choose a suspect (or Nobody / Not sure), set confidence, and see the short debrief. Written reasoning and a clue citation are optional.
-5. Use **Play again** to start a fresh game in the same browser. Previous research logs remain on disk.
+5. Use **Play again** for the next colleague. The reset dialog has a case select, so the next game can be a different case. Previous research logs remain on disk.
 
 Click a monkey, signpost, or destination to walk there. WASD/arrows and E/Space also work. **Skip walking** jumps directly to a destination and is enabled initially for reduced-motion preferences. Momo, Pip, and Nori blink and make small gestures on separate idle cycles, and react when you approach. Reduced-motion preferences disable these animations. The notebook retains its page turns and evidence feedback; reduced-motion preferences disable those effects.
 
-The original ten-minute story is archived in `server/cases/override-v1.mjs`. The new case ID is `banana-mystery`, version `banana-authored-v1.0.0`, prompt version `banana-interview-v1`. Old and new sessions have different case versions in their logs. Switching to this story starts fresh games.
+## Writing a case
+
+A case is one module in `server/cases/`, registered in `server/cases/index.mjs`. `banana-mystery.mjs` and `banana-control.mjs` are the examples to copy. The required fields and the allowlist of what reaches the browser are in the "Decided" section of [the cases spec](../../docs/plans/2026-10-26-override-cases.spec.md); they are not repeated here.
+
+- Set `status: 'draft'` while writing. Draft cases are hidden unless the server runs with `OVERRIDE_DEV_TOOLS=1` (forced off when `NODE_ENV=production`).
+- Run `npm run cases:prompt -- <case> <character> --chapter 1 [--evidence id] [--question "..."]` to print the exact prompt a character receives.
+- Keep the character ids `momo`, `pip`, and `nori`; sprites and CSS key on them.
+- `server/cases/override-v1.mjs` stays archived and unregistered. The live cases are `banana-mystery` and `banana-control`.
 
 ## Research records
 
@@ -66,7 +73,7 @@ The server writes append-only JSONL files under `data/<env>/`, or under `OVERRID
 - `traces/<sessionId>.jsonl`: one record per LLM attempt with the full request and response. Admin only: never served to players. Probes go to `traces/probes.jsonl`.
 - `system.jsonl`: operator and system events, such as endpoint changes (`llm_active`).
 
-Every event includes `schemaVersion` (2), `eventId`, `sequence`, `timestamp`, `elapsedMs`, `sessionId`, `caseId`, `caseVersion`, `promptVersion`, `revealedPosition`, `selectedEvidence`, `character`, `question`, `answer`, interview `mode`, and `model`. Fields that do not apply are `null`. Question and answer events are linked by `questionEventId`; failures are recorded separately. `session_started` adds `env`, `appCommit`, `appDirty`, and `endpointsHash`. Additional payloads record revealed evidence IDs, locations, and the complete submitted verdict.
+Every event includes `schemaVersion` (2), `eventId`, `sequence`, `timestamp`, `elapsedMs`, `sessionId`, `caseId`, `caseVersion`, `contentHash`, `promptVersion`, `revealedPosition`, `selectedEvidence`, `character`, `question`, `answer`, interview `mode`, and `model`. Fields that do not apply are `null`. Question and answer events are linked by `questionEventId`; failures are recorded separately. `session_started` adds `assignment` (`fixed` when the request named a case, else `default`), `env`, `appCommit`, `appDirty`, and `endpointsHash`. Additional payloads record revealed evidence IDs, locations, and the complete submitted verdict.
 
 `interview_answer` and `interview_failed` carry `provenance` (`null` in rehearsal mode): the endpoint, host, model, attempts, whether it failed over, queue and call time, token counts, sampling parameters, and the IDs of the matching trace records.
 
@@ -74,7 +81,7 @@ Recorded events: session start/reset, briefing viewed, location visited, story r
 
 Live responses also emit `interview_provider_response`, linked by `questionEventId`, with the endpoint, attempt number, completion token limit, HTTP status, finish reason, completion token usage, and duration. Provider bodies and internal reasoning never appear in these session events or in responses.
 
-One server process holds the active games in memory and replays a game from its log when its player returns (also after a restart or idle eviction). Requests carry a session ID and revision to reject stale writes from another tab. A game's mutations are locked while its live answer is pending; other players are never blocked. The demo has a technical limit of 40 questions per character and 1,200 characters per question; study budgets are not implemented.
+One server process serves every player. Each browser’s game lives in memory while active and is rebuilt from its JSONL log when its player returns, also after a restart or about 30 idle minutes, so progress survives both. Requests carry a session ID and revision to reject stale writes from another tab. A game’s mutations are locked while its live answer is pending; other players are never blocked. The demo has a technical limit of 40 questions per character and 1,200 characters per question; study budgets are not implemented.
 
 ## LLM fallback
 
@@ -152,6 +159,7 @@ It prints a table per endpoint with review flags (empty, length, a character out
 | `OVERRIDE_DATA_DIR` | `./data` | Root for research records. |
 | `OVERRIDE_ENV` | `live` | Data subdirectory, e.g. `rehearsal`. |
 | `OVERRIDE_APP_COMMIT` | empty | Recorded in `session_started`. |
+| `OVERRIDE_DEV_TOOLS` | off | `1` shows draft cases in the catalog and lets them start; ignored when `NODE_ENV=production`. |
 | `HOST` / `PORT` | 127.0.0.1 / 3001 | Game listener. |
 
 ## Share with colleagues
@@ -173,10 +181,11 @@ If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:e
 
 ## Structure and artwork
 
-- `server/case.mjs`: the three clues, character-specific knowledge, and short debrief; never imported into the client.
-- `server/session.mjs`: per-game state, replay from logs, quick verdict validation, and research logs. Verdicts record `suspect`, `suspects`, confidence, and optional explanation/citations; they do not infer classifications for unselected monkeys.
+- `server/cases/` and `server/cases.mjs`: one module per case (clues, character-specific knowledge, debrief, scripted rehearsal replies), the registry, and the `defineCase` helpers; never imported into the client.
+- `scripts/case-prompt.mjs`: prints the exact interview prompt for a case and character.
+- `server/session.mjs`: per-game state for one registered case, replay from logs, quick verdict validation, and research logs. Verdicts record `suspect`, `suspects`, confidence, and optional explanation/citations; they do not infer classifications for unselected monkeys.
 - `server/llm.mjs`: the endpoint router (queues, caps, failover, traces). `server/admin.mjs`, `metrics.mjs`, `identity.mjs`, `dataset.mjs`, `static.mjs`: admin listener, Prometheus metrics, sign-in tokens and limits, JSONL storage, in-memory static files.
-- `server/interviews.mjs`: endpoint configuration, short-answer prompts, and explicit rehearsal replies.
+- `server/interviews.mjs`: endpoint configuration, the shared short-answer prompt template, and the hand-off to each case’s scripted rehearsal replies.
 - `server/index.mjs`: API, optional shared access code, and production static serving.
 - `client/station.ts`: a compact original jungle clearing, collision-aware click navigation, and nearby interactions.
 - `client/detective-walk.ts`: distance-driven walking with four facing directions and support for high-refresh displays.
