@@ -69,6 +69,7 @@ export function createApp({ investigations, accessCode = '', publicDir = resolve
         if (!validToken(req)) throw new RequestError(401, 'Enter the demo access code to continue.');
         // Each browser owns one investigation through its session cookie.
         const sessionId = cookie(req, 'override_session');
+        if (url.pathname === '/api/cases' && req.method === 'GET') return json(res, 200, { cases: investigations.catalog() });
         if (url.pathname === '/api/state' && req.method === 'GET') return json(res, 200, investigations.view(sessionId));
         if (url.pathname === '/api/events' && req.method === 'GET') {
           const body = investigations.export(sessionId);
@@ -103,7 +104,9 @@ export function createApp({ investigations, accessCode = '', publicDir = resolve
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const config = modelConfig();
-  const investigations = new Investigations({ dataDir: process.env.OVERRIDE_DATA_DIR || resolve(root, 'data'), config });
+  let dev = process.env.OVERRIDE_DEV_TOOLS === '1';
+  if (dev && process.env.NODE_ENV === 'production') { console.log('Dev tools are off in production.'); dev = false; }
+  const investigations = new Investigations({ dataDir: process.env.OVERRIDE_DATA_DIR || resolve(root, 'data'), config, dev });
   const port = Number(process.env.PORT || 3001);
   const host = process.env.HOST || '127.0.0.1';
   const server = createApp({ investigations, accessCode: process.env.OVERRIDE_ACCESS_CODE || '' });

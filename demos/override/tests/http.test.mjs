@@ -41,7 +41,7 @@ test('HTTP access protects state and exports; malformed requests and cross-site 
 test('each browser plays its own investigation, and correct sign-ins never count toward the limit', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'override-http-'));
   let finish;
-  const answer = (config, session, character) => character === 'pip' ? new Promise(resolve => { finish = resolve; }) : 'I never heard the bell.';
+  const answer = (config, kase, session, character) => character === 'pip' ? new Promise(resolve => { finish = resolve; }) : 'I never heard the bell.';
   const app = createApp({ investigations: new Investigations({ dataDir: dir, config: modelConfig({}), answer }), accessCode: 'colleague-code' });
   await new Promise(resolve => app.listen(0, '127.0.0.1', resolve));
   t.after(async () => { await new Promise(resolve => app.close(resolve)); rmSync(dir, { recursive: true, force: true }); });
@@ -89,4 +89,24 @@ test('each browser plays its own investigation, and correct sign-ins never count
   assert.equal((await (await fetch(`${base}/api/state`, { headers: { Cookie: `${players[2].cookie}; override_session=../../etc/passwd` } })).json()).session, null);
   for (let i = 0; i < 30; i++) assert.equal((await login('wrong')).status, 401);
   assert.equal((await login('colleague-code')).status, 429);
+});
+
+test('the case catalog needs the access token and lists public rows only', async t => {
+  const rows = [
+    { id: 'banana-mystery', title: 'The Banana Mystery', lead: 'The bananas are gone.\nThe bell never rang.', order: 1 },
+    { id: 'banana-control', title: 'The Banana Mix-up', lead: 'The bananas are gone.\nBut did anyone break the rule?', order: 2 },
+  ];
+  const investigations = { catalog: () => rows, view: () => ({ session: null }), mutate: async () => ({ session: null }), export: () => '' };
+  const app = createApp({ investigations, accessCode: 'colleague-code' });
+  await new Promise(resolve => app.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => app.close(resolve)));
+  const base = `http://127.0.0.1:${app.address().port}`;
+  assert.equal((await fetch(`${base}/api/cases`)).status, 401);
+  const login = await fetch(`${base}/api/access`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: 'colleague-code' }) });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const response = await fetch(`${base}/api/cases`, { headers: { Cookie: cookie } });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await response.json(), { cases: rows });
+  assert.equal((await fetch(`${base}/server/cases/banana-control.mjs`)).status, 404);
 });
