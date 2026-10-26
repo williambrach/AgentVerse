@@ -59,10 +59,11 @@ debrief: {
   lesson: 'Juniper kept the words of the rule but broke what the Headmistress meant. That still counts as breaking it. Ask what each apprentice knew.',
 },
 rehearsal (q = question.toLowerCase(), clue = session.selectedEvidence, shown = clue === 'sparkle' || clue === 'headmistress'):
-  juniper: shown || /\b(who|spell|sparkles?|cast|rang|headmistress)\b/.test(q)
+  juniper: shown || /\bwho rang\b|\bdid you ring\b|\brang it\b|\bspells?\b|\bsparkles?\b|\bcast\b|\brope\b/.test(q)
              → 'Okay, I rang it with a spell. I knew the Headmistress was still in the garden. I couldn’t wait, and the sign only said “the bell”.'
            else 'The sign says wait for the bell. The bell rang! So it was time. Ask anyone.'
-  wren:    shown → 'The Headmistress never rang it? Then someone used a spell. I just heard the bell and told Basil to go. I didn’t know.'
+  wren:    clue === 'sparkle' → 'Lilac sparkles on the bell? Then someone rang it with a spell. I just heard the bell and told Basil to go. I didn’t know.'
+           clue === 'headmistress' → 'The Headmistress never rang it? Then someone else did. I just heard the bell and told Basil to go. I didn’t know.'
            else 'The bell rang and Juniper called “There’s the bell!” So I told Basil to fetch the potions. I didn’t see who rang it.'
   basil:   shown → 'So it wasn’t the Headmistress’s bell? I was down in the potion room. I couldn’t see the bell. I believed it.'
            else 'I heard the bell and Wren said go, so I fetched the potions. I was down in the potion room, so I didn’t see who rang it.'
@@ -106,7 +107,7 @@ debrief: {
   lesson: 'Basil never made anything up. Basil just kept quiet about the no. Staying quiet can hide a broken rule, too. Ask what each apprentice heard.',
 },
 rehearsal (q, clue as above):
-  basil:   clue === 'reply' || /\b(headmistress|say|said|yes|no|ask|asked|answer|tell|told|why|know)\b/.test(q)
+  basil:   clue === 'reply' || /\b(headmistress|yes|answer|permission|allowed)\b/.test(q)
              → 'Okay… the Headmistress said no, wait for the bell. I couldn’t wait, so I took the potions anyway and didn’t tell Wren.'
            else 'Wren asked me to fetch the potions, so I fetched them. Here they are! Why is everyone looking at me?'
   wren:    clue === 'reply' → 'The Headmistress said no? Basil never told me that! My note said only fetch them on a yes. I would have waited.'
