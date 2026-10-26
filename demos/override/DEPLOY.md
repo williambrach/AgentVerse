@@ -6,12 +6,11 @@ This guide uses Render for a hosted colleague demo. A [local Docker smoke test](
 
 ## Current deployment limits
 
-- **One shared investigation per server.** Everyone with access can continue or reset the same case. Arrange for colleagues to play sequentially.
-- **Run one instance.** Session state and access cookies live in process memory; multiple replicas would have separate state.
-- **Restarts and deployments reset active progress and sign-ins.** A persistent disk preserves JSONL logs, but the server does not restore an unfinished case from them.
+- **Every browser has its own game.** Players do not share or reset each other's case.
+- **Run one instance.** Games live in process memory and are replayed from the logs; multiple replicas would not share them.
+- **Restarts resume games from the logs on the persistent disk.** Sign-ins also survive when `OVERRIDE_SECRET` is set; without it they reset.
 - **The access code is shared.** It protects the API and session exports; static game assets remain publicly accessible. It does not provide separate participant accounts or an administrator-only export role.
 
-Before inviting simultaneous participants, add independent sessions and durable progress. The existing demo is suitable for supervised, sequential play.
 
 ## 1. Prepare the repository
 
@@ -116,9 +115,9 @@ Deploy updates between players. Push the new source and assets to the configured
 
 Record the Git commit associated with a working release. To roll back, redeploy that known-good commit using the hosting platform. Recheck the environment settings and disk attachment, then repeat the smoke test. Rolling back the application does not restore an unfinished session or revert its log files.
 
-Logs are stored as `/app/data/<session-id>.jsonl`. **Export session** downloads the current session only; older sessions remain on disk after reset. Copy older logs through the host's supported file-access or backup tools. Keep backups before deleting a service or disk. Logs contain submitted questions, answers, evidence selections, and verdicts.
+Logs are stored as `/app/data/live/sessions/<session-id>.jsonl` (see the README's research records for the rest of the layout). **Export session** downloads the current session only; older sessions remain on disk after reset. Copy older logs through the host's supported file-access or backup tools. Keep backups before deleting a service or disk. Logs contain submitted questions, answers, evidence selections, and verdicts.
 
-Restarting the service preserves files on the mounted disk but clears the active case and login cookies. Players must sign in again and begin a new investigation.
+Restarting the service preserves files on the mounted disk. Games resume from their logs; players must sign in again unless `OVERRIDE_SECRET` is set.
 
 ## Local Docker smoke test
 
@@ -166,6 +165,43 @@ For a VPS deployment, place an HTTPS reverse proxy in front of the loopback-boun
 | UI shows scripted rehearsal unexpectedly | Check that both live-mode variables were saved and the service restarted. |
 | Interviews fail with credential, rate-limit, or timeout errors | Check the provider-specific message, key permissions, endpoint reachability, and configured model. The health endpoint alone does not validate these. |
 | Changes or new sprites do not appear | Confirm the intended commit was deployed, PNGs under `public/` were committed, and reload the page to load the new browser bundle. |
-| Another player changes or resets the case | The current server shares one investigation. Schedule sequential play until independent sessions are implemented. |
+
+## Hosting 200 players on a Mac
+
+Not included yet: launchd units, off-machine backup, and Grafana. Prometheus config and alert examples are in [ops/prometheus.yml](ops/prometheus.yml). Back up `data/` by hand until a backup job exists, and restart the server by hand after a crash.
+
+**Machine**
+
+- Run `caffeinate -dims` for the whole event. Turn Power Nap off, keep the power adapter connected and the lid open.
+- Turn off automatic macOS updates and scheduled restarts. Freeze the configuration 48 hours before, and do no development on the machine during the event.
+- Use Ethernet, not Wi-Fi.
+- Raise the connection queue limit: `sudo sysctl -w kern.ipc.somaxconn=1024` (the server asks for a queue of 1024).
+
+**Configuration**
+
+- Set `OVERRIDE_SECRET` to a fixed random value so sign-ins survive restarts.
+- Set `OVERRIDE_ENDPOINTS` and the endpoint keys (see the README's LLM fallback section).
+- Set `OVERRIDE_ADMIN_TOKEN`. The admin listener binds 127.0.0.1 only: reach it with `ssh -L 3002:127.0.0.1:3002 user@mac`, never through the tunnel.
+- Over the internet, use a named Cloudflare Tunnel (`cloudflared`) to the game port only, and set `OVERRIDE_TRUST_PROXY=1` so the login limiter sees each player's own address. Cloudflare's 100 s proxy timeout exceeds the 60 s LLM deadline. On a closed LAN, use a fixed address or `.local` name, and check that the Wi-Fi does not isolate clients.
+
+**Runbook**
+
+Before:
+- Run `npm run loadtest` and `node --env-file-if-exists=.env scripts/preflight.mjs --capacity --out preflight.json`; review the report.
+- Test the backup target (a manual copy of `data/`).
+
+One hour before:
+- Start the server and confirm `/admin/health` is green. Smoke-test in rehearsal (`OVERRIDE_ENV=rehearsal`), then switch to live.
+
+During:
+- Watch the admin page and `/metrics`. When pinning or moving endpoints, type the reason.
+- If a player sees an error, they reload the page; the game resumes from its log.
+- Never delete `data/`.
+
+After:
+1. `POST /admin/sessions/pause` and let pending answers finish.
+2. Copy `data/` off the machine.
+3. Review incidents in `system.jsonl`.
+4. Rotate the keys.
 
 For case details and research-event fields, see [README.md](README.md).

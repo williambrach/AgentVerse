@@ -1,0 +1,35 @@
+# Scrapes the game's admin listener. Bind Prometheus to 127.0.0.1 too.
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: override
+    metrics_path: /metrics
+    # File holding only the OVERRIDE_ADMIN_TOKEN value (no trailing text).
+    authorization:
+      type: Bearer
+      credentials_file: /path/to/admin-token
+    static_configs:
+      - targets: ['127.0.0.1:3002']
+
+# Alert rules example: save as rules.yml and list it under `rule_files:` above.
+# groups:
+#   - name: override
+#     rules:
+#       - alert: DataWriteFailure
+#         expr: increase(override_log_write_failures_total[1m]) > 0
+#         labels: { severity: critical }
+#       - alert: ActiveEndpointFailing
+#         expr: sum(rate(override_llm_failures_total[1m])) / clamp_min(sum(rate(override_llm_request_duration_seconds_count[1m])), 0.001) > 0.2
+#         for: 1m
+#         labels: { severity: high }
+#       - alert: AutomaticFailover
+#         expr: increase(override_llm_failovers_total[1m]) > 0
+#         labels: { severity: high }
+#       - alert: CredentialsRejected
+#         expr: increase(override_llm_failures_total{reason="credentials_rejected"}[1m]) > 0
+#         labels: { severity: critical }
+#       - alert: QueueGrowing
+#         expr: sum(override_llm_queue_length) > 50
+#         for: 1m
+#         labels: { severity: high }

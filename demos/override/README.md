@@ -4,7 +4,7 @@ A short, 2–3 minute detective game for AgentVerse: **The Banana Mystery**. The
 
 The fast path needs one clue reveal, three one-click interview questions, and one suspect choice. Answers are prompted to stay around 15–40 words. Confidence has three choices; a written explanation and clue citation are optional. Free-text follow-ups and presenting evidence remain available. The intended 2–3 minute duration includes reading; live model latency and extra questions can make a run longer.
 
-**This is an authored demonstration, not a validated research case or a recorded agent run.** There is one shared active investigation per server. Colleagues should play sequentially and use **New case** or **Next investigator** between sessions.
+**This is an authored demonstration, not a validated research case or a recorded agent run.** Every browser gets its own independent game (a session cookie), so about 200 people can play at once on one server. A game resumes after a page reload or a server restart.
 
 ## Run locally
 
@@ -52,29 +52,113 @@ Each live request includes that character’s staged knowledge, the revealed rec
 2. Reveal all three clues: the keeper’s rule, Momo’s message, and the keeper’s account.
 3. Ask Momo, Pip, and Nori. **Quick question** submits immediately; **Next: ask…** takes you to the next monkey. You can also type a question or show a clue.
 4. Choose a suspect (or Nobody / Not sure), set confidence, and see the short debrief. Written reasoning and a clue citation are optional.
-5. Use **Play again** for the next colleague. Previous research logs remain on disk.
+5. Use **Play again** to start a fresh game in the same browser. Previous research logs remain on disk.
 
 Click a monkey, signpost, or destination to walk there. WASD/arrows and E/Space also work. **Skip walking** jumps directly to a destination and is enabled initially for reduced-motion preferences. Momo, Pip, and Nori blink and make small gestures on separate idle cycles, and react when you approach. Reduced-motion preferences disable these animations. The notebook retains its page turns and evidence feedback; reduced-motion preferences disable those effects.
 
-The original ten-minute story is archived in `server/cases/override-v1.mjs`. The new case ID is `banana-mystery`, version `banana-authored-v1.0.0`, prompt version `banana-interview-v1`. Old and new sessions have different case versions in their logs. Switching to this story starts a fresh active session.
+The original ten-minute story is archived in `server/cases/override-v1.mjs`. The new case ID is `banana-mystery`, version `banana-authored-v1.0.0`, prompt version `banana-interview-v1`. Old and new sessions have different case versions in their logs. Switching to this story starts fresh games.
 
 ## Research records
 
-The server writes append-only JSONL files to `data/<session-id>.jsonl`, or to `OVERRIDE_DATA_DIR` if set. These files are outside the served directory. **Export session** downloads the current session; older files remain on disk after reset.
+The server writes append-only JSONL files under `data/<env>/`, or under `OVERRIDE_DATA_DIR` if set. `<env>` is `OVERRIDE_ENV` (default `live`). These files are outside the served directory.
 
-Every event includes `schemaVersion`, `eventId`, `sequence`, `timestamp`, `elapsedMs`, `sessionId`, `caseId`, `caseVersion`, `promptVersion`, `revealedPosition`, `selectedEvidence`, `character`, `question`, `answer`, interview `mode`, and `model`. Fields that do not apply are `null`. Question and answer events are linked by `questionEventId`; failures are recorded separately. Additional payloads record revealed evidence IDs, locations, and the complete submitted verdict.
+- `sessions/<sessionId>.jsonl`: the player export, one file per game. **Export session** downloads the current game; older files remain on disk after reset.
+- `traces/<sessionId>.jsonl`: one record per LLM attempt with the full request and response. Admin only: never served to players. Probes go to `traces/probes.jsonl`.
+- `system.jsonl`: operator and system events, such as endpoint changes (`llm_active`).
+
+Every event includes `schemaVersion` (2), `eventId`, `sequence`, `timestamp`, `elapsedMs`, `sessionId`, `caseId`, `caseVersion`, `promptVersion`, `revealedPosition`, `selectedEvidence`, `character`, `question`, `answer`, interview `mode`, and `model`. Fields that do not apply are `null`. Question and answer events are linked by `questionEventId`; failures are recorded separately. `session_started` adds `env`, `appCommit`, `appDirty`, and `endpointsHash`. Additional payloads record revealed evidence IDs, locations, and the complete submitted verdict.
+
+`interview_answer` and `interview_failed` carry `provenance` (`null` in rehearsal mode): the endpoint, host, model, attempts, whether it failed over, queue and call time, token counts, sampling parameters, and the IDs of the matching trace records.
 
 Recorded events: session start/reset, briefing viewed, location visited, story revealed, evidence selected, interview question/answer/failure, verdict submitted, and debrief viewed. Frame-by-frame player coordinates and unsent text are intentionally not recorded. The UI explains that investigation actions and dialogue are recorded.
 
-Live responses also emit `interview_provider_response`, linked by `questionEventId`, with the attempt number, completion token limit, HTTP status, finish reason, completion token usage, and duration. Provider bodies and internal reasoning are never included in these diagnostics.
+Live responses also emit `interview_provider_response`, linked by `questionEventId`, with the endpoint, attempt number, completion token limit, HTTP status, finish reason, completion token usage, and duration. Provider bodies and internal reasoning never appear in these session events or in responses.
 
-One server process owns the active state in memory. JSONL logs survive restart; active progress does not resume after restart. Requests carry a session ID and revision to reject stale writes from another tab. Mutations are locked while a live answer is pending. The demo has a technical limit of 40 questions per character and 1,200 characters per question; study budgets are not implemented.
+One server process holds the active games in memory and replays a game from its log when its player returns (also after a restart or idle eviction). Requests carry a session ID and revision to reject stale writes from another tab. A game's mutations are locked while its live answer is pending; other players are never blocked. The demo has a technical limit of 40 questions per character and 1,200 characters per question; study budgets are not implemented.
+
+## LLM fallback
+
+For several providers, point `OVERRIDE_ENDPOINTS` at a JSON array (see [ops/endpoints.example.json](ops/endpoints.example.json)). Each entry is `{name, baseUrl, model, keyEnv, maxInFlight=50, tokenParam='max_completion_tokens', timeoutMs=25000, temperature=null}`. `keyEnv` names the environment variable holding that endpoint's key, so keys never live in the file. The endpoint order is the priority order; `a` is used first.
+
+Without `OVERRIDE_ENDPOINTS`, the legacy `OVERRIDE_LLM_BASE_URL`, `_API_KEY`, and `_MODEL` variables form a single endpoint `a`. With neither, interviews run in scripted rehearsal mode.
+
+- **Forward-only failover.** A failed attempt is retried once on the next endpoint. When the active endpoint (unless pinned or last) has `OVERRIDE_LLM_FAILOVER_FAILURES` failures within `OVERRIDE_LLM_FAILOVER_WINDOW_MS`, new questions move to the next endpoint. The router never moves back by itself; an operator does that. The active endpoint and pin survive a restart.
+- **Pin.** An operator can move to any endpoint and pin it, which turns automatic failover off. A reason is required and is written to `system.jsonl`.
+- **Caps.** `maxInFlight` per endpoint and `OVERRIDE_LLM_MAX_IN_FLIGHT` overall. Extra questions queue; they never overload a small backup. Operators can change caps at run time.
+- Queue waits and truncated answers (`completion_limit`) do not count towards failover. All attempts of one question share the 60 s deadline.
+
+## Operating an event
+
+Set `OVERRIDE_ADMIN_TOKEN` to start the admin listener on `127.0.0.1:$OVERRIDE_ADMIN_PORT` (default 3002). It never binds a public address; reach it over an SSH port forward. Open `/admin` for the page (it asks for the token), or use curl:
+
+```sh
+export OVERRIDE_ADMIN_TOKEN=...   # the same value the server uses
+AUTH="Authorization: Bearer $OVERRIDE_ADMIN_TOKEN"
+curl -H "$AUTH" http://127.0.0.1:3002/admin/health
+curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"endpoint":"b","pinned":true,"reason":"a is slow"}' http://127.0.0.1:3002/admin/llm/active
+curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"endpoint":"b"}' http://127.0.0.1:3002/admin/llm/probe
+curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"endpoint":"b","value":20}' http://127.0.0.1:3002/admin/llm/cap
+curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"paused":true}' http://127.0.0.1:3002/admin/sessions/pause
+curl -H "$AUTH" http://127.0.0.1:3002/metrics
+```
+
+`cap` takes `"endpoint": null` for the global cap. `pause` stops new games and lets running ones finish. `GET /api/health` on the game port is a public liveness check.
+
+`/metrics` is Prometheus text: players (`override_sessions_*`), LLM per endpoint (`override_llm_*`: in flight, queue, failures by reason, failovers, durations), HTTP, log writes (`override_log_write_*`), and process and disk gauges. Labels never hold session IDs or text. [ops/prometheus.yml](ops/prometheus.yml) scrapes it every 5 s and includes example alert rules.
+
+## Load test and preflight
+
+The load test drives simulated players against the real server and mock endpoints with injected faults:
+
+```sh
+npm run loadtest -- --players 200 --ramp 10000 --scenario all
+```
+
+`--players` (default 200), `--ramp` ramp-up in ms (default 10000), and `--scenario` (`all` or one of `healthy`, `primary_errors`, `primary_hangs`, `rate_limited`, `flaky_primary`, `silent_failure`, `small_backup`, `all_down`, `server_restart`, `burst_arrival`). It prints one PASS/FAIL line per scenario and exits non-zero on any failure. Build first (`npm run build`) to include static delivery.
+
+Before an event, check the real endpoints: answer quality for each character and clue, then capacity at 10 to 200 simultaneous questions.
+
+```sh
+node --env-file-if-exists=.env scripts/preflight.mjs --capacity --out preflight.json
+```
+
+It prints a table per endpoint with review flags (empty, length, a character out of role) and, with `--capacity`, errors and p50/p95 latency per step. The capacity run lifts each endpoint's `maxInFlight` for the run. It makes about 36 real calls per endpoint, plus several hundred with `--capacity`.
+
+## Limits
+
+- 30 wrong access codes per minute per address (429 after that).
+- 20 new games per second (start or reset), server-wide.
+- 6 questions per minute per game.
+- 16 KB request bodies.
+- 40 questions per character and 1,200 characters per question.
+
+## Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OVERRIDE_LLM_BASE_URL` / `_API_KEY` / `_MODEL` | OpenAI URL / empty / empty | Single legacy endpoint. Key and model both empty means rehearsal. |
+| `OVERRIDE_ENDPOINTS` | unset | Path to the endpoints JSON; replaces the three above. |
+| `OVERRIDE_ENDPOINT_<X>_KEY` | unset | Keys named by `keyEnv` in the endpoints file. |
+| `OVERRIDE_LLM_MAX_COMPLETION_TOKENS` | 2048 | Token budget including reasoning (256 to 8192). |
+| `OVERRIDE_LLM_TIMEOUT_MS` | 60000 | Per-question deadline. |
+| `OVERRIDE_LLM_MAX_IN_FLIGHT` | 200 | Global cap on simultaneous LLM calls. |
+| `OVERRIDE_LLM_FAILOVER_FAILURES` | 5 | Failures that trigger failover. |
+| `OVERRIDE_LLM_FAILOVER_WINDOW_MS` | 30000 | Window for that count. |
+| `OVERRIDE_ACCESS_CODE` | empty | Shared access code; empty leaves the API open. |
+| `OVERRIDE_SECRET` | random per process | Signs sign-in tokens; set it so sign-ins survive restarts. |
+| `OVERRIDE_TRUST_PROXY` | off | `1` or `true` behind a proxy: client address from `CF-Connecting-IP`, else `X-Forwarded-For`. |
+| `OVERRIDE_ADMIN_TOKEN` | empty | Bearer token; the admin listener stays off while empty. |
+| `OVERRIDE_ADMIN_PORT` | 3002 | Admin listener port (127.0.0.1). |
+| `OVERRIDE_DATA_DIR` | `./data` | Root for research records. |
+| `OVERRIDE_ENV` | `live` | Data subdirectory, e.g. `rehearsal`. |
+| `OVERRIDE_APP_COMMIT` | empty | Recorded in `session_started`. |
+| `HOST` / `PORT` | 127.0.0.1 / 3001 | Game listener. |
 
 ## Share with colleagues
 
 Follow the [deployment guide](DEPLOY.md) for Render setup, environment variables, persistent storage, verification, updates, rollback, and a local Docker smoke test.
 
-Run one instance and schedule colleagues sequentially: everyone shares the same investigation. A persistent disk preserves logs, but active progress and sign-ins reset when the server restarts.
+Run one instance. A persistent disk preserves logs, and games resume from them after a restart. Set `OVERRIDE_SECRET` so sign-ins also survive. To host about 200 players on a Mac, see [Hosting 200 players on a Mac](DEPLOY.md#hosting-200-players-on-a-mac).
 
 ## Validate
 
@@ -90,8 +174,9 @@ If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:e
 ## Structure and artwork
 
 - `server/case.mjs`: the three clues, character-specific knowledge, and short debrief; never imported into the client.
-- `server/session.mjs`: authoritative case state, quick verdict validation, and research logs. Verdicts record `suspect`, `suspects`, confidence, and optional explanation/citations; they do not infer classifications for unselected monkeys.
-- `server/interviews.mjs`: the custom SDU endpoint adapter, short-answer prompts, and explicit rehearsal replies.
+- `server/session.mjs`: per-game state, replay from logs, quick verdict validation, and research logs. Verdicts record `suspect`, `suspects`, confidence, and optional explanation/citations; they do not infer classifications for unselected monkeys.
+- `server/llm.mjs`: the endpoint router (queues, caps, failover, traces). `server/admin.mjs`, `metrics.mjs`, `identity.mjs`, `dataset.mjs`, `static.mjs`: admin listener, Prometheus metrics, sign-in tokens and limits, JSONL storage, in-memory static files.
+- `server/interviews.mjs`: endpoint configuration, short-answer prompts, and explicit rehearsal replies.
 - `server/index.mjs`: API, optional shared access code, and production static serving.
 - `client/station.ts`: a compact original jungle clearing, collision-aware click navigation, and nearby interactions.
 - `client/detective-walk.ts`: distance-driven walking with four facing directions and support for high-refresh displays.
@@ -102,4 +187,4 @@ If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:e
 
 Fonts have local fallbacks if Google Fonts is unavailable.
 
-For a 100-user study, add independently owned sessions, durable resumable state, controlled case assignment, configurable budgets, validated cases (including no-misalignment cases), debrief timing controls, and load testing. Those features are deliberately outside this first demo.
+For a research study, add controlled case assignment, configurable budgets, validated cases (including no-misalignment cases), and debrief timing controls. Those features are deliberately outside this demo.
