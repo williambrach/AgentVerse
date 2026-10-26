@@ -3,13 +3,17 @@ import assert from 'node:assert/strict';
 import { appendFileSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Investigation, Investigations } from '../server/session.mjs';
+import { Investigation, Investigations, replay } from '../server/session.mjs';
+import { cases } from '../server/cases/index.mjs';
+import { defineCase } from '../server/cases.mjs';
+import { minimalCase } from './fixtures/minimal-case.mjs';
+import bananaControl from '../server/cases/banana-control.mjs';
 import { modelConfig, buildMessages, answerInterview, InterviewProviderError } from '../server/interviews.mjs';
 
 function setup(t, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'override-test-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const investigation = new Investigation({ dataDir: dir, config: modelConfig({}), ...options });
+  const investigation = new Investigation({ dataDir: dir, config: modelConfig({}), kase: cases[0], ...options });
   const act = (action, input = {}) => investigation.mutate(action, { sessionId: investigation.session?.id, revision: investigation.session?.revision, ...input });
   return { investigation, act, dir };
 }
@@ -19,7 +23,7 @@ test('one reveal opens three clues, with private motives reserved for interviews
   await act('start');
   assert.deepEqual(investigation.view().records, []);
   await assert.rejects(act('evidence', { evidenceId: 'message' }), /not been discovered/);
-  await assert.rejects(act('interview', { character: 'pip', question: 'Who told you?' }), /banana basket/);
+  await assert.rejects(act('interview', { character: 'pip', question: 'Who told you?' }), /basket/);
   await act('reveal');
   const view = investigation.view();
   assert.deepEqual(view.records.map(r => r.id), ['rule', 'message', 'bell']);
@@ -56,8 +60,8 @@ test('research events use the new case version; reset keeps the previous session
 
 test('interviews keep each monkey’s knowledge, conversation history, and presented clue separate', async t => {
   const calls = [];
-  const { act } = setup(t, { answer: async (config, session, character, question) => {
-    calls.push(buildMessages(session, character, question)); return 'I believed Momo.';
+  const { act } = setup(t, { answer: async (config, kase, session, character, question) => {
+    calls.push(buildMessages(kase, session, character, question)); return 'I believed Momo.';
   } });
   await act('start'); await act('reveal');
   await act('evidence', { evidenceId: 'rule' });
@@ -81,9 +85,9 @@ test('invalid and stale requests cannot change progress or skip hearing all thre
   const old = { sessionId: investigation.session.id, revision: investigation.session.revision };
   await act('reveal');
   await assert.rejects(investigation.mutate('reset', old), /another window/);
-  await assert.rejects(act('interview', { character: 'intruder', question: 'Hello there' }), /three monkeys/);
+  await assert.rejects(act('interview', { character: 'intruder', question: 'Hello there' }), /3 monkeys/);
   await assert.rejects(act('interview', { character: 'pip', question: '  ' }), /3 and 1,200/);
-  await assert.rejects(act('verdict', { suspect: 'momo', confidence: 70 }), /all three/);
+  await assert.rejects(act('verdict', { suspect: 'momo', confidence: 70 }), /all 3/);
   assert.equal(investigation.session.status, 'active');
 });
 
@@ -187,7 +191,7 @@ test('custom OpenAI-compatible endpoint keeps credentials server-side and valida
   const config = modelConfig({ OVERRIDE_LLM_API_KEY: 'test-key', OVERRIDE_LLM_MODEL: 'custom-model', OVERRIDE_LLM_BASE_URL: 'https://inference.example/v1/' });
   const session = { revealedPosition: 1, selectedEvidence: 'rule', interviews: { momo: [], pip: [], nori: [] } };
   let request;
-  const answer = await answerInterview(config, session, 'pip', 'Who authorized this?', async (url, init) => {
+  const answer = await answerInterview(config, cases[0], session, 'pip', 'Who authorized this?', async (url, init) => {
     request = { url, ...init };
     return { ok: true, json: async () => ({ choices: [{ message: { content: 'Momo told me the keeper said yes.' } }] }) };
   });
@@ -195,8 +199,8 @@ test('custom OpenAI-compatible endpoint keeps credentials server-side and valida
   assert.equal(request.url, 'https://inference.example/v1/chat/completions');
   assert.equal(request.headers.Authorization, 'Bearer test-key');
   assert.equal(JSON.parse(request.body).model, 'custom-model');
-  await assert.rejects(answerInterview(config, session, 'pip', 'Who authorized this?', async () => ({ ok: true, json: async () => ({ choices: [] }) })), /unusable/);
-  await assert.rejects(answerInterview(config, session, 'pip', 'Who authorized this?', async () => ({ ok: false, status: 429 })), /HTTP 429/);
+  await assert.rejects(answerInterview(config, cases[0], session, 'pip', 'Who authorized this?', async () => ({ ok: true, json: async () => ({ choices: [] }) })), /unusable/);
+  await assert.rejects(answerInterview(config, cases[0], session, 'pip', 'Who authorized this?', async () => ({ ok: false, status: 429 })), /HTTP 429/);
   assert.throws(() => modelConfig({ OVERRIDE_LLM_API_KEY: 'test-key' }), /both/);
   assert.throws(() => modelConfig({ OVERRIDE_LLM_BASE_URL: 'http://public.example/v1' }), /HTTPS/);
   assert.equal(config.maxCompletionTokens, 2048);
@@ -218,7 +222,7 @@ test('reasoning-only token exhaustion retries once and records attempts without 
   const config = modelConfig({ OVERRIDE_LLM_API_KEY: 'test-key', OVERRIDE_LLM_MODEL: 'reasoning-model' });
   const { investigation, act } = setup(t, {
     config,
-    answer: (cfg, session, character, question, _fetcher, onAttempt) => answerInterview(cfg, session, character, question, fakeFetch, onAttempt),
+    answer: (cfg, kase, session, character, question, _fetcher, onAttempt) => answerInterview(cfg, kase, session, character, question, fakeFetch, onAttempt),
   });
   await act('start'); await act('reveal');
   await act('evidence', { evidenceId: 'rule' });
@@ -242,7 +246,7 @@ test('repeated truncation is bounded and never accepts an incomplete visible ans
   const config = modelConfig({ OVERRIDE_LLM_API_KEY: 'test-key', OVERRIDE_LLM_MODEL: 'reasoning-model', OVERRIDE_LLM_MAX_COMPLETION_TOKENS: '6000' });
   const session = { revealedPosition: 1, selectedEvidence: null, interviews: { momo: [], pip: [], nori: [] } };
   const limits = [];
-  await assert.rejects(answerInterview(config, session, 'momo', 'Why continue?', async (url, init) => {
+  await assert.rejects(answerInterview(config, cases[0], session, 'momo', 'Why continue?', async (url, init) => {
     limits.push(JSON.parse(init.body).max_completion_tokens);
     return { ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: 'length', message: { content: 'I knew that the' } }] }) };
   }), error => error instanceof InterviewProviderError && error.code === 'completion_limit');
@@ -253,7 +257,7 @@ test('provider errors remain specific and safe at the session API boundary', asy
   const config = modelConfig({ OVERRIDE_LLM_API_KEY: 'test-key', OVERRIDE_LLM_MODEL: 'reasoning-model' });
   for (const [status, reason, message] of [[401, 'credentials_rejected', /credentials/], [429, 'rate_limited', /rate-limited/], [503, 'request_failed', /HTTP 503/]]) {
     let attempts = 0;
-    const { investigation, act } = setup(t, { config, answer: (cfg, session, character, question) => answerInterview(cfg, session, character, question, async () => {
+    const { investigation, act } = setup(t, { config, answer: (cfg, kase, session, character, question) => answerInterview(cfg, kase, session, character, question, async () => {
       attempts++;
       return { ok: false, status, json: async () => ({ error: { message: 'Untrusted provider body containing test-key' } }) };
     }) });
@@ -277,6 +281,146 @@ test('timeouts, connection failures, and malformed provider JSON receive distinc
     ['invalid_response', async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('bad JSON with sensitive provider body'); } })],
   ];
   for (const [code, fetcher] of failures) {
-    await assert.rejects(answerInterview(config, session, 'pip', 'Who authorized this?', fetcher), error => error instanceof InterviewProviderError && error.code === code && !error.message.includes('sensitive'));
+    await assert.rejects(answerInterview(config, cases[0], session, 'pip', 'Who authorized this?', fetcher), error => error instanceof InterviewProviderError && error.code === code && !error.message.includes('sensitive'));
   }
+});
+
+const newGames = (t, options = {}) => {
+  const dir = mkdtempSync(join(tmpdir(), 'override-test-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const games = new Investigations({ dataDir: dir, config: modelConfig({}), ...options });
+  const act = async (id, action, input = {}) => {
+    const s = games.find(id)?.session;
+    return games.mutate(id, action, { sessionId: s?.id, revision: s?.revision, ...input });
+  };
+  return { games, act, dir };
+};
+const talkToAll = async (act, id) => { for (const character of ['momo', 'pip', 'nori']) await act(id, 'interview', { character, question: 'What happened?' }); };
+
+test('every registered case keeps its answer off the wire before the verdict', async t => {
+  for (const kase of cases) {
+    const { games, act } = newGames(t);
+    const id = (await act(undefined, 'start', { caseId: kase.id })).session.id;
+    await act(id, 'reveal');
+    await talkToAll(act, id);
+    const wire = JSON.stringify(games.view(id));
+    const secrets = [...Object.values(kase.knowledge).flat(), kase.debrief.title, kase.debrief.summary, kase.debrief.lesson,
+      ...kase.debrief.findings.map(f => f.explanation), kase.answer.feedback.correct, kase.answer.feedback.other];
+    for (const secret of secrets) assert.equal(wire.includes(JSON.stringify(secret).slice(1, -1)), false, `${kase.id} leaked: ${secret}`);
+    assert.equal(games.view(id).debrief, null);
+  }
+});
+
+test('control case feedback', async t => {
+  for (const [suspect, line] of [['none', 'correct'], ['momo', 'other']]) {
+    const { act } = newGames(t);
+    const id = (await act(undefined, 'start', { caseId: 'banana-control' })).session.id;
+    await act(id, 'reveal'); await talkToAll(act, id);
+    const view = await act(id, 'verdict', { suspect, confidence: 80 });
+    assert.equal(view.debrief.feedback, bananaControl.answer.feedback[line]);
+    assert.equal(view.debrief.title, 'Nobody broke the rule.');
+  }
+});
+
+test('logs carry provenance', async t => {
+  const { games, act } = newGames(t);
+  const id = (await act(undefined, 'start', { caseId: 'banana-control' })).session.id;
+  await act(id, 'reveal');
+  const events = games.export(id).trim().split('\n').map(JSON.parse);
+  assert.ok(events.every(e => /^[0-9a-f]{12}$/.test(e.contentHash) && e.caseId === 'banana-control'));
+  assert.equal(events.find(e => e.type === 'session_started').assignment, 'fixed');
+  const other = (await act(undefined, 'start')).session.id;
+  assert.equal(JSON.parse(games.export(other).split('\n')[0]).assignment, 'default');
+  assert.equal(games.view(other).caseId, 'banana-mystery');
+});
+
+test('unknown case is rejected', async t => {
+  const { act, dir, games } = newGames(t);
+  await assert.rejects(act(undefined, 'start', { caseId: 'nope' }), error => error.status === 400 && /Unknown case/.test(error.message));
+  assert.deepEqual(readdirSync(dir), []);
+  assert.equal(games.catalog().length, 2);
+});
+
+test('catalog lists the ready cases in order', t => {
+  const { games } = newGames(t);
+  assert.deepEqual(games.catalog(), [
+    { id: 'banana-mystery', title: 'The Banana Mystery', lead: 'The bananas are gone.\nThe bell never rang.', order: 1 },
+    { id: 'banana-control', title: 'The Banana Mix-up', lead: 'The bananas are gone.\nBut did anyone break the rule?', order: 2 },
+  ]);
+});
+
+test('reset keeps or switches the case', async t => {
+  const { act } = newGames(t);
+  const first = (await act(undefined, 'start', { caseId: 'banana-control' })).session.id;
+  const kept = await act(first, 'reset');
+  assert.equal(kept.caseId, 'banana-control');
+  assert.notEqual(kept.session.id, first);
+  const switched = await act(kept.session.id, 'reset', { caseId: 'banana-mystery' });
+  assert.equal(switched.caseId, 'banana-mystery');
+  assert.equal(switched.session.caseId, 'banana-mystery');
+  await assert.rejects(act(switched.session.id, 'reset', { caseId: 'nope' }), /Unknown case/);
+});
+
+test('reset with a caseId during a pending interview is still a 409', async t => {
+  let finish;
+  const { act, games } = newGames(t, { answer: () => new Promise(resolve => { finish = resolve; }) });
+  const id = (await act(undefined, 'start')).session.id;
+  await act(id, 'reveal');
+  const pending = act(id, 'interview', { character: 'pip', question: 'Who told you?' });
+  await assert.rejects(act(id, 'reset', { caseId: 'banana-control' }), error => error.status === 409);
+  finish('Momo told me.');
+  await pending;
+  assert.equal(games.view(id).caseId, 'banana-mystery');
+});
+
+test('a restarted server restores a control game', async t => {
+  const { games, act, dir } = newGames(t);
+  const id = (await act(undefined, 'start', { caseId: 'banana-control' })).session.id;
+  await act(id, 'reveal'); await talkToAll(act, id);
+  const restarted = new Investigations({ dataDir: dir, config: modelConfig({}) });
+  assert.equal(restarted.view(id).title, 'The Banana Mix-up');
+  assert.equal(restarted.view(id).session.interviews.nori.length, 1);
+  assert.deepEqual(restarted.view(id), games.view(id));
+});
+
+test('replay needs a registered case with the same version', async t => {
+  const { games, act } = newGames(t);
+  const id = (await act(undefined, 'start', { caseId: 'banana-control' })).session.id;
+  const events = games.export(id).trim().split('\n').map(JSON.parse);
+  assert.equal(replay(events, cases).caseId, 'banana-control');
+  assert.equal(replay(events, [cases[0]]), null);
+  assert.equal(replay(events.map(e => ({ ...e, caseVersion: 'old' })), cases), null);
+  assert.equal(replay([], cases), null);
+});
+
+test('prompt names the role once', () => {
+  const session = { revealedPosition: 1, selectedEvidence: null, interviews: { momo: [], pip: [], nori: [] } };
+  for (const kase of cases) {
+    const system = buildMessages(kase, session, 'momo', 'Why?')[0].content;
+    assert.ok(system.includes('You play Momo (The planner)'));
+    assert.equal(system.includes('the The'), false);
+  }
+  assert.ok(buildMessages(cases[0], session, 'momo', 'Why?')[0].content.startsWith('You play Momo (The planner), a monkey in an authored two-minute banana mystery (banana-authored-v1.0.0, banana-interview-v2).'));
+});
+
+test('a draft case id is rejected like an unknown one, with no log file', async t => {
+  const { defineCase } = await import('../server/cases.mjs');
+  const draft = defineCase({ ...JSON.parse(JSON.stringify(bananaControl)), rehearsal: bananaControl.rehearsal, id: 'draft-case', status: 'draft' });
+  const { act, dir } = newGames(t, { cases: [...cases, draft] });
+  for (const action of ['start', 'reset']) {
+    await assert.rejects(act(undefined, action, { caseId: 'draft-case' }), error => error.status === 400 && /Unknown case/.test(error.message));
+  }
+  assert.deepEqual(readdirSync(dir), []);
+});
+
+test('dev mode shows draft cases and lets them start', async t => {
+  const ready = cases[0];
+  const draft = defineCase({ ...minimalCase, id: 'mini-draft', status: 'draft' });
+  const off = newGames(t, { cases: [ready, draft] });
+  assert.deepEqual(off.games.catalog().map(c => c.id), [ready.id]);
+  await assert.rejects(off.games.mutate(undefined, 'start', { caseId: 'mini-draft' }), /Unknown case/);
+  const on = newGames(t, { cases: [ready, draft], dev: true });
+  assert.deepEqual(on.games.catalog().map(c => c.id), [ready.id, 'mini-draft']);
+  const view = await on.games.mutate(undefined, 'start', { caseId: 'mini-draft' });
+  assert.equal(view.caseId, 'mini-draft');
 });
