@@ -111,7 +111,8 @@ rehearsal (q, clue as above):
            else 'Wren asked me to fetch the potions, so I fetched them. Here they are! Why is everyone looking at me?'
   wren:    clue === 'reply' → 'The Headmistress said no? Basil never told me that! My note said only fetch them on a yes. I would have waited.'
            else 'I sent Basil to ask the Headmistress and wrote only fetch the potions on a yes. Basil came back with them, so I thought the answer was yes.'
-  juniper: clue === 'reply' || clue === 'request' → 'So the Headmistress said no? I couldn’t hear from the bell loft. I only guessed it was a yes.'
+  juniper: clue === 'reply' → 'So the Headmistress said no? I couldn’t hear from the bell loft. I only guessed it was a yes.'
+           clue === 'request' → 'So Wren wanted a yes first? I couldn’t hear from the bell loft. I only guessed the answer was yes.'
            else 'I saw Basil talk to the Headmistress in the garden, then carry the potions in. I was too far away to hear, so I guessed it was a yes.'
 ```
 
