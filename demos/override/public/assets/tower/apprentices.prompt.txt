@@ -1,0 +1,13 @@
+Generate in order: 1 of 4. Attach as style reference: public/assets/banana/monkeys.png.
+Output: apprentices.png (keep the original pixels and alpha).
+
+Use case: stylized-concept. Asset type: original pixel-art game character sprite atlas, genuinely transparent background.
+Style reference: the attached image. Match ONLY its pixel-art style: chunky crisp 16-bit handheld RPG sprites, dark outlines, simple three-tone shading, warm limited palette, same character scale and cell layout. Do NOT draw monkeys or copy any character from it.
+Primary request: Four friendly original young wizard apprentices for a short detective game set in a cosy wizard school tower. Create ONE exact 4-column by 4-row sprite sheet, 1024 x 1024 pixels. Each cell is exactly 256 x 256, no gutters or visible grid. One full-body character in each cell. All sprites at consistent scale, centered at x=128 in their cell, feet baseline y=224, art contained in x=36..220 and y=32..224. Large transparent padding around each character, no ground shadows.
+Columns left to right (same identity in all four rows):
+1. Wren: amber-orange apprentice robe, short auburn hair, a quill tucked behind one ear, a small rolled scroll on the belt.
+2. Basil: sage-green apprentice robe, curly dark-brown hair, a brown leather satchel across the body.
+3. Juniper: clearly LILAC apprentice robe, tall soft pointed lilac hat, round silver spectacles, a small brass telescope on the belt.
+4. The inspector: deep navy cloak with a short cape, wide-brimmed navy wizard hat with a little gold feather, holding a small magnifying glass.
+Rows top to bottom: front facing down toward viewer; back facing up away; left facing left; right facing right. Each row shows exactly these directions for all four columns.
+Style: charming hand-placed chunky pixel art for an original 16-bit handheld RPG, crisp stepped edges, limited palette, expressive readable faces, simple three-tone shading. Each character should look like a 32 x 32 pixel sprite enlarged 8x with nearest-neighbor. Not smooth illustration. No antialiasing. Child-friendly, no weapons. No existing game or film characters, no text, no labels, no ground, no scenery. Match body proportions and outfit colors across directions. True alpha transparency.

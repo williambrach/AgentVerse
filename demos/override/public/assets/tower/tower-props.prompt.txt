@@ -1,0 +1,11 @@
+Generate in order: 4 of 4 (independent of the others). Attach as style reference: public/assets/banana/jungle-props.png.
+Output: tower-props.png (keep the original pixels and alpha).
+
+Use case: stylized-concept. Asset type: original pixel-art prop atlas for a cosy wizard school tower, genuine alpha transparency.
+Style reference: the attached prop sheet. Match ONLY its pixel-art style, scale and cell layout; do not copy its objects.
+Primary request: ONE exact 2-column by 2-row grid sprite sheet, square 1024 x 1024. Each cell exactly 512 x 512, no visible grid, no gutters, each object centered in its own cell with at least 48 px transparent padding. Four full isolated objects in an overhead 3/4 view for a friendly wizard-apprentice detective RPG.
+Top left: a tall wooden bookshelf packed with colourful spell books, a small potted glowing moonflower on top, visible base at the bottom.
+Top right: a small wooden potion cabinet with two glass doors standing slightly open, rows of little lantern potion bottles inside glowing amber, green and lilac.
+Bottom left: a small rustic wooden noticeboard on two short posts, a blank cream paper pinned to it, no letters, a tiny gold star emblem at the top.
+Bottom right: a small brass tower bell hanging in a simple dark wooden arch with a rope, little wooden base, readable silhouette.
+Style: original warm 16-bit handheld RPG pixel art, chunky crisp square pixels, palette of deep wood browns, stone grey, brass gold, candle amber and soft lilac. Each prop looks like a 64 x 64 pixel sprite enlarged 8x with nearest-neighbor. Simple three-tone shading, no gradients, no antialiasing. No text, no labels, no people, no characters, no background, no floor tiles, no existing game artwork. Preserve alpha transparency.
