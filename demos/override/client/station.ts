@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import type { Character, LocationId } from './types';
 import { DetectiveWalk, groveWalk, walkSpec, type WalkDirection, type WalkSpec } from './detective-walk';
-import { MonkeyIdle, groveIdle, idleSpec, type IdleSpec } from './monkey-idle';
+import { MonkeyIdle, groveIdle, idleSpec, reskinIdle, type IdleSpec } from './monkey-idle';
 import { mirrorStride, sliceAtlas, type Frame } from './atlas';
 import { placeholderAtlas } from './placeholder-art';
 import { worldFor, type WorldPack } from './worlds';
+import { hueShift, faceSheetPlan, SHEET_CAST } from './recolor';
 
 type Point = { x: number; y: number };
 type Stop = Point & { title: string; label: string };
@@ -12,7 +13,6 @@ type ArtKind = 'cast' | 'idle' | 'walk' | 'props';
 export type ArtSource = 'file' | 'placeholder';
 const artKinds: ArtKind[] = ['cast', 'idle', 'walk', 'props'];
 const atlasDims: Record<ArtKind, [number, number]> = { cast: [4, 4], idle: [4, 3], walk: [4, 4], props: [2, 2] };
-const slotPoints: Point[] = [{ x: 116, y: 156 }, { x: 364, y: 156 }, { x: 364, y: 268 }];
 const groveColors = ['#cf7a4a', '#6e9a5c', '#9a85c2'];
 const groveCast: Character[] = ['Momo', 'Pip', 'Nori'].map((name, i) => ({
   id: name.toLowerCase(), name, role: '', room: '', color: groveColors[i], introduction: '', quickQuestion: '',
@@ -20,10 +20,10 @@ const groveCast: Character[] = ['Momo', 'Pip', 'Nori'].map((name, i) => ({
 
 function buildStops(world: WorldPack, cast: Character[]): Record<string, Stop> {
   const stops: Record<string, Stop> = {
-    report: { x: 132, y: 276, title: 'Choose your suspect', label: 'YOUR GUESS' },
+    report: { x: 132, y: 276, title: 'Pick the roles', label: 'YOUR GUESS' },
     briefing: { x: 244, y: 276, title: 'Read the case', label: 'START HERE' },
   };
-  cast.forEach((c, slot) => { stops[c.id] = { ...slotPoints[slot], title: `Ask ${c.name}`, label: c.name.toUpperCase() }; });
+  cast.forEach((c, slot) => { stops[c.id] = { ...world.slots[slot], title: `Ask ${c.name}`, label: c.name.toUpperCase() }; });
   return stops;
 }
 const keyOf = (world: WorldPack, cast: Character[]) => `${world.id}|${cast.map(c => c.id).join(',')}`;
@@ -77,6 +77,10 @@ export class Station extends Phaser.Scene {
   // The source image each `-stride` texture was rebuilt from; a different image means it is stale.
   private strideSources = new Map<string, unknown>();
   private towerProps: Record<string, Frame> = {};
+  // The source image each recoloured texture was made from; a different image means it is stale.
+  private recolorSources = new Map<string, unknown>();
+  // Blob URLs of the recoloured face sheets, by world and cast index; kept per world+cast and revoked when replaced.
+  private faceSheets = new Map<string, { key: string; url: string }>();
 
   constructor(onArrival: (location: LocationId) => void, onHint: (hint: string) => void) {
     super('banana-grove');
@@ -86,7 +90,7 @@ export class Station extends Phaser.Scene {
 
   /** Switch world or cast: a no-op when both are unchanged, otherwise the scene restarts. */
   configure(world: WorldPack, cast: Character[]) {
-    const next = cast.slice(0, slotPoints.length);
+    const next = cast.slice(0, world.slots.length);
     if (keyOf(world, next) === keyOf(this.world, this.cast)) return;
     this.world = world;
     this.cast = next;
@@ -96,7 +100,7 @@ export class Station extends Phaser.Scene {
 
   init(data?: { world?: WorldPack; cast?: Character[] }) {
     if (data?.world) this.world = data.world;
-    if (data?.cast) this.cast = data.cast.slice(0, slotPoints.length);
+    if (data?.cast) this.cast = data.cast.slice(0, this.world.slots.length);
     this.worldId = this.world.id;
     this.builtKey = keyOf(this.world, this.cast);
     this.overlay?.replaceChildren();
@@ -149,6 +153,65 @@ export class Station extends Phaser.Scene {
     });
   }
 
+  /** A recoloured copy of texture `key` for the character at `index`: base colour to its own. Reused while the source image is unchanged. */
+  private recolored(key: string, index: number): string | null {
+    const base = this.cast[index - SHEET_CAST], own = this.cast[index];
+    if (!base || !own) return null;
+    const newKey = `${key}-rc${index}-${base.color.replace('#', '')}-${own.color.replace('#', '')}`;
+    const image = this.textures.get(key).getSourceImage() as CanvasImageSource & { width: number; height: number };
+    if (this.textures.exists(newKey) && this.recolorSources.get(newKey) === image) return newKey;
+    const canvas = this.recolorCanvas(image, base.color, own.color);
+    // One recoloured copy per world sheet and index: drop copies made for earlier colours so cast changes do not pile up.
+    const prefix = `${key}-rc${index}-`;
+    for (const old of this.textures.getTextureKeys()) {
+      if (old.startsWith(prefix) && old !== newKey) { this.textures.remove(old); this.recolorSources.delete(old); }
+    }
+    if (this.textures.exists(newKey)) this.textures.remove(newKey);
+    this.textures.addCanvas(newKey, canvas);
+    this.recolorSources.set(newKey, image);
+    return newKey;
+  }
+
+  private recolorCanvas(image: CanvasImageSource & { width: number; height: number }, from: string, to: string): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width; canvas.height = image.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(image, 0, 0);
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(hueShift(pixels.data, from, to)), canvas.width, canvas.height), 0, 0);
+    return canvas;
+  }
+
+  /** The DOM faces for index >= 3 read the recoloured cast sheet from --face-sheet-<world>-<i>; one blob per world+cast.
+   *  Other worlds' variables stay published, so a case board preview of that world draws its own sheet. */
+  private publishFaces(castKey: string) {
+    const root = document.documentElement;
+    const image = this.textures.get(castKey).getSourceImage() as CanvasImageSource & { width: number; height: number };
+    for (const step of faceSheetPlan(this.world.id, this.cast, this.world.slots.length)) {
+      const slot = `${this.world.id}:${step.index}`;
+      const known = this.faceSheets.get(slot);
+      const stepKey = step.key;
+      if (!stepKey) {
+        if (known) URL.revokeObjectURL(known.url);
+        this.faceSheets.delete(slot);
+        root.style.removeProperty(step.name);
+        continue;
+      }
+      if (known?.key === stepKey) { root.style.setProperty(step.name, `url("${known.url}")`); continue; }
+      this.recolorCanvas(image, step.from, step.to).toBlob(blob => {
+        if (!blob || this.faceSheets.get(slot)?.key === stepKey) return;
+        // The cast may have changed while the blob was encoding; only the latest world+cast gets published.
+        const now = faceSheetPlan(this.world.id, this.cast, this.world.slots.length).find(s => s.index === step.index);
+        if (now?.key !== stepKey) return;
+        const url = URL.createObjectURL(blob);
+        const old = this.faceSheets.get(slot);
+        this.faceSheets.set(slot, { key: stepKey, url });
+        root.style.setProperty(step.name, `url("${url}")`);
+        if (old) setTimeout(() => URL.revokeObjectURL(old.url), 1000);
+      });
+    }
+  }
+
   /** Frames measured from the texture's alpha, so regenerated art needs no tuned anchors. */
   private framesOf(kind: ArtKind, key: string): Frame[] {
     const cached = this.slices.get(key);
@@ -173,6 +236,7 @@ export class Station extends Phaser.Scene {
     const grove = this.world.id === 'grove';
     const keys = artKeys(this.world);
     this.prepareArt();
+    this.publishFaces(keys.cast);
     this.cameras.main.setBackgroundColor(this.world.palette.ground);
     if (grove) {
       const jungle = this.textures.get('jungle');
@@ -206,18 +270,25 @@ export class Station extends Phaser.Scene {
       const id = member.id;
       const p = this.stops[id];
       this.add.ellipse(p.x, p.y - 13, 25, 7, 0x314c34, .22).setDepth(p.y - 18);
+      // Art follows the persona index: index >= 3 draws index - 3, recoloured from that character's colour to its own.
+      const base = slot >= SHEET_CAST ? slot - SHEET_CAST : slot;
+      const baseId = this.cast[base]?.id ?? id;
       let spec: IdleSpec;
-      if (grove) spec = groveIdle[id] ?? Object.values(groveIdle)[slot];
+      if (grove) spec = groveIdle[baseId] ?? Object.values(groveIdle)[base];
       else {
         const sheet = this.framesOf('idle', keys.idle);
-        const poses = sheet.slice(slot * 4, slot * 4 + 4);
+        const poses = sheet.slice(base * 4, base * 4 + 4);
         // One scale for the whole sheet keeps the cast's drawn proportions: a tall hat stays taller.
         const tallest = Math.max(...sheet.map(f => f.h));
         spec = idleSpec(poses, keys.idle, (this.world.heights?.cast ?? 46) * Math.max(...poses.map(f => f.h)) / tallest, slot);
-        // Frame names are per character id; drop any left from an earlier cast so they are re-measured.
-        const texture = this.textures.get(keys.idle);
-        for (let pose = 0; pose < 4; pose++) texture.remove(`${id}-${pose}`);
       }
+      if (slot >= SHEET_CAST) {
+        const key = this.recolored(keys.idle, slot);
+        if (key) spec = reskinIdle(spec, key, slot);
+      }
+      // Frame names are per character id; drop any left from an earlier cast so they are re-measured.
+      const texture = this.textures.get(spec.textureKey);
+      for (let pose = 0; pose < 4; pose++) texture.remove(`${id}-${pose}`);
       const npc = new MonkeyIdle(this, id, p.x, p.y - 12, spec);
       this.npcs.set(id, npc);
       this.label(p.x, p.y - 66, p.label);
