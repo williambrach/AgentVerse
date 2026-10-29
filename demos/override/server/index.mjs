@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Investigations, RequestError } from './session.mjs';
 import { buildMessages, modelConfig } from './interviews.mjs';
+import { economyRules } from './economy.mjs';
 import { cases } from './cases/index.mjs';
 import { LlmRouter } from './llm.mjs';
 import { appendJsonl, dataPaths, lastRecord, readJsonl, setWriteObserver } from './dataset.mjs';
@@ -19,7 +20,7 @@ import { createTrafficSampler, loadEvents, loadRound, readSessionEvents } from '
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TOKEN_MS = 12 * 60 * 60_000;
-const actions = ['start', 'reset', 'visit', 'interview', 'verdict'];
+const actions = ['start', 'reset', 'visit', 'interview', 'inspect', 'continue', 'verdict'];
 const tabPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -135,6 +136,7 @@ const sleep = ms => new Promise(resolve => { setTimeout(resolve, ms).unref(); })
 
 export async function startServer(env = process.env, { publicDir = resolve(root, 'dist') } = {}) {
   const config = modelConfig(env);
+  config.economy = economyRules(env);
   const envName = env.OVERRIDE_ENV || 'live';
   const dataDir = resolve(env.OVERRIDE_DATA_DIR || resolve(root, 'data'), envName);
   const paths = dataPaths(dataDir);
