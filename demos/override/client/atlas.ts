@@ -91,3 +91,34 @@ export function sliceAtlas(alpha: ArrayLike<number>, width: number, height: numb
   }
   return out;
 }
+
+/**
+ * Copy one frame out of an RGBA atlas and mirror the bottom `band` of its legs window around the
+ * anchor column. A walk sheet whose two stride poses lift the same foot gets the other foot this
+ * way; the window keeps the cape's outer edges and everything above the band (hands, props) as drawn.
+ */
+export function mirrorStride(rgba: ArrayLike<number>, width: number, frame: Frame, band = 0.24, halfWidth = 0.28): Uint8ClampedArray<ArrayBuffer> {
+  const { x: fx, y: fy, w, h, anchorX } = frame;
+  const out = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const s = ((fy + y) * width + fx + x) * 4;
+      const d = (y * w + x) * 4;
+      out[d] = rgba[s]; out[d + 1] = rgba[s + 1]; out[d + 2] = rgba[s + 2]; out[d + 3] = rgba[s + 3];
+    }
+  }
+  const y0 = Math.round(h * (1 - band));
+  const half = Math.round(w * halfWidth);
+  const x0 = Math.max(0, Math.round(anchorX) - half);
+  const x1 = Math.min(w, Math.round(anchorX) + half);
+  for (let y = y0; y < h; y++) {
+    for (let x = x0; x < x1; x++) {
+      const sx = Math.round(2 * anchorX - x - 1);
+      const d = (y * w + x) * 4;
+      if (sx < 0 || sx >= w) { out[d] = out[d + 1] = out[d + 2] = out[d + 3] = 0; continue; }
+      const s = ((fy + y) * width + fx + sx) * 4;
+      out[d] = rgba[s]; out[d + 1] = rgba[s + 1]; out[d + 2] = rgba[s + 2]; out[d + 3] = rgba[s + 3];
+    }
+  }
+  return out;
+}

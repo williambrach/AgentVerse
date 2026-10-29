@@ -8,12 +8,14 @@ const groveFiles = {
 };
 
 // `page.art.bytes` null: every tower PNG is a 404. Otherwise each is served as the matching grove PNG.
-async function start(page, caseId = 'tower-bell-charm') {
+// `realArt` serves the committed tower PNGs as they are.
+async function start(page, caseId = 'tower-bell-charm', { realArt = false } = {}) {
   const errors = [];
   const art = { bytes: null };
   page.art = art;
   page.on('pageerror', error => errors.push(String(error)));
   await page.route('**/assets/tower/*.png', route => {
+    if (realArt) return route.continue();
     const file = art.bytes?.[new URL(route.request().url()).pathname.split('/').pop()];
     return file ? route.fulfill({ status: 200, contentType: 'image/png', body: file }) : route.fulfill({ status: 404, body: '' });
   });
@@ -193,4 +195,32 @@ test('a tower session resumes from its cookie', async ({ page }) => {
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   for (const id of ['wren', 'basil', 'juniper']) await expect(page.locator(`nav [data-go="${id}"]`)).toHaveCount(1);
   await expect(page.locator('#notebook-index')).toContainText('/ 07');
+});
+
+test('the real tower art keeps its proportions, uses the corrected walk atlas and sits on the grove chrome', async ({ page }) => {
+  const errors = await start(page, 'tower-bell-charm', { realArt: true });
+  await settled(page, 'tower', ['wren', 'basil', 'juniper']);
+  const look = await page.evaluate(() => {
+    const scene = window.walkingTestGame.scene.getScene('banana-grove');
+    const walk = scene.textures.get(scene.avatar.texture.key);
+    const top = name => walk.get(name).cutY;
+    return {
+      artSources: { ...scene.artSources },
+      heights: Object.fromEntries([...scene.npcs].map(([id, npc]) => [id, npc.sprite.displayHeight])),
+      avatar: scene.avatar.displayHeight,
+      sheetHeight: scene.textures.get('tower-walk').getSourceImage().height,
+      drawn: ['down-1', 'down-3', 'up-1', 'up-3', 'left-3', 'right-3'].map(top),
+    };
+  });
+  expect(look.artSources).toEqual({ cast: 'file', idle: 'file', walk: 'file', props: 'file' });
+  // One scale for the sheet: Juniper's hat makes her the tallest, the others keep their drawn size.
+  expect(look.heights.juniper).toBeCloseTo(47, 0);
+  expect(look.heights.wren).toBeLessThan(look.heights.juniper - 2);
+  expect(look.heights.basil).toBeLessThan(look.heights.juniper - 2);
+  expect(look.avatar).toBeGreaterThan(44);
+  expect(look.avatar).toBeLessThanOrEqual(45);
+  // All strides now come directly from the corrected PNG, without the rebuilt strip.
+  for (const y of look.drawn) expect(y).toBeLessThan(look.sheetHeight);
+  await expect(page.locator('.room-nav .avatar-dot').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  expect(errors).toEqual([]);
 });

@@ -134,16 +134,16 @@
 @media (prefers-reduced-motion: reduce) { .suspect-option { transform: none !important; } }
 
 
-/* Tower world: the apprentice sheet row 0 (wren, basil, juniper) in place of the monkeys, tinted by --cast-color. */
+/* Tower world: the apprentice sheet row 0 (wren, basil, juniper) in place of the monkeys, on the same chrome as the grove. */
 [data-world="tower"] .banana-mark { background: #e6dcf7; border-color: #7d6a9d; box-shadow: inset 0 2px #f6f0ff, 0 2px #b6a9cf; }
 [data-world="tower"] .banana-mark svg { fill: #f2c94c; stroke: #6e5a2a; }
-[data-world="tower"] .portrait .pixel-person { background: var(--cast-color) url('/assets/tower/apprentices.png') 0 0 / 304px 304px no-repeat; }
+[data-world="tower"] .portrait .pixel-person { background: url('/assets/tower/apprentices.png') 0 0 / 304px 304px no-repeat; }
 [data-world="tower"] .portrait.slot-1 .pixel-person { background-position-x: -76px; }
 [data-world="tower"] .portrait.slot-2 .pixel-person { background-position-x: -152px; }
-[data-world="tower"] .monkey-face { background: var(--cast-color) url('/assets/tower/apprentices.png') 0 0 / 216px 216px no-repeat; }
+[data-world="tower"] .monkey-face { background: url('/assets/tower/apprentices.png') 0 0 / 216px 216px no-repeat; }
 [data-world="tower"] .monkey-face.slot-1 { background-position-x: -54px; }
 [data-world="tower"] .monkey-face.slot-2 { background-position-x: -108px; }
-[data-world="tower"] .avatar-dot { background: var(--cast-color) url('/assets/tower/apprentices.png') 0 0 / 88px 88px no-repeat; }
+[data-world="tower"] .avatar-dot { background: url('/assets/tower/apprentices.png') 0 0 / 88px 88px no-repeat; }
 [data-world="tower"] .avatar-dot.slot-1 { background-position-x: -22px; }
 [data-world="tower"] .avatar-dot.slot-2 { background-position-x: -44px; }
 [data-world="tower"] .basket-illustration { background: url('/assets/tower/tower-props.png') -120px -4px / 240px 240px no-repeat; }

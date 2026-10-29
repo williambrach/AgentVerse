@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { Character, LocationId } from './types';
 import { DetectiveWalk, groveWalk, walkSpec, type WalkDirection, type WalkSpec } from './detective-walk';
 import { MonkeyIdle, groveIdle, idleSpec, type IdleSpec } from './monkey-idle';
-import { sliceAtlas, type Frame } from './atlas';
+import { mirrorStride, sliceAtlas, type Frame } from './atlas';
 import { placeholderAtlas } from './placeholder-art';
 import { worldFor, type WorldPack } from './worlds';
 
@@ -38,6 +38,12 @@ const width = 480;
 const height = 340;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const treeSpots = [[18, 99, 98], [77, 78, 96], [149, 68, 90], [225, 55, 94], [303, 67, 98], [385, 77, 96], [465, 105, 105], [12, 185, 90], [472, 197, 94], [12, 292, 96], [473, 301, 100], [55, 362, 99], [214, 382, 95], [434, 365, 98]];
+// Bookcases line the tower walls in rows (the grove's palms grow in clumps); the front wall stays open at the start.
+const shelfSpots = [
+  ...[26, 76, 126, 176, 226, 276, 326, 376, 426, 476].map(x => [x, 84, 70]),
+  [18, 170, 70], [18, 250, 70], [462, 170, 70], [462, 250, 70],
+  ...[26, 76, 126, 376, 426, 476].map(x => [x, 376, 70]),
+];
 
 export class Station extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Image;
@@ -67,6 +73,8 @@ export class Station extends Phaser.Scene {
   private created = false;
   private placeholders = new Set<string>();
   private slices = new Map<string, Frame[]>();
+  // The source image each `-stride` texture was rebuilt from; a different image means it is stale.
+  private strideSources = new Map<string, unknown>();
   private towerProps: Record<string, Frame> = {};
 
   constructor(onArrival: (location: LocationId) => void, onHint: (hint: string) => void) {
@@ -199,7 +207,11 @@ export class Station extends Phaser.Scene {
       let spec: IdleSpec;
       if (grove) spec = groveIdle[id] ?? Object.values(groveIdle)[slot];
       else {
-        spec = idleSpec(this.framesOf('idle', keys.idle).slice(slot * 4, slot * 4 + 4), keys.idle, 46, slot);
+        const sheet = this.framesOf('idle', keys.idle);
+        const poses = sheet.slice(slot * 4, slot * 4 + 4);
+        // One scale for the whole sheet keeps the cast's drawn proportions: a tall hat stays taller.
+        const tallest = Math.max(...sheet.map(f => f.h));
+        spec = idleSpec(poses, keys.idle, (this.world.heights?.cast ?? 46) * Math.max(...poses.map(f => f.h)) / tallest, slot);
         // Frame names are per character id; drop any left from an earlier cast so they are re-measured.
         const texture = this.textures.get(keys.idle);
         for (let pose = 0; pose < 4; pose++) texture.remove(`${id}-${pose}`);
@@ -215,7 +227,7 @@ export class Station extends Phaser.Scene {
     this.player = this.physics.add.image(this.stops.briefing.x, this.stops.briefing.y, 'feet').setVisible(false).setCollideWorldBounds(true);
     this.cast.forEach(({ id }) => { const p = this.stops[id]; const feet = this.physics.add.staticImage(p.x, p.y - 12, 'feet').setVisible(false); this.physics.add.collider(this.player, feet); });
     this.shadow = this.add.ellipse(this.player.x, this.player.y + 1, 22, 6, 0x314c34, .22);
-    const walk = grove ? groveWalk : walkSpec(this.framesOf('walk', keys.walk), keys.walk, 46);
+    const walk = grove ? groveWalk : this.measuredWalk(keys.walk);
     this.walk = new DetectiveWalk(this, this.player.x, this.player.y, walk);
     this.avatar = this.walk.sprite;
     (['briefing', 'replay', 'evidence', 'report'] as const).forEach(id => {
@@ -250,6 +262,41 @@ export class Station extends Phaser.Scene {
     this.created = true;
     // configure() may have run while this build was loading.
     if (this.builtKey !== keyOf(this.world, this.cast)) this.scene.restart({ world: this.world, cast: this.cast });
+  }
+
+  /** The measured walk; with `strideFix`, the listed rows' step 3 comes from a rebuilt copy of the sheet. */
+  private measuredWalk(key: string): WalkSpec {
+    const frames = this.framesOf('walk', key);
+    const height = this.world.heights?.investigator ?? 46;
+    const fix = this.world.strideFix;
+    if (!fix || this.placeholders.has(key)) return walkSpec(frames, key, height);
+    const fixedKey = `${key}-stride`;
+    let fixed = this.slices.get(fixedKey);
+    const image = this.textures.get(key).getSourceImage() as CanvasImageSource & { width: number; height: number };
+    if (!fixed || !this.textures.exists(fixedKey) || this.strideSources.get(fixedKey) !== image) {
+      const sources = fix.rows.map(row => frames[row * 4 + 1]);
+      // The original sheet, plus one strip below it holding the rebuilt frames. The PNG is untouched.
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(image.width, sources.reduce((sum, f) => sum + f.w, 0));
+      canvas.height = image.height + Math.max(...sources.map(f => f.h));
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(image, 0, 0);
+      const rgba = ctx.getImageData(0, 0, image.width, image.height).data;
+      const rebuilt = frames.slice();
+      let x = 0;
+      fix.rows.forEach((row, i) => {
+        const source = sources[i];
+        ctx.putImageData(new ImageData(mirrorStride(rgba, image.width, source, fix.band, fix.halfWidth), source.w, source.h), x, image.height);
+        rebuilt[row * 4 + 3] = { ...source, x, y: image.height };
+        x += source.w;
+      });
+      if (this.textures.exists(fixedKey)) this.textures.remove(fixedKey);
+      this.textures.addCanvas(fixedKey, canvas);
+      this.slices.set(fixedKey, rebuilt);
+      this.strideSources.set(fixedKey, image);
+      fixed = rebuilt;
+    }
+    return walkSpec(fixed, fixedKey, height);
   }
 
   private prop(key: string, name: string, x: number, y: number, size: number) {
@@ -297,7 +344,7 @@ export class Station extends Phaser.Scene {
     g.fillStyle(0x6f5a99).fillEllipse(235, 205, 86, 54);
     g.fillStyle(0xb9a3dc).fillEllipse(235, 205, 76, 44);
     g.lineStyle(2, 0x8d74b8).strokeEllipse(235, 205, 52, 28);
-    treeSpots.forEach(([x, y, size]) => this.prop(artKeys(this.world).props, 'bookshelf', x, y, size).setDepth(y < 100 ? 5 : y));
+    shelfSpots.forEach(([x, y, size]) => this.prop(artKeys(this.world).props, 'bookshelf', x, y, size).setDepth(y < 100 ? 5 : y));
   }
 
   private label(x: number, y: number, text: string) {

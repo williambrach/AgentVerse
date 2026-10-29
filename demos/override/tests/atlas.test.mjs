@@ -56,3 +56,32 @@ test('ignores a one-pixel bridge', () => {
   const img = two(); for (let x = 10; x < 14; x++) img.a[5 * 20 + x] = 255;
   assert.deepEqual(box(slice(img, 2, 1)), AB);
 });
+
+// mirrorStride: rebuild the other stride from one stride pose (RGBA atlas, frame inside it).
+import { mirrorStride } from '../client/atlas.ts';
+const rgbaAtlas = (w, h) => ({ w, h, px: new Uint8ClampedArray(w * h * 4) });
+const paint = (img, x, y, rw, rh, v) => { for (let j = y; j < y + rh; j++) for (let i = x; i < x + rw; i++) img.px.set(v, (j * img.w + i) * 4); return img; };
+const at = (out, w, x, y) => Array.from(out.slice((y * w + x) * 4, (y * w + x) * 4 + 4));
+const BOOT = [120, 60, 20, 255], HAND = [240, 200, 160, 255], CAPE = [30, 40, 90, 255];
+test('mirrorStride moves the stepping boot to the other side', () => {
+  const img = paint(paint(rgbaAtlas(10, 10), 1, 8, 2, 2, BOOT), 1, 2, 1, 1, HAND);
+  const out = mirrorStride(img.px, 10, { x: 0, y: 0, w: 10, h: 10, anchorX: 5, anchorY: 10 }, 0.3, 0.5);
+  assert.deepEqual([at(out, 10, 7, 8), at(out, 10, 8, 9)], [BOOT, BOOT]);
+  assert.deepEqual([at(out, 10, 1, 8)[3], at(out, 10, 2, 9)[3]], [0, 0]);
+  assert.deepEqual(at(out, 10, 1, 2), HAND, 'above the band nothing moves');
+});
+test('mirrorStride keeps pixels outside the legs window', () => {
+  const img = paint(paint(rgbaAtlas(10, 10), 0, 9, 1, 1, CAPE), 4, 9, 1, 1, BOOT);
+  const out = mirrorStride(img.px, 10, { x: 0, y: 0, w: 10, h: 10, anchorX: 5, anchorY: 10 }, 0.3, 0.2);
+  assert.deepEqual(at(out, 10, 0, 9), CAPE, 'the cape edge stays');
+  assert.deepEqual(at(out, 10, 5, 9), BOOT, 'x 4 mirrors to x 5 around anchor 5');
+  assert.equal(at(out, 10, 4, 9)[3], 0);
+});
+test('mirrorStride reads the frame where it sits in the atlas and leaves the atlas alone', () => {
+  const img = paint(rgbaAtlas(20, 15), 5, 12, 1, 2, BOOT);
+  const before = img.px.slice();
+  const out = mirrorStride(img.px, 20, { x: 4, y: 3, w: 8, h: 11, anchorX: 4, anchorY: 11 }, 0.25, 0.5);
+  assert.equal(out.length, 8 * 11 * 4);
+  assert.deepEqual([at(out, 8, 6, 9), at(out, 8, 6, 10)], [BOOT, BOOT], 'atlas x 5 is frame x 1, mirrored to 2*4-1-1 = 6');
+  assert.deepEqual(img.px, before);
+});

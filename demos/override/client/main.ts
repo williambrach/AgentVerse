@@ -61,7 +61,6 @@ const cap = (word: string) => word.charAt(0) + word.slice(1).toLowerCase();
 const slotOf = (id: string) => Math.max(0, state.characters.findIndex(c => c.id === id));
 /** Class and style that let the world's portrait art and the character's colour apply by cast slot. */
 const castClass = (id: string) => `${escape(id)} slot-${slotOf(id)}`;
-const castStyle = (id: string) => `style="--cast-color:${escape(state.characters.find(c => c.id === id)?.color)}"`;
 
 async function api(path: string, body?: object) {
   const response = await fetch(`/api/${path}`, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined);
@@ -149,7 +148,7 @@ function renderWorld() {
   document.querySelector('#room-nav')!.setAttribute('aria-label', `${cap(t.eyebrow)} destinations`);
   document.querySelector('#room-nav')!.innerHTML = `
           <button data-go="replay">${icon('replay')}<span>${escape(t.clueNav)}<small id="replay-count"></small></span></button>
-          ${state.characters.map(c => `<button data-go="${escape(c.id)}"><i class="avatar-dot ${castClass(c.id)}" ${castStyle(c.id)}></i><span>${escape(c.name)}<small>${escape(c.role)}</small></span><span class="interview-check" data-check="${escape(c.id)}"></span></button>`).join('')}
+          ${state.characters.map(c => `<button data-go="${escape(c.id)}"><i class="avatar-dot ${castClass(c.id)}"></i><span>${escape(c.name)}<small>${escape(c.role)}</small></span><span class="interview-check" data-check="${escape(c.id)}"></span></button>`).join('')}
           <button data-go="evidence">${icon('evidence')}<span>Clues<small id="evidence-count">0 / ${state.clueCount} found</small></span></button>
           <button data-go="report">${icon('report')}<span>Your guess<small>Who knew?</small></span></button>`;
   document.querySelector('#notebook-index')!.textContent = `01 / 0${4 + state.characters.length}`;
@@ -277,7 +276,7 @@ function casePreview(id: 'intro' | 'case-switch') {
   const primary = `<button class="primary-button" id="${id === 'intro' ? 'begin-button' : 'confirm-reset'}" ${busy ? 'disabled' : ''}>${label} ${icon('arrow')}</button>`;
   const note = active && (id === 'case-switch' || !loaded) ? `${loaded ? 'Restarting' : 'Starting it'} ends the case you’re in. Its records stay on the server.` : '';
   return `<div class="intro-stamp">CASE ${caseNumber(row ? row.order : state.order)} <span>AUTHORED DEMONSTRATION</span></div>
-    <div class="monkey-line" data-world="${escape(row?.world || state.world?.id || 'grove')}" aria-hidden="true">${state.characters.map(c => `<i class="monkey-face ${castClass(c.id)}" ${castStyle(c.id)}></i>`).join('')}</div>
+    <div class="monkey-line" data-world="${escape(row?.world || state.world?.id || 'grove')}" aria-hidden="true">${state.characters.map(c => `<i class="monkey-face ${castClass(c.id)}"></i>`).join('')}</div>
     <span class="eyebrow">A 2–3 MINUTE MYSTERY</span><h2 id="intro-title">${escape(title).replace(/ (\S+)$/, '<br>$1')}<span>.</span></h2>
     <p class="intro-lead">${escape(row ? row.lead : state.copy.intro.lead).replace(/\n/g, '<br>')}</p>
     <p id="intro-body" ${loaded ? '' : 'hidden'}>${escape(state.copy.intro.body)}</p>
@@ -336,7 +335,7 @@ function interviewPanel(characterId: string) {
   const locked = !state.session?.revealedPosition;
   const closed = state.session?.status === 'closed';
   const next = state.characters.find(c => c.id !== characterId && !state.session?.interviews[c.id].length);
-  return `<div class="interview-heading"><div class="portrait ${castClass(characterId)}" ${castStyle(characterId)}><span class="pixel-person"></span></div><div><span class="eyebrow">${escape(world().text.castLabel)} ${character.room} OF 0${state.characters.length}</span><h2>${escape(character.name)}</h2><p>${escape(character.role)}</p></div><span class="interview-status"><i class="live-dot"></i>${state.mode === 'live' ? 'LIVE' : 'SCRIPTED'}</span></div>
+  return `<div class="interview-heading"><div class="portrait ${castClass(characterId)}"><span class="pixel-person"></span></div><div><span class="eyebrow">${escape(world().text.castLabel)} ${character.room} OF 0${state.characters.length}</span><h2>${escape(character.name)}</h2><p>${escape(character.role)}</p></div><span class="interview-status"><i class="live-dot"></i>${state.mode === 'live' ? 'LIVE' : 'SCRIPTED'}</span></div>
     <div class="interview-transcript" id="transcript" role="log" aria-label="Interview transcript" aria-live="polite"><div class="speech character" data-motion-key="introduction"><span>${escape(character.name.toUpperCase())}</span><p>${escape(character.introduction)}</p></div>
     ${turns.map((turn, i) => `<div class="speech investigator" data-motion-key="question-${i}"><span>YOU${turn.evidence ? ` <i>+ ${escape(state.records.find(r => r.id === turn.evidence)?.title || turn.evidence)}</i>` : ''}</span><p>${escape(turn.question)}</p></div><div class="speech character" data-motion-key="answer-${i}"><span>${escape(character.name.toUpperCase())}</span><p>${escape(turn.answer)}</p></div>`).join('')}
     ${pendingCharacter === characterId && busy ? `<div class="speech investigator" data-motion-key="question-${turns.length}"><span>YOU${selected ? ` <i>+ ${escape(selected.title)}</i>` : ''}</span><p>${escape(drafts[characterId])}</p></div><div class="speech character waiting" data-motion-key="waiting"><span>${escape(character.name.toUpperCase())}</span><p class="thinking">Thinking<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></p></div>` : ''}</div>
@@ -356,7 +355,7 @@ function reportPanel() {
     <div class="notebook-content"><div class="requirements">${state.characters.map(c => `<button data-go="${escape(c.id)}"><span>${session.interviews[c.id].length ? icon('check') : icon('person')} Ask ${escape(c.name)}</span>${icon('arrow')}</button>`).join('')}</div>${!session.revealedPosition ? '<button class="primary-button" data-go="replay">Find the clues first</button>' : ''}</div>`;
   return `${heading('YOUR GUESS', escape(state.copy.report.title), escape(state.copy.report.description))}
     <form class="notebook-content report-form" id="report-form">
-    <fieldset class="suspect-options"><legend class="sr-only">Choose a suspect</legend>${state.characters.map(c => `<label class="suspect-option"><input type="radio" name="suspect" value="${escape(c.id)}" required ${reportDraft.suspect === c.id ? 'checked' : ''}><i class="monkey-face ${castClass(c.id)}" ${castStyle(c.id)} aria-hidden="true"></i><span><b>${escape(c.name)}</b><small>${escape(c.role)}</small></span></label>`).join('')}<div class="other-guesses">${[['none', 'Nobody'], ['uncertain', 'Not sure']].map(([value, label]) => `<label><input type="radio" name="suspect" value="${value}" ${reportDraft.suspect === value ? 'checked' : ''}> ${label}</label>`).join('')}</div></fieldset>
+    <fieldset class="suspect-options"><legend class="sr-only">Choose a suspect</legend>${state.characters.map(c => `<label class="suspect-option"><input type="radio" name="suspect" value="${escape(c.id)}" required ${reportDraft.suspect === c.id ? 'checked' : ''}><i class="monkey-face ${castClass(c.id)}" aria-hidden="true"></i><span><b>${escape(c.name)}</b><small>${escape(c.role)}</small></span></label>`).join('')}<div class="other-guesses">${[['none', 'Nobody'], ['uncertain', 'Not sure']].map(([value, label]) => `<label><input type="radio" name="suspect" value="${value}" ${reportDraft.suspect === value ? 'checked' : ''}> ${label}</label>`).join('')}</div></fieldset>
     <label for="confidence">How sure are you?</label><select id="confidence"><option value="40" ${reportDraft.confidence === 40 ? 'selected' : ''}>Just a hunch</option><option value="70" ${reportDraft.confidence === 70 ? 'selected' : ''}>Fairly sure</option><option value="95" ${reportDraft.confidence === 95 ? 'selected' : ''}>Very sure</option></select>
     <label for="explanation">Why? <span>optional · one sentence</span></label><textarea id="explanation" rows="2" maxlength="500" placeholder="What gave it away?">${escape(reportDraft.explanation)}</textarea>
     <label for="verdict-clue">Which clue helped? <span>optional</span></label><select id="verdict-clue"><option value="">Choose a clue</option>${state.records.map(r => `<option value="${r.id}" ${reportDraft.evidenceIds.includes(r.id) ? 'selected' : ''}>${escape(r.title)}</option>`).join('')}</select>
@@ -370,7 +369,7 @@ function debriefPanel() {
   const next = nextCase();
   return `${heading('MYSTERY SOLVED / AUTHORED DEMO', debrief.title, debrief.summary)}
     <div class="notebook-content"><div class="verdict-summary"><span class="eyebrow">YOUR GUESS · ${escape(chosen).toUpperCase()}</span><p>${escape(debrief.feedback)}</p></div>
-    ${debrief.findings.map(f => `<section class="finding"><div class="finding-monkey"><i class="monkey-face ${castClass(f.character)}" ${castStyle(f.character)} aria-hidden="true"></i><div><span class="eyebrow">${escape(f.character.toUpperCase())}</span><h3>${escape(f.classification)}</h3></div></div><p>${escape(f.explanation)}</p>${f.evidence.map(id => { const r = state.records.find(r => r.id === id)!; return `<details><summary>${escape(r.title)}</summary><p>${escape(r.text)}</p></details>`; }).join('')}</section>`).join('')}
+    ${debrief.findings.map(f => `<section class="finding"><div class="finding-monkey"><i class="monkey-face ${castClass(f.character)}" aria-hidden="true"></i><div><span class="eyebrow">${escape(f.character.toUpperCase())}</span><h3>${escape(f.classification)}</h3></div></div><p>${escape(f.explanation)}</p>${f.evidence.map(id => { const r = state.records.find(r => r.id === id)!; return `<details><summary>${escape(r.title)}</summary><p>${escape(r.text)}</p></details>`; }).join('')}</section>`).join('')}
     <div class="briefing-note"><p>${escape(debrief.lesson)}</p></div><p class="fine-print">These ${escape(world().text.many)} represent AI agents. This is an authored demonstration of intent and mistakes, not a validated research case.</p>
     ${next ? `<button class="primary-button" id="next-case" data-case="${escape(next.id)}">Next case: ${escape(next.title)} ${icon('arrow')}</button>` : ''}
     <div class="debrief-actions"><button class="${next ? 'secondary' : 'primary'}-button" id="debrief-reset">${next ? 'All cases' : 'Play again'} ${icon(next ? 'cases' : 'reset')}</button><button class="secondary-button" id="debrief-export">Export session ${icon('arrow')}</button></div></div>`;

@@ -44,3 +44,10 @@ test('catalog rows name their world', () => {
   assert.equal(rows.find(r => r.id === 'banana-mystery').world, 'grove');
   assert.equal(rows.find(r => r.id === 'tower-bell-charm').world, 'tower');
 });
+
+test('the tower measures its art; the grove keeps its tuned tables', () => {
+  assert.deepEqual(worldFor('tower').heights, { cast: 47, investigator: 45 });
+  assert.equal(worldFor('tower').strideFix, undefined);
+  assert.equal(worldFor('grove').heights, undefined);
+  assert.equal(worldFor('grove').strideFix, undefined);
+});
