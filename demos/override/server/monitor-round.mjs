@@ -47,7 +47,7 @@ export function createRoundStats(cases) {
       case 'interview_question': s.questions += 1; s.asked = true; break;
       case 'interview_answer': if ((byId.get(s.caseId).characters ?? []).some((c) => c.id === e.character)) s.answered.add(e.character); break;
       case 'verdict_submitted':
-        if (!s.verdict && e.verdict && Number.isFinite(e.elapsedMs)) s.verdict = { suspect: e.verdict.suspect, ms: e.elapsedMs, questions: s.questions };
+        if (!s.verdict && e.verdict && Number.isFinite(e.elapsedMs)) s.verdict = { suspect: e.verdict.suspect, ms: e.elapsedMs, questions: s.questions, coins: Number.isFinite(e.coins?.spent) ? e.coins.spent : null };
         break;
       case 'debrief_viewed': s.debrief = true; break;
       default: break;
@@ -78,9 +78,10 @@ export function createRoundStats(cases) {
 
   function tallies() {
     const out = {};
-    for (const c of cases) out[c.id] = { verdicts: 0, correct: null, accused: {}, medianMsToVerdict: null, medianQuestions: null };
+    for (const c of cases) out[c.id] = { verdicts: 0, correct: null, accused: {}, medianMsToVerdict: null, medianQuestions: null, medianCoins: null };
     const ms = {};
     const qs = {};
+    const cs = {};
     const right = {};
     for (const s of sessions.values()) {
       if (!s.verdict) continue;
@@ -93,6 +94,7 @@ export function createRoundStats(cases) {
       right[s.caseId] = (right[s.caseId] ?? 0) + (ok ? 1 : 0);
       (ms[s.caseId] ??= []).push(s.verdict.ms);
       (qs[s.caseId] ??= []).push(s.verdict.questions);
+      if (s.verdict.coins !== null) (cs[s.caseId] ??= []).push(s.verdict.coins);
     }
     for (const id of Object.keys(out)) {
       const t = out[id];
@@ -100,6 +102,7 @@ export function createRoundStats(cases) {
       t.correct = right[id] ?? 0;
       t.medianMsToVerdict = lowerMiddle(ms[id]);
       t.medianQuestions = lowerMiddle(qs[id]);
+      t.medianCoins = lowerMiddle(cs[id] ?? []);
     }
     return out;
   }

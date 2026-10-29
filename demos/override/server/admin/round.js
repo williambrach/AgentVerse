@@ -56,6 +56,7 @@ export function tallyRows(snap, catalog) {
       accused,
       medianMin: verdicts > 0 ? minutes(row.medianMsToVerdict) : '–',
       medianQuestions: verdicts > 0 && num(row.medianQuestions) ? row.medianQuestions : null,
+      medianCoins: verdicts > 0 && num(row.medianCoins) ? row.medianCoins : null,
     };
   });
 }
@@ -101,7 +102,7 @@ export function renderTallies(root, snap, catalog) {
       continue;
     }
     const head = row.correctPct === null ? '–' : `${row.correctPct} %`;
-    el(doc, 'div', 'tally-head', box, `${row.verdicts} verdicts · ${head} correct · median ${row.medianMin} min · ${row.medianQuestions === null ? '–' : row.medianQuestions} questions`);
+    el(doc, 'div', 'tally-head', box, `${row.verdicts} verdicts · ${head} correct · median ${row.medianMin} min · ${row.medianQuestions === null ? '–' : row.medianQuestions} questions · median ${row.medianCoins === null ? '–' : row.medianCoins} coins`);
     for (const a of row.accused) {
       const line = el(doc, 'div', 'step', box);
       el(doc, 'span', 'step-l', line, a.who);

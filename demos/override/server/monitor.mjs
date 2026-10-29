@@ -3,6 +3,7 @@ const KINDS = {
   session_started: 'start', briefing_viewed: 'briefing', location_visited: 'visit',
   interview_question: 'question', interview_answer: 'answer',
   interview_failed: 'failure', verdict_submitted: 'verdict', debrief_viewed: 'debrief', session_reset: 'reset',
+  chatter_line: 'chatter', reasoning_inspected: 'inspect', chatter_failed: 'failure',
 };
 const SYSTEM_CAP = 20;
 const QUESTION_CAP = 2000;
@@ -34,10 +35,19 @@ export function toRow(e, ctx = {}) {
     player: String(e.sessionId ?? '').slice(0, 4), caseId: e.caseId ?? null, kind,
     character: e.character ?? null, text: null, ms: null, endpoint: null, failedOver: false,
     reason: null, verdict: null, elapsedMs: isNum(e.elapsedMs) ? e.elapsedMs : null,
+    cost: isNum(e.spend?.cost) ? e.spend.cost : null,
   };
   if (kind === 'visit') row.text = e.location ?? null;
   else if (kind === 'question') row.text = e.question ?? null;
-  else if (kind === 'answer' || kind === 'failure') {
+  else if (kind === 'chatter' || kind === 'inspect' || (kind === 'failure' && e.type === 'chatter_failed')) {
+    if (kind === 'chatter') row.text = e.text ?? null;
+    else if (kind === 'inspect') row.text = e.reasoning ?? null;
+    if (kind !== 'inspect') {
+      row.endpoint = prov?.endpoint ?? (ctx?.mode === 'rehearsal' ? 'rehearsal' : null);
+      row.failedOver = prov?.failedOver === true;
+    }
+    if (kind === 'failure') row.reason = e.reason ?? null;
+  } else if (kind === 'answer' || kind === 'failure') {
     row.text = kind === 'answer' ? (e.answer ?? null) : (e.question ?? null);
     row.endpoint = prov?.endpoint ?? (ctx?.mode === 'rehearsal' ? 'rehearsal' : null);
     row.failedOver = prov?.failedOver === true;
@@ -179,6 +189,16 @@ export function createMonitor(opts) {
       roundStats.reset();
       round = { label: String(label ?? '').trim() || null, startedAt: now() };
       return { ...round };
+    },
+    sessionCoins(id) {
+      const events = readSession(id);
+      if (!events) return null;
+      let spent = 0, budget = null;
+      for (const e of events) {
+        if (e.type === 'session_started') budget = isNum(e.economy?.budget) ? e.economy.budget : null;
+        if (isNum(e.spend?.total)) spent = e.spend.total;
+      }
+      return { spent, budget };
     },
     session(id) {
       const events = readSession(id);

@@ -23,7 +23,7 @@ test('funnel and tallies for a full session', () => {
   const r = createRoundStats(cases);
   full(r, 's1');
   assert.deepEqual(r.funnel()[B], { started: 1, asked: 1, interviewed: 1, verdict: 1, debrief: 1 });
-  assert.deepEqual(r.tallies()[B], { verdicts: 1, correct: 1, accused: { momo: 1 }, medianMsToVerdict: 600000, medianQuestions: 3 });
+  assert.deepEqual(r.tallies()[B], { verdicts: 1, correct: 1, accused: { momo: 1 }, medianMsToVerdict: 600000, medianQuestions: 3, medianCoins: null });
 });
 
 test('medianQuestions counts interview_question events at verdict', () => {
@@ -47,7 +47,7 @@ test('asked counts a session once; story_revealed is ignored', () => {
 
 test('empty and unregistered cases', () => {
   const r = createRoundStats(cases);
-  assert.deepEqual(r.tallies()[B], { verdicts: 0, correct: null, accused: {}, medianMsToVerdict: null, medianQuestions: null });
+  assert.deepEqual(r.tallies()[B], { verdicts: 0, correct: null, accused: {}, medianMsToVerdict: null, medianQuestions: null, medianCoins: null });
   assert.deepEqual(r.funnel()[T], { started: 0, asked: 0, interviewed: 0, verdict: 0, debrief: 0 });
   r.observe(ev('x', 'banana-control', 'session_started'));
   r.observe(verdict('x', 'banana-control', 'momo'));
@@ -137,4 +137,14 @@ test('resetting an unknown session does not lower the round count', () => {
   r.observe(ev('s1', B, 'session_started'));
   r.observe(ev('ghost', B, 'session_reset'));
   assert.equal(r.players().round, 1);
+});
+
+test('medianCoins is the lower middle of verdict coins.spent, null when absent', () => {
+  const r = createRoundStats(cases);
+  const mk = (sid, spent) => { r.observe({ type: 'session_started', sessionId: sid, caseId: B }); r.observe({ type: 'verdict_submitted', sessionId: sid, caseId: B, verdict: { suspect: 'momo' }, elapsedMs: 1, ...(spent == null ? {} : { coins: { spent, budget: 9 } }) }); };
+  mk('a', 7); mk('b', 3); mk('c', null);
+  assert.equal(r.tallies()[B].medianCoins, 3);
+  const r2 = createRoundStats(cases);
+  r2.observe({ type: 'verdict_submitted', sessionId: 'z', caseId: B, verdict: { suspect: 'momo' }, elapsedMs: 1 });
+  assert.equal(r2.tallies()[B].medianCoins, null);
 });

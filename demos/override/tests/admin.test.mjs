@@ -407,3 +407,13 @@ test('close_ends_streams', async () => {
   await sleep(100);
   assert.equal(snaps, n);
 });
+
+test('session_drilldown_coins', async () => {
+  const withSpend = { ...fakeMonitor(), sessionCoins: () => ({ spent: 7, budget: 12 }) };
+  const a = await boot({ monitor: withSpend });
+  assert.deepEqual((await (await a.req(`/admin/sessions/${UID}`)).json()).coins, { spent: 7, budget: 12 });
+  a.close();
+  const old = await boot({ monitor: fakeMonitor() }); // no sessionCoins: old-format session
+  assert.deepEqual((await (await old.req(`/admin/sessions/${UID}`)).json()).coins, { spent: 0, budget: null });
+  old.close();
+});

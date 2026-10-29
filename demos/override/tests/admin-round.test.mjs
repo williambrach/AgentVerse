@@ -37,7 +37,7 @@ test('tallyRows example (answer [] = Nobody correct)', () => {
   const snap = { tallies: { 'tower-echo-bell': { verdicts: 10, correct: 0.4, accused: { none: 4, wren: 6 }, medianMsToVerdict: 754000, medianQuestions: 7 } } };
   const r = round.tallyRows(snap, catalog)[1];
   assert.deepEqual(r, { caseId: 'tower-echo-bell', title: 'Lanterns Too Soon', verdicts: 10, correctPct: 40,
-    accused: [{ who: 'Wren', n: 6, pct: 60, correct: false }, { who: 'Nobody', n: 4, pct: 40, correct: true }], medianMin: '12:34', medianQuestions: 7 });
+    accused: [{ who: 'Wren', n: 6, pct: 60, correct: false }, { who: 'Nobody', n: 4, pct: 40, correct: true }], medianMin: '12:34', medianQuestions: 7, medianCoins: null });
 });
 
 test('tallyRows zero verdicts and uncertain', () => {
@@ -107,4 +107,9 @@ test('module never uses innerHTML', async () => {
   const { readFile } = await import('node:fs/promises');
   const src = await readFile(new URL('../server/admin/round.js', import.meta.url), 'utf8');
   assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|setAttribute\('style'/.test(src));
+});
+
+test('tallyRows carries medianCoins', () => {
+  const snap = { tallies: { 'banana-mystery': { verdicts: 2, correct: 1, accused: {}, medianMsToVerdict: 1000, medianQuestions: 1, medianCoins: 4 } } };
+  assert.equal(round.tallyRows(snap, catalog)[0].medianCoins, 4);
 });
