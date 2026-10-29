@@ -65,6 +65,14 @@ Provider reasoning (`reasoning_content` or `reasoning`) is kept only in server m
 
 Inspect reasoning shows how that character reasoned about their last line. Let them talk is available from the start; it makes the three characters post in a forum-style thread. They see each other's earlier lines but never your questions. Their lines appear as speech bubbles over the speaker and in the thread panel. Walking, the verdict and reset are free. Failed answers cost nothing. With a budget, the game keeps enough coins to ask each character you have not asked once. The coin counter is in the top bar; the debrief shows the total.
 
+### Teams and the leaderboard
+
+- **Check-in.** A new browser first asks for a team name (2 to 24 letters, numbers and spaces). Use one screen per team. If another screen already uses the name, the game asks whether to join that team; joining is the only way to share a name. The game follows the team: the same team on a second screen shows the same game, and **Cases** and **Reset** keep the team. **Change team** in the top bar switches to another name.
+- **Scoring.** A correct guess scores 1 point. Only a team's first guess per case in the current round counts. Time runs from the team's first start of that case to the counted guess; coins are everything the team spent on that case until then. Ties are broken by time or by coins, as the operator chooses in the command centre. Teams that are still playing are listed without a rank.
+- **Where it shows.** The **Leaderboard** button in the top bar and a button on the debrief open the board; your team's row is highlighted.
+- **Without a check-in.** Old browsers and scripts that never join a team play as before but are not on the board.
+- **One data directory per event.** Team names persist in `teams.jsonl` and stay taken. Use a fresh `OVERRIDE_ENV` (data directory) for each event.
+
 Click a monkey, signpost, or destination to walk there. WASD/arrows and E/Space also work. **Skip walking** jumps directly to a destination and is enabled initially for reduced-motion preferences. Momo, Pip, and Nori blink and make small gestures on separate idle cycles, and react when you approach. Reduced-motion preferences disable these animations. The notebook retains its page turns; reduced-motion preferences disable those effects.
 
 ## Writing a case
@@ -82,9 +90,10 @@ The server writes append-only JSONL files under `data/<env>/`, or under `OVERRID
 
 - `sessions/<sessionId>.jsonl`: the player export, one file per game. **Export session** downloads the current game; older files remain on disk after reset.
 - `traces/<sessionId>.jsonl`: one record per LLM attempt with the full request and response. Admin only: never served to players. Probes go to `traces/probes.jsonl`.
-- `system.jsonl`: operator and system events, such as endpoint changes (`llm_active`).
+- `system.jsonl`: operator and system events, such as endpoint changes (`llm_active`), `leaderboard_settings` and `team_hidden`.
+- `teams.jsonl`: `team_created {teamId, name}` and `team_session {teamId, sessionId}` records; the team list is rebuilt from it on restart.
 
-Every event includes `schemaVersion` (2), `eventId`, `sequence`, `timestamp`, `elapsedMs`, `sessionId`, `caseId`, `caseVersion`, `contentHash`, `promptVersion`, `revealedPosition`, `selectedEvidence`, `character`, `question`, `answer`, interview `mode`, and `model`. Fields that do not apply are `null`. Question and answer events are linked by `questionEventId`; failures are recorded separately. `session_started` adds `assignment` (`fixed` when the request named a case, else `default`), `env`, `appCommit`, `appDirty`, and `endpointsHash`. `revealedPosition` and `selectedEvidence` are kept for old readers and are always `null` since 2026-10-29. Additional payloads record locations and the complete submitted verdict, whose `evidenceIds` is always `[]`.
+Every event includes `schemaVersion` (2), `eventId`, `sequence`, `timestamp`, `elapsedMs`, `sessionId`, `caseId`, `caseVersion`, `contentHash`, `promptVersion`, `revealedPosition`, `selectedEvidence`, `character`, `question`, `answer`, interview `mode`, and `model`. Fields that do not apply are `null`. Question and answer events are linked by `questionEventId`; failures are recorded separately. `session_started` adds `assignment` (`fixed` when the request named a case, else `default`), `env`, `appCommit`, `appDirty`, and `endpointsHash`, and `team {id, name}` (`null` without a check-in). `revealedPosition` and `selectedEvidence` are kept for old readers and are always `null` since 2026-10-29. Additional payloads record locations and the complete submitted verdict, whose `evidenceIds` is always `[]`.
 
 `interview_answer` and `interview_failed` carry `provenance` (`null` in rehearsal mode): the endpoint, host, model, attempts, whether it failed over, queue and call time, token counts, sampling parameters, and the IDs of the matching trace records.
 
@@ -131,6 +140,7 @@ Set `OVERRIDE_ADMIN_TOKEN` to start the admin listener on `127.0.0.1:$OVERRIDE_A
 - **Message log.** Live game events with filters. The log shows `chatter` and `inspect` rows, each with its cost. Click a player to see that player's whole session, read from disk, so evicted games work too; the drill-down shows the team's coins. Player text shows only here, behind the token.
 - **Funnel and tallies.** Per case: started, first question, interviewed all, verdict, debrief; then verdicts, share correct, who was accused, and median time and questions to a verdict, and median coins at verdict.
 - **Rounds.** *Start round* names a new session (for example a new class). It is stored as a `round_started` record in `system.jsonl`, resets the funnel, tallies and *players this round*, and survives a restart. Without one, the round is everything in the data directory.
+- **Leaderboard.** The same standings as players see, plus hidden teams. The *Ties by* Time / Coins toggle is saved in `system.jsonl` and restored on restart. **Hide** and **Show** moderate a team: a hidden team leaves the public board (and stays visible here). Starting a new round empties the board. Log rows show team names.
 - **Controls.** The router table, pin, probe, caps and pause are still on the page, and the curl calls below still work.
 
 Grafana and Prometheus stay optional; the command centre does not need them.
@@ -152,9 +162,12 @@ curl -H "$AUTH" http://127.0.0.1:3002/metrics
 curl -N -H "$AUTH" http://127.0.0.1:3002/admin/stream
 curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"label":"Session B","reason":"second class"}' http://127.0.0.1:3002/admin/round
 curl -H "$AUTH" http://127.0.0.1:3002/admin/sessions/<session-id>
+curl -H "$AUTH" http://127.0.0.1:3002/admin/leaderboard
+curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"rankBy":"coins"}' http://127.0.0.1:3002/admin/leaderboard
+curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"teamId":"<team-id>","hidden":true}' http://127.0.0.1:3002/admin/teams/hidden
 ```
 
-`/admin/stream` is NDJSON: a `hello` line (catalog, snapshot, recent rows), then an `event` line per game event and a `tick` line with a fresh snapshot every second. At most 5 streams are open at once. `/admin/round` takes a label of 1 to 60 characters. `/admin/sessions/<id>` returns `{sessionId, rows}`, or 404.
+`/admin/stream` is NDJSON: a `hello` line (catalog, snapshot, recent rows), then an `event` line per game event and a `tick` line with a fresh snapshot every second. At most 5 streams are open at once. `/admin/round` takes a label of 1 to 60 characters. `GET /admin/leaderboard` returns the full standings with team ids and hidden flags; `POST /admin/leaderboard {"rankBy": "time"|"coins"}` sets the tie-break; `POST /admin/teams/hidden {"teamId", "hidden"}` hides or shows a team. `/admin/sessions/<id>` returns `{sessionId, rows}`, or 404.
 
 `cap` takes `"endpoint": null` for the global cap. `pause` stops new games and lets running ones finish. `GET /api/health` on the game port is a public liveness check. `POST /api/heartbeat {"tab": "<uuid>"}` on the game port needs the access cookie, answers 204 with no body, and only feeds the online count.
 
