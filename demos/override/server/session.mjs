@@ -31,7 +31,8 @@ export function replay(events, cases) {
       s = { id: e.sessionId, revision: 0, startedAt: new Date(Date.parse(e.timestamp) - e.elapsedMs).toISOString(),
         status: 'active', caseId: kase.id,
         location: 'briefing', interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])), verdict: null,
-        economy: createWallet(e.economy ?? economyRules({})), thread: [], chatter: { round: 0, pending: 0 }, inspections: [] };
+        economy: createWallet(e.economy ?? economyRules({})), thread: [], chatter: { round: 0, pending: 0 }, inspections: [],
+        team: e.team && typeof e.team.id === 'string' && typeof e.team.name === 'string' ? { id: e.team.id, name: e.team.name } : null };
     }
     if (!s || e.sessionId !== s.id || e.sequence !== s.revision + 1) return null;
     s.revision = e.sequence;
@@ -109,7 +110,7 @@ export class Investigations {
     return (this.find(sessionId) || this.create(null, this.cases[0])).view();
   }
 
-  async mutate(sessionId, action, input = {}) {
+  async mutate(sessionId, action, input = {}, { team = null } = {}) {
     const now = Date.now();
     for (const [id, game] of this.games) if (!game.busy && now - game.touched > this.idleMs) this.games.delete(id);
     let kase;
@@ -120,7 +121,7 @@ export class Investigations {
     const game = this.find(sessionId) || this.create(null, kase || this.cases[0]);
     if (action === 'start' && this.paused) throw new RequestError(503, 'New games are paused. Try again shortly.');
     if ((action === 'start' || action === 'reset') && !this.newGames.take(now)) throw new RequestError(429, 'Too many new games right now. Try again in a moment.');
-    const run = game.mutate(action, input, { kase, assignment: kase ? 'fixed' : 'default' });
+    const run = game.mutate(action, input, { kase, assignment: kase ? 'fixed' : 'default', team });
     this.pending.add(run);
     try {
       const view = await run;
@@ -228,7 +229,7 @@ export class Investigation {
     }
   }
 
-  async mutate(action, input = {}, { kase = null, assignment = 'default' } = {}) {
+  async mutate(action, input = {}, { kase = null, assignment = 'default', team = null } = {}) {
     if (this.busy) throw new RequestError(409, 'An interview is still in progress. Wait for the answer, then try again.');
     this.busy = true;
     this.wrote = null;
@@ -238,7 +239,7 @@ export class Investigation {
       if (action === 'start') {
         if (this.session) throw new RequestError(409, 'A case is already active. Continue it or reset for the next investigator.');
         if (kase) this.kase = kase;
-        this.start(assignment);
+        this.start(assignment, team);
       } else {
         this.ensureCurrent(input);
         const s = this.session;
@@ -246,7 +247,7 @@ export class Investigation {
         if (action === 'reset') {
           this.log('session_reset', { completed: s.status === 'closed' });
           if (kase) this.kase = kase;
-          this.start(assignment);
+          this.start(assignment, team);
         } else {
           if (s.status !== 'active') throw new RequestError(409, 'This case is closed. Review the debrief or start a new session.');
           if (action === 'visit') {
@@ -281,7 +282,7 @@ export class Investigation {
     } finally { this.busy = false; }
   }
 
-  start(assignment = 'default') {
+  start(assignment = 'default', team = null) {
     this.reasoning.clear();
     const rules = this.config.economy ?? economyRules({});
     this.session = {
@@ -289,8 +290,9 @@ export class Investigation {
       status: 'active', caseId: this.kase.id,
       location: 'briefing', interviews: Object.fromEntries(this.kase.characters.map(c => [c.id, []])), verdict: null,
       economy: createWallet(rules), thread: [], chatter: { round: 0, pending: 0 }, inspections: [],
+      team: team && typeof team.id === 'string' && typeof team.name === 'string' ? { id: team.id, name: team.name } : null,
     };
-    this.log('session_started', { assignment, economy: rules, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, ...this.meta });
+    this.log('session_started', { assignment, economy: rules, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, team: this.session.team, ...this.meta });
     this.log('briefing_viewed');
   }
 
