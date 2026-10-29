@@ -7,6 +7,7 @@ import './fit.css';
 import './tower.css';
 import { renderNotebook } from './notebook';
 import { createStation, type Station } from './station';
+import { postHeartbeat, startHeartbeat } from './heartbeat';
 import { worldFor } from './worlds';
 import type { CaseState, Character, Evidence, LocationId } from './types';
 
@@ -450,6 +451,8 @@ function nextCase() {
   return [...catalog.slice(at + 1), ...catalog.slice(0, Math.max(at, 0))].find(row => !solved.has(row.id));
 }
 
+let stopHeartbeat: (() => void) | undefined;
+
 async function boot() {
   try {
     const access = await api('access');
@@ -469,6 +472,7 @@ async function boot() {
     drafts = blankDrafts();
     shell();
     render();
+    stopHeartbeat ??= startHeartbeat(document, postHeartbeat, 30000);
   } catch {
     app.innerHTML = `<div class="access-screen"><div class="reset-card"><span class="eyebrow">CONNECTION UNAVAILABLE</span><h1>The grove is offline.</h1><p>The case server could not be reached. Start the demo server, then reload this page.</p><button class="primary-button" onclick="location.reload()">Try again</button></div></div>`;
   }
