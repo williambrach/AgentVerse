@@ -82,3 +82,10 @@ Ruling: [tryout] AI try-out: 7/7 acceptance tests pass on the prototype (4 monke
   - Ruling: "identityCast no module found / contract mismatch" is the seam checker's known .mjs blind spot - export present at server/cases.mjs:196 with the planned signature; used by session, index and tests - cost if wrong: none
   - Ruling: roles.spec.mjs-e already deleted; case-prompt usage still matches the test regex (`<characterId> [--question …] [--part …]`); cases.test review_* tests pass (fixed by the T1 review); old test-failure incidents are mid-TDD records - all verified by the 495/0 run - cost if wrong: none
   - incidents tool counts every entry separately, so the 38 `fixed` entries appended by the coordinator do not clear the packet; second final review gets the packet plus this evidence
+- note: demo/override moved again 531b0d6 -> 9a9e7e3 (teams-leaderboard, 11 commits, 38 files); leaderboard points() already uses verdict.score when present
+- Ruling: merge demo/override (9a9e7e3) into superlite/agent-roles before handing off - the branch must merge cleanly and the team gate touches every browser spec - cost if wrong: one more merge round
+- merge 2: git merge --no-ff --no-commit demo/override (9a9e7e3) started 20:03:18; 10 conflicts (README, main.ts, index, monitor, session, 5 browser specs); one fixer-opus owns the resolution + unit and browser suites
+- merge 2 committed: unit 553/553, browser 80/80 per fixer; leaderboard points = roles right (role_verdict_points_are_roles_right); teams specs ask all four, mark everyone honest (1 right); replay_keeps_points retargeted to two tower plays (3 pts, first verdict per case counts)
+- tests full passed=553 failed=0 skipped=0 seconds=31.3
+- tests full passed=553 failed=0 skipped=0 seconds=31.1
+- verified on 86bd9f4: unit 553/0 (run_tests --full 31.1 s), browser 80/80 (npx playwright test, 5.1 min); shipping unattended (AI orchestrator): branch kept, merge into demo/override deferred to the user
