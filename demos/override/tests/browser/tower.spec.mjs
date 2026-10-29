@@ -186,6 +186,30 @@ test('case board preview shows the selected world', async ({ page }) => {
   expect(await face.evaluate(el => getComputedStyle(el).backgroundImage)).toContain('monkeys.png');
 });
 
+test('the tower has its own colours, the grove keeps its own, and the case board follows the pick', async ({ page }) => {
+  const look = () => page.evaluate(() => ({
+    theme: document.documentElement.dataset.theme,
+    page: getComputedStyle(document.documentElement).backgroundColor,
+    topbar: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
+    title: document.title,
+  }));
+  await start(page);
+  await settled(page, 'tower', ['wren', 'basil', 'juniper']);
+  expect(await look()).toEqual({ theme: 'tower', page: 'rgb(228, 225, 238)', topbar: 'rgb(248, 246, 252)', title: 'Lanterns Too Soon · AgentVerse' });
+  await page.locator('#reset-button').focus();
+  await page.keyboard.press('Shift+Tab');
+  expect(await page.locator('#restart-button').evaluate(el => getComputedStyle(el).outlineColor)).toBe('rgb(116, 102, 176)');
+  await switchTo(page, 'banana-mystery');
+  await settled(page, 'grove', ['momo', 'pip', 'nori']);
+  expect(await look()).toEqual({ theme: 'grove', page: 'rgb(232, 237, 218)', topbar: 'rgb(255, 249, 232)', title: 'The Banana Mystery · AgentVerse' });
+  await page.locator('#reset-button').click();
+  await page.locator('.case-option input[name="case"][value="tower-echo-bell"]').check();
+  await expect.poll(async () => (await look()).theme).toBe('tower');
+  await page.keyboard.press('Escape');
+  await expect.poll(async () => (await look()).theme).toBe('grove');
+  await expect(page.locator('#app')).toHaveAttribute('data-world', 'grove');
+});
+
 test('a tower session resumes from its cookie', async ({ page }) => {
   await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);

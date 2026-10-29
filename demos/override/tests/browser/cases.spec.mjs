@@ -74,6 +74,31 @@ test('reset switches case', async ({ page }) => {
   await expect(page.locator('#case-switch')).toHaveCount(0);
 });
 
+test('reset session starts the current case over', async ({ page }) => {
+  await page.goto('/?case=tower-echo-bell');
+  await page.locator('#begin-button').click();
+  await page.locator('#skip-walking').check();
+  await page.locator('nav [data-go="replay"]').click();
+  await page.locator('#reveal-button').click();
+  await expect(page.locator('.evidence-card')).toHaveCount(3);
+  const before = (await (await page.request.get('/api/state')).json()).session;
+  await page.locator('#restart-button').click();
+  await expect(page.locator('#reset-title')).toHaveText('Start Lanterns Too Soon over?');
+  await expect(page.locator('#reset-confirm')).toContainText('your chats with the apprentices');
+  await expect(page.locator('#cancel-restart')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#reset-confirm')).toHaveCount(0);
+  await expect(page.locator('#restart-button')).toBeFocused();
+  await page.locator('#restart-button').click();
+  await page.locator('#confirm-restart').click();
+  await expect(page.locator('#reset-confirm')).toHaveCount(0);
+  await expect(page.locator('#panel h2')).toHaveText('Lanterns, too soon.');
+  const after = (await (await page.request.get('/api/state')).json()).session;
+  expect(after.id).not.toBe(before.id);
+  expect(after.caseId).toBe('tower-echo-bell');
+  expect(after.revealedPosition).toBe(0);
+});
+
 test('a malformed solved list in storage does not break the page', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('override.solved', '{}'));
   await page.goto('/');

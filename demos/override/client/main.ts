@@ -4,6 +4,7 @@ import './notebook.css';
 import './banana.css';
 import './case-board.css';
 import './fit.css';
+import './tower.css';
 import { renderNotebook } from './notebook';
 import { createStation, type Station } from './station';
 import { worldFor } from './worlds';
@@ -100,6 +101,7 @@ function shell() {
     <header class="topbar">
       <a class="wordmark" href="/" aria-label="The Override home"><span class="banana-mark" id="world-icon"></span><span>THE OVERRIDE<small>AGENTVERSE</small></span></a>
       <div class="top-meta"><span class="authored-label">AUTHORED DEMONSTRATION</span><span id="mode-badge" class="mode-badge"></span></div>
+      <button class="quiet-button" id="restart-button" title="Start this case over in a fresh session">${icon('reset')}<span>Reset session</span></button>
       <button class="quiet-button" id="reset-button" title="Choose another case or restart this one">${icon('cases')}<span>Cases</span></button>
     </header>
     <main class="workspace">
@@ -124,7 +126,7 @@ function shell() {
     selectedCase = input.value;
     renderPreview();
   });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.querySelector('#case-switch')) closeCases(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.querySelector('#case-switch, #reset-confirm')) closeOverlay(); });
   document.querySelector('#skip-walking')!.addEventListener('change', event => { skipWalking = (event.target as HTMLInputElement).checked; });
   setInterval(() => {
     const elapsed = document.querySelector('#elapsed');
@@ -191,8 +193,10 @@ async function onClick(event: MouseEvent) {
   if (button.id === 'reveal-button') await action('reveal');
   if (button.id === 'clear-evidence') await action('evidence', { evidenceId: null });
   if (button.id === 'reset-button' || button.id === 'debrief-reset') showCases();
-  if (button.id === 'cancel-reset') closeCases();
+  if (button.id === 'restart-button') showRestart();
+  if (button.id === 'cancel-reset' || button.id === 'cancel-restart') closeOverlay();
   if (button.id === 'confirm-reset') await startCase(selectedCase || state.caseId);
+  if (button.id === 'confirm-restart') await startCase(state.caseId);
   if (button.id === 'next-case') await startCase(button.dataset.case!);
   if (button.id === 'export-button' || button.id === 'debrief-export') window.location.assign('/api/events');
 }
@@ -219,6 +223,7 @@ function render() {
   if (session?.status === 'closed') markSolved(session.caseId);
   renderWorld();
   document.querySelector('#case-headline')!.textContent = state.copy.headline;
+  document.title = `${state.title} · AgentVerse`;
   document.querySelector('#case-topline')!.textContent = state.title.toUpperCase();
   document.querySelector('#case-eyebrow')!.innerHTML = `CASE ${caseNumber(state.order)} <span class="slash">/</span> ${escape(world().text.eyebrow)}`;
   document.querySelector('#mode-badge')!.textContent = state.mode === 'live' ? 'LIVE INTERVIEWS' : 'SCRIPTED REHEARSAL';
@@ -235,10 +240,11 @@ function render() {
   document.querySelectorAll<HTMLElement>('[data-check]').forEach(el => { el.innerHTML = session?.interviews[el.dataset.check!].length ? icon('check') : ''; });
   (document.querySelector('#export-button') as HTMLButtonElement).disabled = !session || busy;
   (document.querySelector('#reset-button') as HTMLButtonElement).disabled = !session || busy;
+  (document.querySelector('#restart-button') as HTMLButtonElement).disabled = !session || busy;
   const toast = document.querySelector<HTMLElement>('#toast')!;
   toast.hidden = !errorMessage;
   toast.textContent = errorMessage;
-  station?.setEnabled(Boolean(session && !introVisible && !busy && !document.querySelector('#case-switch')));
+  station?.setEnabled(Boolean(session && !introVisible && !busy && !document.querySelector('#case-switch, #reset-confirm')));
   const target = document.querySelector<HTMLElement>('#panel')!;
   const sections: Record<string, string> = { briefing: 'Case briefing', replay: state.chapters[0]?.title || `The ${world().text.clueSpot}`, ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), evidence: 'Your clues', report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
   document.querySelector('#notebook-section')!.textContent = sections[panel];
@@ -256,6 +262,13 @@ function render() {
     if (document.querySelector('#intro')) document.querySelector('#overlay-root')!.innerHTML = '';
     if (document.querySelector('#case-switch')) renderPreview();
   }
+  applyTheme();
+}
+
+/** Colours follow the case on screen: the selection while the case board is open, otherwise the loaded case. Sprites keep following #app[data-world]. */
+function applyTheme() {
+  const picked = document.querySelector('#intro, #case-switch') ? catalog.find(row => row.id === selectedCase) : undefined;
+  document.documentElement.dataset.theme = picked?.world || world().id;
 }
 
 /** The case board: the case list beside a preview of the chosen case. Shown at the start (#intro) and from the topbar (#case-switch). */
@@ -289,6 +302,7 @@ function casePreview(id: 'intro' | 'case-switch') {
 function renderPreview() {
   const shade = document.querySelector<HTMLElement>('#intro, #case-switch');
   if (shade) shade.querySelector('#case-preview')!.innerHTML = casePreview(shade.id as 'intro' | 'case-switch');
+  applyTheme();
 }
 
 function renderIntro() {
@@ -408,14 +422,26 @@ function showCases() {
   const current = document.querySelector<HTMLInputElement>('#case-list input:checked');
   current?.scrollIntoView({ block: 'nearest' });
   (current || document.querySelector<HTMLButtonElement>('#cancel-reset'))!.focus({ preventScroll: true });
-  document.querySelector('#case-switch')!.addEventListener('click', event => { if (event.target === event.currentTarget) closeCases(); });
+  document.querySelector('#case-switch')!.addEventListener('click', event => { if (event.target === event.currentTarget) closeOverlay(); });
+  applyTheme();
 }
 
-function closeCases() {
+/** Asks before starting the current case over. The old session's records stay on the server. */
+function showRestart() {
+  station.setEnabled(false);
+  document.querySelector('#overlay-root')!.innerHTML = `<div class="modal-shade" id="reset-confirm"><section class="reset-card" role="dialog" aria-modal="true" aria-labelledby="reset-title"><span class="eyebrow">RESET SESSION</span><h2 id="reset-title">Start ${escape(state.title)} over?</h2><p>Your clues, your chats with the ${escape(world().text.many)} and your guess are cleared, and the case starts again from the briefing. The old session’s records stay on the server.</p><div class="reset-actions"><button class="secondary-button" id="cancel-restart">Keep investigating</button><button class="primary-button" id="confirm-restart">Reset session ${icon('reset')}</button></div></section></div>`;
+  document.querySelector<HTMLButtonElement>('#cancel-restart')!.focus({ preventScroll: true });
+  document.querySelector('#reset-confirm')!.addEventListener('click', event => { if (event.target === event.currentTarget) closeOverlay(); });
+}
+
+/** Closes the case board or the reset question and gives focus back to the button that opened it. */
+function closeOverlay() {
   if (busy) return;
+  const opener = document.querySelector('#reset-confirm') ? '#restart-button' : '#reset-button';
   document.querySelector('#overlay-root')!.innerHTML = '';
   station.setEnabled(Boolean(state.session));
-  document.querySelector<HTMLButtonElement>('#reset-button')?.focus({ preventScroll: true });
+  applyTheme();
+  document.querySelector<HTMLButtonElement>(opener)?.focus({ preventScroll: true });
 }
 
 /** The next case in catalog order that this browser has not solved yet. */
