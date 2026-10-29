@@ -55,7 +55,10 @@ export class Station extends Phaser.Scene {
   private route: Point[] = [];
   private destination: string | null = null;
   private marker!: Phaser.GameObjects.Arc;
-  private prompt!: Phaser.GameObjects.Text;
+  // Labels and the [E] prompt are HTML over the canvas, so they stay sharp however far the pixel-art canvas is scaled.
+  private overlay?: HTMLDivElement;
+  private prompt?: HTMLSpanElement;
+  private promptKey = '';
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private enabled = false;
@@ -98,6 +101,7 @@ export class Station extends Phaser.Scene {
     if (data?.cast) this.cast = data.cast.slice(0, slotPoints.length);
     this.worldId = this.world.id;
     this.builtKey = keyOf(this.world, this.cast);
+    this.overlay?.replaceChildren();
     this.stops = buildStops(this.world, this.cast);
     this.created = false;
     this.npcs = new Map();
@@ -240,7 +244,9 @@ export class Station extends Phaser.Scene {
     });
     this.prop(keys.props, 'bell', 282, 111, 39).setDepth(95);
     this.marker = this.add.circle(0, 0, 10).setStrokeStyle(2, 0xffeb9b).setVisible(false).setDepth(2);
-    this.prompt = this.add.text(0, 0, '', { fontFamily: 'monospace', fontSize: '8px', color: '#384d3a', backgroundColor: '#fff5d9', padding: { x: 5, y: 3 } }).setOrigin(.5, 0).setDepth(1000);
+    this.prompt = this.label(0, 0, '', 'station-prompt');
+    this.prompt.hidden = true;
+    this.promptKey = '';
     this.game.canvas.setAttribute('aria-label', `${this.world.text.place} with ${this.cast.map(c => c.name).join(', ')} and your ${this.world.text.investigator}. Click ${this.world.text.clickOne}, use the destination buttons, or walk with WASD and arrows.`);
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,SPACE', false) as typeof this.keys;
@@ -347,8 +353,42 @@ export class Station extends Phaser.Scene {
     shelfSpots.forEach(([x, y, size]) => this.prop(artKeys(this.world).props, 'bookshelf', x, y, size).setDepth(y < 100 ? 5 : y));
   }
 
-  private label(x: number, y: number, text: string) {
-    return this.add.text(x, y, text, { fontFamily: 'monospace', fontSize: '7px', color: this.world.palette.label, backgroundColor: this.world.palette.labelBg, padding: { x: 4, y: 3 } }).setOrigin(.5).setDepth(800);
+  private label(x: number, y: number, text: string, kind = 'station-label') {
+    const overlay = this.labelLayer();
+    const el = document.createElement('span');
+    el.className = kind;
+    el.textContent = text;
+    el.style.left = `${x / width * 100}%`;
+    el.style.top = `${y / height * 100}%`;
+    overlay.append(el);
+    return el;
+  }
+
+  /** The HTML layer over the canvas: same box as the canvas, with --u = one game pixel in CSS pixels. */
+  private labelLayer(): HTMLDivElement {
+    if (this.overlay) {
+      this.overlay.style.setProperty('--label', this.world.palette.label);
+      this.overlay.style.setProperty('--label-bg', this.world.palette.labelBg);
+      return this.overlay;
+    }
+    const canvas = this.game.canvas;
+    const overlay = this.overlay = document.createElement('div');
+    overlay.className = 'station-labels';
+    overlay.setAttribute('aria-hidden', 'true');
+    canvas.after(overlay);
+    const sync = () => {
+      overlay.style.left = `${canvas.offsetLeft}px`;
+      overlay.style.top = `${canvas.offsetTop}px`;
+      overlay.style.width = `${canvas.clientWidth}px`;
+      overlay.style.height = `${canvas.clientHeight}px`;
+      overlay.style.setProperty('--u', `${canvas.clientWidth / width}px`);
+    };
+    const observer = new ResizeObserver(sync);
+    observer.observe(canvas);
+    if (canvas.parentElement) observer.observe(canvas.parentElement);
+    this.scale.on(Phaser.Scale.Events.RESIZE, sync);
+    sync();
+    return this.labelLayer();
   }
   private typing() { return Boolean(document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')); }
   setEnabled(enabled: boolean) { this.enabled = enabled; }
@@ -422,7 +462,17 @@ export class Station extends Phaser.Scene {
     const near = Object.entries(this.stops).find(([, p]) => Phaser.Math.Distance.Between(this.player.x, this.player.y, p.x, p.y) < 18);
     const hint = near ? `E / SPACE · ${near[1].title}` : this.destination ? `Walking to ${this.stops[this.destination].label.toLowerCase()}…` : this.world.text.hint;
     if (hint !== this.currentHint) { this.currentHint = hint; this.onHint(hint); }
-    this.prompt.setVisible(Boolean(near && this.enabled && !this.typing())).setPosition(this.player.x, this.player.y + 14).setText(near ? `[E] ${near[1].title}` : '');
+    const shown = Boolean(near && this.enabled && !this.typing());
+    const promptKey = shown ? `${Math.round(this.player.x)},${Math.round(this.player.y)},${near![1].title}` : '';
+    if (this.prompt && promptKey !== this.promptKey) {
+      this.promptKey = promptKey;
+      this.prompt.hidden = !shown;
+      if (shown) {
+        this.prompt.textContent = `[E] ${near![1].title}`;
+        this.prompt.style.left = `${this.player.x / width * 100}%`;
+        this.prompt.style.top = `${(this.player.y + 14) / height * 100}%`;
+      }
+    }
     if (near && this.enabled && !this.typing() && (Phaser.Input.Keyboard.JustDown(this.keys.E) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE))) this.onArrival(near[0]);
   }
 }

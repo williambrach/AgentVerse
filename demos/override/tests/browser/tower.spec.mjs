@@ -210,6 +210,25 @@ test('the tower has its own colours, the grove keeps its own, and the case board
   await expect(page.locator('#app')).toHaveAttribute('data-world', 'grove');
 });
 
+test('station labels are sharp HTML over the canvas that follow its size and world', async ({ page }) => {
+  const fit = () => page.evaluate(() => {
+    const c = document.querySelector('#station canvas').getBoundingClientRect();
+    const o = document.querySelector('#station .station-labels').getBoundingClientRect();
+    const font = parseFloat(getComputedStyle(document.querySelector('#station .station-label')).fontSize);
+    return [c.width - o.width, c.height - o.height, c.left - o.left, c.top - o.top].map(d => Math.abs(Math.round(d))).join() + ` font ${Math.round(font / c.width * 480)}`;
+  });
+  await start(page);
+  await settled(page, 'tower', ['wren', 'basil', 'juniper']);
+  const labels = page.locator('#station .station-label');
+  await expect(labels).toHaveText(['WREN', 'BASIL', 'JUNIPER', 'START HERE', 'POTION CABINET', 'CLUES', 'YOUR GUESS']);
+  await expect(page.locator('#station .station-prompt')).toHaveText('[E] Read the case');
+  await expect.poll(fit).toBe('0,0,0,0 font 7');
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await expect.poll(fit).toBe('0,0,0,0 font 7');
+  await switchTo(page, 'banana-mystery');
+  await expect(labels).toHaveText(['MOMO', 'PIP', 'NORI', 'START HERE', 'BANANA BASKET', 'CLUES', 'YOUR GUESS']);
+});
+
 test('a tower session resumes from its cookie', async ({ page }) => {
   await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
