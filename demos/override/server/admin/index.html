@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Override admin</title>
+<link rel="stylesheet" href="/admin/app.css">
+<link rel="stylesheet" href="/admin/tiles.css">
+<link rel="stylesheet" href="/admin/log.css">
+<link rel="stylesheet" href="/admin/round.css">
+<link rel="stylesheet" href="/admin/controls.css">
+<script type="module" src="/admin/app.js"></script>
+</head>
+<body>
+<header class="top">
+  <h1>Override admin</h1>
+  <span id="status" class="status">offline</span>
+  <div id="round"></div>
+  <form class="auth" id="auth">
+    <input id="token" type="password" placeholder="admin token" autocomplete="off">
+    <button id="save" type="submit">Save</button>
+  </form>
+</header>
+<main>
+  <section id="players"></section>
+  <section id="tiles"></section>
+  <section id="history"></section>
+  <div class="cols">
+    <section id="log"></section>
+    <div class="side">
+      <section id="funnel"></section>
+      <section id="tallies"></section>
+    </div>
+  </div>
+  <section id="controls"></section>
+</main>
+<aside id="player-panel" hidden></aside>
+</body>
+</html>

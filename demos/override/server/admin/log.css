@@ -1,0 +1,14 @@
+.log-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.log-bar select, .log-bar input, .log-bar button { font: inherit; padding: 3px 8px; }
+.log-chip.on { font-weight: 600; text-decoration: underline; }
+.log-player-chip { padding: 2px 6px; border: 1px solid currentColor; border-radius: 10px; }
+.log-list { max-height: 60vh; overflow-y: auto; font-size: 13px; }
+.log-row { display: grid; grid-template-columns: 52px 44px 90px 20px 1fr auto; gap: 6px; padding: 2px 0; border-bottom: 1px solid rgba(128, 128, 128, 0.2); }
+.log-player { cursor: pointer; text-decoration: underline; font-family: ui-monospace, monospace; }
+.log-time, .log-meta { opacity: 0.65; }
+.log-failure { color: #c0392b; }
+.log-text-cell { overflow-wrap: anywhere; }
+.panel-timeline { padding-left: 0; list-style: none; font-size: 13px; }
+.panel-timeline li { display: flex; gap: 8px; padding: 2px 0; }
+.panel-error { color: #c0392b; }
+@media (prefers-color-scheme: dark) { .log-failure, .panel-error { color: #ff7b6b; } }
