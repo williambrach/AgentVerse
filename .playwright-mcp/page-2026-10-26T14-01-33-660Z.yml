@@ -1,0 +1,112 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - link "The Override home" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e8]:
+        - text: THE OVERRIDE
+        - generic [ref=e9]: AGENTVERSE
+    - generic [ref=e10]: SCRIPTED REHEARSAL
+    - button "New case" [disabled] [ref=e12]
+  - main [ref=e16]:
+    - region "Banana Grove" [ref=e17]:
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - generic [ref=e20]: CASE 001 / GROVE
+          - heading "Who took the bananas?" [level=1] [ref=e21]
+        - generic [ref=e22]: AWAITING INVESTIGATOR
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e27]: THE BANANA MYSTERY
+            - text: / PICNIC DAY
+          - generic [ref=e28]: 00:00
+        - img "Banana Grove with Momo, Pip, Nori and your monkey investigator. Click a monkey, use the destination buttons, or walk with WASD and arrows." [ref=e30]
+        - generic [ref=e31]: WASD / ARROWS to walk · E to interact
+      - navigation "Grove destinations" [ref=e33]:
+        - button "Basket Find 3 clues" [disabled] [ref=e34]:
+          - generic [ref=e38]:
+            - text: Basket
+            - generic [ref=e39]: Find 3 clues
+        - button "Momo The planner" [disabled] [ref=e40]:
+          - generic [ref=e42]:
+            - text: Momo
+            - generic [ref=e43]: The planner
+        - button "Pip The carrier" [disabled] [ref=e44]:
+          - generic [ref=e46]:
+            - text: Pip
+            - generic [ref=e47]: The carrier
+        - button "Nori The lookout" [disabled] [ref=e48]:
+          - generic [ref=e50]:
+            - text: Nori
+            - generic [ref=e51]: The lookout
+        - button "Clues 0 / 3 found" [disabled] [ref=e52]:
+          - generic [ref=e56]:
+            - text: Clues
+            - generic [ref=e57]: 0 / 3 found
+        - button "Your guess Who knew?" [disabled] [ref=e58]:
+          - generic [ref=e61]:
+            - text: Your guess
+            - generic [ref=e62]: Who knew?
+      - generic [ref=e63]:
+        - generic [ref=e64]: 1. Inspect the basket to find 3 clues
+        - generic [ref=e65] [cursor=pointer]:
+          - checkbox "Skip walking" [ref=e66]
+          - text: Skip walking
+    - complementary "Investigation notebook" [ref=e67]:
+      - generic [ref=e68]:
+        - generic [ref=e69]:
+          - generic [ref=e70]: INVESTIGATOR’S NOTEBOOK
+          - generic [ref=e71]: Case briefing
+        - generic [aria-hidden] [ref=e72]: 01 / 07
+        - button "View briefing" [disabled] [ref=e73]
+      - generic [ref=e77]:
+        - generic [ref=e78]:
+          - text: THE CASE / 2–3 MINUTES
+          - heading "A bunch of trouble." [level=2] [ref=e79]
+          - paragraph [ref=e80]: "The keeper said: “Wait for the bell.” But the picnic bananas vanished before it rang."
+        - generic [ref=e81]:
+          - generic [ref=e82]:
+            - text: YOUR QUESTION
+            - paragraph [ref=e83]: Who knew they were breaking the rule?
+            - generic [ref=e84]: Carrying the bananas doesn’t tell you the whole story.
+          - list [ref=e85]:
+            - listitem [ref=e86]:
+              - generic [ref=e87]: Find 3 clues
+              - generic [ref=e88]: Inspect the basket. Read the rule, the message, and the keeper’s account.
+            - listitem [ref=e89]:
+              - generic [ref=e90]: Ask 3 monkeys
+              - generic [ref=e91]: One quick question each. Present a clue if you want to dig deeper.
+            - listitem [ref=e92]:
+              - generic [ref=e93]: Make your guess
+              - generic [ref=e94]: Choose who knowingly broke the rule. Then see what happened.
+          - button "Inspect the basket" [ref=e95] [cursor=pointer]
+          - generic [ref=e98]: Click a monkey or a destination to walk there. Skip walking jumps straight to the conversation.
+  - contentinfo [ref=e99]:
+    - generic [ref=e100]: AGENTVERSE / THE OVERRIDE
+    - generic [ref=e101]: Authored demo · 2–3 minutes · Your own case
+    - button "Export session" [disabled] [ref=e102]
+  - dialog [ref=e106]:
+    - generic [ref=e107]:
+      - text: CASE 001
+      - generic [ref=e108]: AUTHORED DEMONSTRATION
+    - text: A 2–3 MINUTE MYSTERY
+    - heading "The Banana Mystery." [level=2] [ref=e113]: The BananaMystery.
+    - paragraph [ref=e114]: The bananas are gone.The bell never rang.
+    - paragraph [ref=e115]: Three monkeys were told to wait for the picnic bell. Who knowingly broke the rule, and who just made a mistake?
+    - generic [ref=e116]:
+      - generic [ref=e117]: 01 Find 3 clues
+      - generic [ref=e118]: 02 Ask 3 monkeys
+      - generic [ref=e119]: 03 Choose
+    - group "Choose a mystery" [ref=e120]:
+      - generic [ref=e122] [cursor=pointer]:
+        - radio "The Banana Mystery The bananas are gone. The bell never rang." [ref=e123]
+        - generic [ref=e124]:
+          - generic [ref=e125]: The Banana Mystery
+          - generic [ref=e126]: The bananas are gone. The bell never rang.
+      - generic [ref=e127] [cursor=pointer]:
+        - radio "The Banana Mix-up The bananas are gone. But did anyone break the rule?" [checked] [ref=e128]
+        - generic [ref=e129]:
+          - generic [ref=e130]: The Banana Mix-up
+          - generic [ref=e131]: The bananas are gone. But did anyone break the rule?
+    - button "Let’s investigate" [ref=e132] [cursor=pointer]
+    - paragraph [ref=e135]: The monkeys are AI agents in an authored story. Questions, answers, and game actions are recorded. This preview uses scripted replies.

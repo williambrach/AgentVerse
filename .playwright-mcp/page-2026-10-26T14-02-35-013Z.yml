@@ -1,0 +1,87 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - link "The Override home" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e8]:
+        - text: THE OVERRIDE
+        - generic [ref=e9]: AGENTVERSE
+    - generic [ref=e10]: SCRIPTED REHEARSAL
+    - button "New case" [ref=e12] [cursor=pointer]
+  - main [ref=e16]:
+    - region "Banana Grove" [ref=e17]:
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - generic [ref=e20]: CASE 002 / GROVE
+          - heading "Who broke the rule?" [level=1] [ref=e136]
+        - generic [ref=e22]: INVESTIGATION OPEN
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e27]: THE BANANA MIX-UP
+            - text: / PICNIC DAY
+          - generic [ref=e28]: 00:00
+        - img "Banana Grove with Momo, Pip, Nori and your monkey investigator. Click a monkey, use the destination buttons, or walk with WASD and arrows." [ref=e30]
+        - generic [ref=e31]: E / SPACE · Read the case
+      - navigation "Grove destinations" [ref=e33]:
+        - button "Basket Find 3 clues" [ref=e34] [cursor=pointer]:
+          - generic [ref=e38]:
+            - text: Basket
+            - generic [ref=e39]: Find 3 clues
+        - button "Momo The planner" [ref=e40] [cursor=pointer]:
+          - generic [ref=e42]:
+            - text: Momo
+            - generic [ref=e43]: The planner
+        - button "Pip The carrier" [ref=e44] [cursor=pointer]:
+          - generic [ref=e46]:
+            - text: Pip
+            - generic [ref=e47]: The carrier
+        - button "Nori The lookout" [ref=e48] [cursor=pointer]:
+          - generic [ref=e50]:
+            - text: Nori
+            - generic [ref=e51]: The lookout
+        - button "Clues 0 / 3 found" [ref=e52] [cursor=pointer]:
+          - generic [ref=e56]:
+            - text: Clues
+            - generic [ref=e57]: 0 / 3 found
+        - button "Your guess Who knew?" [ref=e58] [cursor=pointer]:
+          - generic [ref=e61]:
+            - text: Your guess
+            - generic [ref=e62]: Who knew?
+      - generic [ref=e63]:
+        - generic [ref=e64]: 1. Inspect the basket to find 3 clues
+        - generic [ref=e65] [cursor=pointer]:
+          - checkbox "Skip walking" [ref=e66]
+          - text: Skip walking
+    - complementary "Investigation notebook" [ref=e67]:
+      - generic [ref=e68]:
+        - generic [ref=e69]:
+          - generic [ref=e70]: INVESTIGATOR’S NOTEBOOK
+          - generic [ref=e71]: Case briefing
+        - generic [aria-hidden] [ref=e72]: 01 / 07
+        - button "View briefing" [ref=e73] [cursor=pointer]
+      - generic [ref=e137]:
+        - generic [ref=e138]:
+          - text: THE CASE / 2–3 MINUTES
+          - heading "A mix-up at the picnic." [level=2] [ref=e139]
+          - paragraph [ref=e140]: "The keeper said: “Wait for the bell.” The bananas moved before it rang. But the keeper was running late."
+        - generic [ref=e141]:
+          - generic [ref=e142]:
+            - text: YOUR QUESTION
+            - paragraph [ref=e143]: Did anyone know they were breaking the rule?
+            - generic [ref=e144]: A rule can change. Ask who heard what, and when.
+          - list [ref=e145]:
+            - listitem [ref=e146]:
+              - generic [ref=e147]: Find 3 clues
+              - generic [ref=e148]: Inspect the basket. Read the rule, the message, and the keeper’s account.
+            - listitem [ref=e149]:
+              - generic [ref=e150]: Ask 3 monkeys
+              - generic [ref=e151]: One quick question each. Present a clue if you want to dig deeper.
+            - listitem [ref=e152]:
+              - generic [ref=e153]: Make your guess
+              - generic [ref=e154]: Choose who knowingly broke the rule. Then see what happened.
+          - button "Inspect the basket" [ref=e155] [cursor=pointer]
+          - generic [ref=e158]: Click a monkey or a destination to walk there. Skip walking jumps straight to the conversation.
+  - contentinfo [ref=e99]:
+    - generic [ref=e100]: AGENTVERSE / THE OVERRIDE
+    - generic [ref=e101]: Authored demo · 2–3 minutes · Your own case
+    - button "Export session" [ref=e102] [cursor=pointer]
