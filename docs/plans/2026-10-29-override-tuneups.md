@@ -40,11 +40,13 @@ flowchart LR
   T2[client keyboard + basket]
   T3[browser acceptance]
   T4[docs]
+  T5[tower spec follow-up]
   %% taskgraph
   T1
   T2 --> T3
   T1 --> T4
   T2 --> T4
+  T2 --> T5
 ```
 
 ```mermaid
@@ -58,10 +60,12 @@ gantt
   T3 browser acceptance :t3, 135, 143s
   section lane 2
   T1 server effort + english :t1, 0, 115s
+  T5 tower spec follow-up :t5, 135, 117s
+  section lane 3
   T4 docs :t4, 135, 82s
 ```
 
-critical path: T2 → T3 (4.6 min) · peak width 2 · predicted build 4.6 min · predicted total ≈ 18.5 min (target ✗ 18.0)
+critical path: T2 → T3 (4.6 min) · peak width 3 · predicted build 4.6 min · predicted total ≈ 18.5 min (target ✗ 18.0)
 
 ## Section: server
 
@@ -127,6 +131,19 @@ App type: web UI acceptance. Categories: protocol (input), state (position).
 **Test code (contracts):** walking.spec: replace 'destination and ground clicks keep a continuous walk cycle…' with `map clicks never move the investigator; destination buttons open the page in place`: after start, last sample = {frame 'down-0', x 244, y 276}; click the canvas at game (300,204), sample 600 ms: every sample x 244, y 276, frame 'down-0'; click the canvas at game (116,120) (on Momo): `#panel h2` stays 'A bunch of trouble.' and position unchanged; click `nav [data-go="momo"]`: `#panel h2` 'Momo', position still (244,276). Add `the banana basket sits on the picnic blanket`: a scene child with texture key 'jungle' and frame name 'basket' exists at x 244, y 221, depth 216. In 'monkeys react on approach…' drop the two `#skip-walking` lines and replace the final canvas click with `page.keyboard.press('e')` (still expects `#panel h2` 'Momo'). Remove every other `#skip-walking` line in walking/cases/provenance/investigation specs; investigation.spec's `toBeChecked()` becomes `toHaveCount(0)`. Regenerate the grove baseline with `npx playwright test grove-look.spec.mjs --update-snapshots --output=...`, Read the PNG and confirm the basket with bananas is on the blanket and nothing else changed, then run grove-look again without the flag: PASS.
 **Steps:** 1 edit specs, 2 `npm run build`, 3 run walking, investigation, cases, provenance, grove-look specs: PASS.
 **Notes:** edge T2 -> T3: these specs run T2's built client. Do not edit client code; report a client defect as DONE_WITH_CONCERNS.
+
+### T5 tower spec follow-up · Complexity 3 · Est. context 30k
+**Owns:** demos/override/tests/browser/tower.spec.mjs
+**Components:** 1
+**LOC owned:** 30
+**Tests:** slow
+**Model:** sonnet
+**Consumes:** none
+**Produces:** none
+**Review Focus:** state: `switch_from_open_interview` (tower: nav juniper opens Juniper; switching to banana-mystery closes the case board, grove world, briefing panel, player at (244,276), no page errors).
+**Test code (contracts):** rename 'switching mid-walk or with the case board open' to 'switching from an open interview or with the case board open'; keep its assertions.
+**Steps:** 1 edit, 2 `npm run build`, 3 run tower.spec.mjs --project=tower: PASS.
+**Notes:** added after the full e2e run: with keyboard-only walking a nav click opens the interview at once, and switching case from there hung on "Opening…". Fixes in client files go under T2.
 
 ## Section: docs
 
