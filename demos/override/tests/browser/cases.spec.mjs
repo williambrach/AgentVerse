@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './team.mjs';
 
 const radio = (page, id) => page.locator(`.case-option input[name="case"][value="${id}"]`);
 

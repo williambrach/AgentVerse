@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, joinTeam } from './team.mjs';
 
 const LEAKS = [
   'you wanted the bananas now',
@@ -49,6 +49,7 @@ test('state never leaks the answer', async ({ browser, baseURL }) => {
   for (const { id } of cases) {
     const ctx = await browser.newContext({ baseURL });
     const page = await ctx.newPage();
+    await joinTeam(ctx);
     await page.goto('/');
     await page.locator(`.case-option input[name="case"][value="${id}"]`).check();
     await page.locator('#begin-button').click();

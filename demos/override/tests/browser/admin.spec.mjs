@@ -111,3 +111,35 @@ test('stream_401', async ({ request }) => {
   const res = await request.get('/admin/stream');
   expect(res.status()).toBe(401);
 });
+
+test('leaderboard_section', async ({ page, playwright }) => {
+  const names = ['Board Owls', 'Board Foxes'].map(n => `${n} ${Date.now() % 100000}`);
+  const ids = [];
+  for (const name of names) {
+    const ctx = await playwright.request.newContext({ baseURL: GAME });
+    await ctx.post('/api/team', { data: { name } });
+    const p = await player(ctx);
+    await p.ask('Who knew?', 'pip');
+    await p.verdict();
+    ids.push(p.id);
+    await ctx.dispose();
+  }
+  await connect(page);
+  const rows = page.locator('#board .board-row');
+  for (const name of names) await expect(page.locator('#board')).toContainText(name, { timeout: 10_000 });
+  await page.locator('#board [data-rank-by="coins"]').click();
+  await expect(page.locator('#board [data-rank-by="coins"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#board [data-rank-by="time"]')).toHaveAttribute('aria-pressed', 'false');
+  const row = rows.filter({ hasText: names[0] });
+  await row.locator('[data-action="hide"]').click();
+  await expect(row.locator('[data-action="show"]')).toBeVisible();
+  const outsider = await playwright.request.newContext({ baseURL: GAME });
+  const board = await (await outsider.get('/api/leaderboard')).json();
+  expect(board.rankBy).toBe('coins');
+  expect(board.teams.map(t => t.name)).not.toContain(names[0]);
+  expect(board.teams.map(t => t.name)).toContain(names[1]);
+  await row.locator('[data-action="show"]').click();
+  await expect.poll(async () => (await (await outsider.get('/api/leaderboard')).json()).teams.map(t => t.name)).toContain(names[0]);
+  await page.locator('#board [data-rank-by="time"]').click();
+  await outsider.dispose();
+});

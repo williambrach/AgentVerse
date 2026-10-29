@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './team.mjs';
 
 // Runs in the `tower` project (port 4318, dev tools on; the tower case no longer needs them).
 // The tower PNGs are routed to 404 so the tests behave the same with or without real art.

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './team.mjs';
 
 test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 1000 } });
 
