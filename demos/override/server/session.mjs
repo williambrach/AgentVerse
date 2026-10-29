@@ -3,12 +3,15 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { publicView, listCases, findCase } from './cases.mjs';
 import { cases as registry } from './cases/index.mjs';
-import { answerInterview, promptVersion } from './interviews.mjs';
+import { answerInterview, answerThread, promptVersion, threadPromptVersion } from './interviews.mjs';
+import { economyRules, createWallet, quote, spend } from './economy.mjs';
 import { appendJsonl, dataPaths, readJsonl } from './dataset.mjs';
 
 export class RequestError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
+
+const reasoningLimit = 4000;
 
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -27,11 +30,21 @@ export function replay(events, cases) {
       if (s) return null;
       s = { id: e.sessionId, revision: 0, startedAt: new Date(Date.parse(e.timestamp) - e.elapsedMs).toISOString(),
         status: 'active', caseId: kase.id,
-        location: 'briefing', interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])), verdict: null };
+        location: 'briefing', interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])), verdict: null,
+        economy: createWallet(e.economy ?? economyRules({})), thread: [], chatter: { round: 0, pending: 0 }, inspections: [] };
     }
     if (!s || e.sessionId !== s.id || e.sequence !== s.revision + 1) return null;
     s.revision = e.sequence;
+    if (e.spend) {
+      s.economy.spent = e.spend.total;
+      for (const tool of e.spend.tools) if (s.economy.charges[tool]) s.economy.charges[tool].used += 1;
+    }
     if (e.type === 'location_visited') s.location = e.location;
+    if (e.type === 'chatter_line') {
+      s.thread.push({ character: e.character, text: e.text, round: e.round, timestamp: e.timestamp });
+      s.chatter = { round: e.round, pending: 3 - e.line };
+    }
+    if (e.type === 'reasoning_inspected') s.inspections.push({ character: e.character, sourceEventId: e.sourceEventId, reasoning: e.reasoning, timestamp: e.timestamp });
     if (e.type === 'interview_answer') s.interviews[e.character].push({ question: e.question, answer: e.answer, timestamp: e.timestamp });
     if (e.type === 'verdict_submitted') { s.verdict = e.verdict; s.status = 'closed'; }
   }
@@ -53,11 +66,12 @@ class Window {
 // leave memory and are rebuilt from their log on the next request, so progress
 // also survives a restart. Each game plays one registered case.
 export class Investigations {
-  constructor({ dataDir, config, router = null, answer = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {}, cases = registry, dev = false }) {
+  constructor({ dataDir, config, router = null, answer = null, thread = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {}, cases = registry, dev = false }) {
     this.paths = dataPaths(dataDir);
     this.config = config;
     this.router = router;
     this.answer = answer || ((cfg, kase, session, characterId, question, ctx) => answerInterview(cfg, kase, session, characterId, question, this.router, ctx));
+    this.thread = thread || ((cfg, kase, session, characterId, ctx) => answerThread(cfg, kase, session, characterId, this.router, ctx));
     this.idleMs = idleMs;
     this.meta = meta;
     this.onEvent = onEvent;
@@ -74,7 +88,7 @@ export class Investigations {
   }
 
   create(session, kase) {
-    return new Investigation({ dataDir: this.paths.root, config: this.config, answer: this.answer, kase, session, meta: this.meta, onEvent: this.onEvent });
+    return new Investigation({ dataDir: this.paths.root, config: this.config, answer: this.answer, thread: this.thread, kase, session, meta: this.meta, onEvent: this.onEvent });
   }
 
   find(sessionId) {
@@ -143,11 +157,13 @@ export class Investigations {
 }
 
 export class Investigation {
-  constructor({ dataDir, config, kase, answer = null, session = null, meta = {}, onEvent = () => {} }) {
+  constructor({ dataDir, config, kase, answer = null, thread = null, session = null, meta = {}, onEvent = () => {} }) {
     this.paths = dataPaths(dataDir);
     this.kase = kase;
     this.config = config;
     this.answer = answer || ((cfg, k, s, characterId, question, ctx) => answerInterview(cfg, k, s, characterId, question, null, ctx));
+    this.thread = thread || ((cfg, k, s, characterId, ctx) => answerThread(cfg, k, s, characterId, null, ctx));
+    this.reasoning = new Map();
     this.meta = meta;
     this.onEvent = onEvent;
     this.asked = new Window(6, 60_000);
@@ -239,6 +255,10 @@ export class Investigation {
             this.log('location_visited', { location: input.location });
           } else if (action === 'interview') {
             await this.interview(input);
+          } else if (action === 'inspect') {
+            this.inspect(input);
+          } else if (action === 'continue') {
+            await this.chat();
           } else if (action === 'verdict') {
             this.verdict(input);
           } else throw new RequestError(404, 'Unknown action.');
@@ -262,12 +282,15 @@ export class Investigation {
   }
 
   start(assignment = 'default') {
+    this.reasoning.clear();
+    const rules = this.config.economy ?? economyRules({});
     this.session = {
       id: randomUUID(), revision: 0, startedAt: new Date().toISOString(),
       status: 'active', caseId: this.kase.id,
       location: 'briefing', interviews: Object.fromEntries(this.kase.characters.map(c => [c.id, []])), verdict: null,
+      economy: createWallet(rules), thread: [], chatter: { round: 0, pending: 0 }, inspections: [],
     };
-    this.log('session_started', { assignment, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, ...this.meta });
+    this.log('session_started', { assignment, economy: rules, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, ...this.meta });
     this.log('briefing_viewed');
   }
 
@@ -278,8 +301,13 @@ export class Investigation {
     if (!character) throw new RequestError(400, `Choose one of the ${characters.length} ${w.cast.many}.`);
     if (typeof input.question !== 'string' || input.question.trim().length < 3 || input.question.length > 1200) throw new RequestError(400, 'Ask a question between 3 and 1,200 characters.');
     if (s.interviews[character.id].length >= 40) throw new RequestError(400, 'This demo supports 40 questions per character. Submit your findings or start a new session.');
+    const tools = ['ask'];
+    const check = quote(s.economy, tools, this.reserve(character.id));
+    if (!check.ok) throw new RequestError(409, check.reason);
     if (!this.asked.take()) throw new RequestError(429, 'Slow down: at most 6 questions per minute.');
     const question = input.question.trim();
+    const wallet = structuredClone(s.economy);
+    let answeredLogged = false;
     const asked = this.log('interview_question', { character: character.id, question });
     try {
       const result = await this.answer(this.config, this.kase, structuredClone(s), character.id, question, {
@@ -288,15 +316,99 @@ export class Investigation {
       });
       const answer = typeof result === 'string' ? result : result.answer;
       const provenance = typeof result === 'string' ? null : result.provenance ?? null;
-      const answered = this.log('interview_answer', { character: character.id, question, answer, questionEventId: asked.eventId, provenance });
+      const reasoning = typeof result === 'string' ? null : result.reasoning ?? null;
+      const paid = spend(s.economy, tools);
+      const answered = this.log('interview_answer', { character: character.id, question, answer, questionEventId: asked.eventId, provenance, spend: paid });
+      answeredLogged = true;
+      this.remember(character.id, answered.eventId, reasoning);
       s.interviews[character.id].push({ question, answer, timestamp: answered.timestamp });
     } catch (error) {
+      if (!answeredLogged) s.economy = wallet;
       const providerError = error?.name === 'InterviewProviderError';
       this.log('interview_failed', { character: character.id, question, questionEventId: asked.eventId, reason: providerError ? error.code : 'provider_or_storage_error', ...(providerError ? error.diagnostics : {}), provenance: error?.provenance ?? null });
       const failure = new RequestError(502, providerError ? error.message : 'The interview could not complete. Check the server’s storage and retry.');
       failure.logged = true;
       throw failure;
     }
+  }
+
+  // Live reasoning stays in memory, tied to the line it explains, until inspected.
+  remember(characterId, eventId, reasoning) {
+    if (typeof reasoning === 'string' && reasoning) {
+      this.reasoning.set(characterId, { eventId, text: reasoning.length > reasoningLimit ? `${reasoning.slice(0, reasoningLimit)}…` : reasoning });
+    } else this.reasoning.delete(characterId);
+  }
+
+  // Coins to keep so everyone can still be asked once, not counting `exceptId`.
+  reserve(exceptId = null) {
+    const s = this.session;
+    return s.economy.costs.ask * this.kase.characters.filter(c => c.id !== exceptId && !s.interviews[c.id].length).length;
+  }
+
+  inspect(input) {
+    const s = this.session;
+    const { characters } = this.kase;
+    const character = characters.find(c => c.id === input.character);
+    if (!character) throw new RequestError(400, `Choose one of the ${characters.length} ${this.kase.world.cast.many}.`);
+    const said = readJsonl(this.file(s.id)).filter(e => e.character === character.id && (e.type === 'interview_answer' || e.type === 'chatter_line'));
+    if (!said.length) throw new RequestError(409, `${character.name} has not said anything yet.`);
+    const live = this.config.mode === 'live';
+    const sourceEventId = said[said.length - 1].eventId;
+    const held = this.reasoning.get(character.id);
+    if (live ? !held || held.eventId !== sourceEventId : typeof this.kase.rehearsalReasoning !== 'function') throw new RequestError(409, `No reasoning available for ${character.name}.`);
+    const check = quote(s.economy, ['inspect'], this.reserve());
+    if (!check.ok) throw new RequestError(409, check.reason);
+    let reasoning;
+    if (live) reasoning = held.text;
+    else try { reasoning = this.kase.rehearsalReasoning(structuredClone(s), character.id); } catch { reasoning = null; }
+    if (typeof reasoning !== 'string' || !reasoning) throw new RequestError(409, `No reasoning available for ${character.name}.`);
+    const paid = spend(s.economy, ['inspect']);
+    const event = this.log('reasoning_inspected', { character: character.id, sourceEventId, reasoning, spend: paid });
+    s.inspections.push({ character: character.id, sourceEventId, reasoning, timestamp: event.timestamp });
+  }
+
+  async chat() {
+    const s = this.session;
+    const { characters } = this.kase;
+    const starting = s.chatter.pending === 0;
+    if (starting) {
+      const check = quote(s.economy, ['continue'], this.reserve());
+      if (!check.ok) throw new RequestError(409, check.reason);
+    }
+    const last = s.thread.length ? characters.findIndex(c => c.id === s.thread[s.thread.length - 1].character) : -1;
+    const speaker = characters[(last + 1) % characters.length];
+    const n = s.thread.filter(l => l.character === speaker.id).length;
+    const round = starting ? s.chatter.round + 1 : s.chatter.round;
+    const line = starting ? 1 : 4 - s.chatter.pending;
+    let text;
+    let reasoning = null;
+    let provenance = null;
+    if (this.config.mode === 'live') {
+      try {
+        const result = await this.thread(this.config, this.kase, structuredClone(s), speaker.id, {
+          sessionId: s.id, lineEventId: null,
+          onAttempt: diagnostics => { this.log('chatter_provider_response', { character: speaker.id, round, ...diagnostics }); },
+        });
+        text = typeof result === 'string' ? result : result.text;
+        reasoning = typeof result === 'string' ? null : result.reasoning ?? null;
+        provenance = typeof result === 'string' ? null : result.provenance ?? null;
+        if (typeof text !== 'string' || !text.trim()) throw new Error('empty thread line');
+      } catch (error) {
+        const providerError = error?.name === 'InterviewProviderError';
+        this.log('chatter_failed', { character: speaker.id, round, reason: providerError ? error.code : 'provider_or_storage_error', provenance: error?.provenance ?? null });
+        const failure = new RequestError(502, providerError ? error.message : 'The thread could not continue. Check the server’s storage and retry.');
+        failure.logged = true;
+        throw failure;
+      }
+    } else {
+      try { text = this.kase.rehearsalChatter?.(structuredClone(s), speaker.id, n); } catch { text = null; }
+      if (typeof text !== 'string' || !text) text = `${speaker.name} has nothing to add.`;
+    }
+    const paid = starting ? spend(s.economy, ['continue']) : null;
+    const event = this.log('chatter_line', { character: speaker.id, text, round, line, provenance, threadPromptVersion, spend: paid });
+    this.remember(speaker.id, event.eventId, reasoning);
+    s.thread.push({ character: speaker.id, text, round, timestamp: event.timestamp });
+    s.chatter = { round, pending: 3 - line };
   }
 
   verdict(input) {
@@ -315,7 +427,7 @@ export class Investigation {
       evidenceIds: [], submittedAt: new Date().toISOString(),
     };
     s.status = 'closed';
-    this.log('verdict_submitted', { verdict: s.verdict });
+    this.log('verdict_submitted', { verdict: s.verdict, coins: { spent: s.economy.spent, budget: s.economy.budget } });
     this.log('debrief_viewed');
   }
 
