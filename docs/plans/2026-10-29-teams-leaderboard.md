@@ -46,6 +46,8 @@ flowchart LR
   T8[client main]
   T9[acceptance]
   T10[docs demo]
+  T11[monitor test]
+  T12[admin log fixes]
   %% taskgraph
   T1
   T4
@@ -193,6 +195,17 @@ e.g. setHidden('uuid-a', true) -> undefined; standings().teams[0].hidden -> true
 **Test code (contracts):** `team_gate_flow`; `same_team_two_browsers` (B joins A's team: same session id in /api/state; B resets, A sees the new id); `session_started_team`; `leaderboard_public` (correct banana verdict 'momo' -> rank 1, 1 point, you true; no `teamId`/`hidden` keys; another team sees you false); `teamless_still_works` (override_session cookie as before, not on the board); `new_team_rate_limit` (121st new name from one address in a minute -> 429; join still 200); `restart_restores` (startServer twice on one data dir: team name, session, rankBy 'coins' set via POST /admin/leaderboard); `round_empties_board` (POST /admin/round).
 **Notes:** `createApp({..., teams = createTeams({file: null}), leaderboard = null})`; route labels add `team`, `leaderboard`. With a known team, `sessionId = team.sessionId`; after a mutation that changes the session, `teams.attach` (no session cookie); without a team, behaviour unchanged. startServer builds the board with T2's real `createLeaderboard(cases)` (edge T2 -> T4); teams file `join(paths.root, 'teams.jsonl')`; board restored from system.jsonl, reset to `loadRound().startedAt`, fed `loadEvents(paths.sessions, startedAt)` (load once, shared with the monitor) and every `onEvent`; `round_started` system records reset it; facade setters write `leaderboard_settings` / `team_hidden` via `onSystem`; `extras()` adds `leaderboard: standings({includeHidden: true})`.
 
+### T11 monitor test retarget · Complexity 1 · Est. context 20k
+**Owns:** demos/override/tests/monitor.test.mjs
+**Components:** 1
+**LOC owned:** 4
+**Tests:** fast
+**Kind:** mechanical
+**Model:** haiku
+**Consumes:** none
+**Test code (contracts):** the two pinned-key assertions follow T5's additive fields: a row has `team: null`, the snapshot keys include `leaderboard`; `node --test demos/override/tests/monitor.test.mjs` passes.
+**Notes:** done by T5's implementer (see Ruling in progress); recorded so a task owns the file.
+
 ## Section: admin page
 
 App type: web UI. Categories: encoding (XSS via team names), protocol via its API.
@@ -209,6 +222,17 @@ App type: web UI. Categories: encoding (XSS via team names), protocol via its AP
 **Review Focus:** encoding
 **Test code (contracts):** `boardRows` (rank null -> '–', timeMs 125000 -> '2:05', points 1 -> '1 pt', hidden flag, null leaderboard -> []); `renderBoard` with the fake DOM from admin-round.test (toggle calls api('/admin/leaderboard', {rankBy: 'coins'}), Hide calls api('/admin/teams/hidden', {teamId, hidden: true}), `aria-pressed` follows rankBy, re-render keeps one row per team); `systemLine` for `leaderboard_settings` and `team_hidden`; log shows `row.team` instead of the 4-character id when present.
 **Notes:** textContent only (admin-page-files.test bans innerHTML). Section `#board` sits in the `.side` column above the funnel; empty board text `No team has finished a case this round.`
+
+### T12 admin log review fixes · Complexity 1 · Est. context 20k
+**Owns:** demos/override/server/admin/log.css, demos/override/tests/admin-log.test.mjs
+**Components:** 1
+**LOC owned:** 40
+**Tests:** fast
+**Kind:** mechanical
+**Model:** haiku
+**Consumes:** none
+**Test code (contracts):** the log player column fits long team names (`minmax(44px, 12ch)`, ellipsis); tests for team names in rows and the player chip, markup in a name stays text; `node --test demos/override/tests/admin-log.test.mjs` passes.
+**Notes:** written by the admin package reviewer (see Ruling in progress).
 
 ## Section: client
 
