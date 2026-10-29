@@ -136,3 +136,54 @@ Title `Lanterns Too Soon`. `prompt` unchanged from v2. Copy unchanged from v2, e
 | planner | otherwise | `We heard the bell and {watcher} called out, so I told {fetcher} to fetch the potions. I thought the Headmistress rang it.` |
 | fetcher | shown | `An echo shell? Huh. The bell sounded just right to me. I believed it was the tower bell.` |
 | fetcher | otherwise | `The bell rang and {planner} said go, so I fetched the potions. It sounded like the tower bell to me.` |
+
+## Tool content (coins-and-tools merge): `rehearsalReasoning(partId)` and `rehearsalChatter(partId, n)`
+
+Added after `demo/override` gained coins-and-tools (Inspect reasoning, "Let them talk"). Both functions now take a **part id** and return a template with `{partId}` placeholders, resolved by the caller like `rehearsal`. Chatter cycles: post `((n % 3) + 3) % 3`. Rules kept from coins-and-tools: reasoning 30–120 words, posts 15–40 words, 3 distinct posts, no substring of knowledge/debrief/findings/feedback/leak strings; tower texts never say lied/lie/made up/fooled me/echo shell, and every tower post names another character.
+
+### banana-mystery
+
+**reasoning**
+- planner: `I keep thinking about what I said to {carrier}. The keeper was clear with me, and I knew exactly what the rule was. I am not sure why I said it the way I did. Maybe I was just so hungry that the words came out easier than the truth. I hope {carrier} does not get blamed for carrying them. I would feel bad about that.`
+- carrier: `{planner} sounded so sure, so I did not stop to wonder. I knew the usual rule, but a new permission seemed possible. Why did I not walk over and ask the keeper? It would have taken a minute. Now I am not certain what I actually knew and what I only hoped was true.`
+- lookout: `Sitting by the path felt like an easy job at the time. A banana for keeping my eyes open, that was the deal. I kept glancing back at the blanket and telling myself it was not my business. Was I watching for trouble or helping trouble along? I would rather not answer that out loud, but I know which one it was.`
+- minder: `I stayed where the keeper asked me to stay, and nothing happened all morning. Then {carrier} came running past, so cheerful and so sure. For a moment I wanted to believe it too. A banana sounded wonderful. But the bell was right there beside me, silent the whole time. I keep wondering whether I should have said something louder.`
+
+**chatter** (posts 0, 1, 2)
+- planner:
+  - `{carrier}, thanks for carrying everything over so fast. {lookout}, you were very quiet by the path. I only wanted our picnic to start. Did anyone hear from the keeper this morning?`
+  - `{carrier}, you said you believed me, and I keep thinking about that. {minder}, you stayed by the bell all morning. Did it ring even once while you sat there?`
+  - `Nobody has asked the keeper yet, have they? {carrier}, I would rather we all go together. {lookout}, you had the best view of the path, so who did you see coming?`
+- carrier:
+  - `{planner}, you told me we could take them, so I did. I never heard a bell, though. {minder}, did you? I keep wondering why I did not check with the keeper first.`
+  - `{lookout}, you were sitting by the path the whole time. Did the keeper walk past? {planner}, where exactly did the word come from? I only know what you told me.`
+  - `The bananas are on your blanket, {planner}, and I carried every one. {minder}, you did not take any when I shouted. Why not? What did you know that I did not?`
+- lookout:
+  - `Quiet morning on the path. Nobody came by, not once. {carrier}, you did all the heavy lifting. {planner}, the picnic looked lovely from where I sat.`
+  - `{minder}, you could have joined us, you know. There were plenty of bananas. {carrier}, did anyone ask you to keep an eye out, or was that only me?`
+  - `If the keeper asks, I was just sitting by the path. {planner}, you will back me up on that, right? {carrier}, you looked happy carrying them.`
+- minder:
+  - `{carrier}, you ran past shouting that the keeper said yes. The keeper had just told me to wait. {planner}, did the keeper really change the rule?`
+  - `The bell never rang, I promise. I sat right beside it all morning. {lookout}, why were you looking up and down the path like that?`
+  - `I did not eat a single banana. {carrier}, I am not cross with you. {planner}, I just think we should all tell the keeper what happened.`
+
+### tower-echo-bell
+
+**reasoning**
+- planner: `A bell rang and {watcher} called out, so I sent {fetcher} for the potions. It all felt in order at the time. Now I wonder how closely I listened. I trusted what I heard, and I never stopped to ask where the sound came from. I hope the Headmistress understands how it seemed to us.`
+- fetcher: `I did what {planner} said, and the bell had sounded right to me. I carried the potions and felt pleased to be helping. Now people are asking questions and I keep replaying the moment. Was there anything I could have noticed? I only know that I believed it, and I still do not see what else I could have done.`
+- watcher: `I was meant to watch the bell, and instead I was on the stairs when the sound came. I called out before looking up. That bothers me most. Everyone trusted my call, and I never checked it. I honestly believed it, but believing is not the same as looking, and I know it.`
+
+**chatter** (posts 0, 1, 2)
+- planner:
+  - `{fetcher}, thank you for fetching everything so fast. {watcher}, your call came right as the bell rang, so I sent {fetcher} off. Did either of you see who rang it?`
+  - `{watcher}, I went by your shout and what I heard. {fetcher}, you trusted me, and I am sorry if that landed you in trouble. Where were you standing when it rang?`
+  - `We should tell the Headmistress exactly what each of us heard, in order. {fetcher}, you start. {watcher}, then you. I will go last and say what I decided.`
+- fetcher:
+  - `{planner}, you said go, so I went. The bell sounded just right to me. {watcher}, did you see it? I never looked up at the tower myself.`
+  - `{watcher}, your call was loud and clear, and {planner} agreed at once. I only carried the potions. {planner}, did you ask anyone before sending me down?`
+  - `The potions are back on the shelf now, {planner}. I would love to know what really rang. {watcher}, you were closest to the stairs, so what did you hear there?`
+- watcher:
+  - `{planner}, {fetcher}, I called the parade because I heard a ding-dong by the stair window. I had gone for a snack, and I did not look up. I am sorry.`
+  - `{fetcher}, you did what the shout said, and {planner} did too. That shout was mine. {planner}, did the bell sound the same to you as it did to me?`
+  - `Next time I will look at the bell before I call anything out. {planner}, {fetcher}, you both trusted me quickly. Did either of you actually see anyone ring it?`
