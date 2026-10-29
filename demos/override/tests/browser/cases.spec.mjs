@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { castOf, truthOf, sessionIdOf, pickRole, rehearsalReply, quickQuestionFor } from './cast.mjs';
 
 const radio = (page, id) => page.locator(`.case-option input[name="case"][value="${id}"]`);
 
@@ -37,23 +38,35 @@ test('deep link is dropped after start and ids are not injected', async ({ page 
   expect(new URL(page.url()).search).toBe('');
 });
 
-test('honest mistake to Nobody', async ({ page }) => {
+// Picks the true role for every character from the server-side cast, then locks in.
+async function lockPerfect(page, ids) {
+  const truth = truthOf(castOf(await sessionIdOf(page)));
+  await page.locator('nav [data-go="report"]').click();
+  await expect(page.locator('fieldset.role-row')).toHaveCount(ids.length);
+  for (const id of ids) await pickRole(page, id, truth[id]);
+  await page.locator('#lock-in').click();
+}
+
+test('everyone honest but fooled scores 3 of 3', async ({ page }) => {
   await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
   await page.locator('#skip-walking').check();
   await expect(page.locator('nav [data-go]')).toHaveCount(4);
   await expect(page.locator('#reveal-button, .evidence-card, #present-evidence')).toHaveCount(0);
-  const asks = [['wren', 'I thought the Headmistress rang it'], ['basil', 'sounded like the tower bell'], ['juniper', 'I didn’t look']];
-  for (const [id, text] of asks) {
+  const cast = castOf(await sessionIdOf(page));
+  for (const id of ['wren', 'basil', 'juniper']) {
     await page.locator(`nav [data-go="${id}"]`).click();
     await page.locator('[data-quick-question]').click();
-    await expect(page.locator('.speech.character').last()).toContainText(text);
+    await expect(page.locator('.speech.character').last()).toContainText(rehearsalReply(cast, id, quickQuestionFor(cast, id)));
   }
-  await page.locator('nav [data-go="report"]').click();
-  await page.locator('[name="suspect"][value="none"]').check();
-  await page.getByRole('button', { name: 'See what happened' }).click();
+  const truth = truthOf(cast);
+  expect(Object.values(truth)).toEqual(['fooled', 'fooled', 'fooled']);
+  await lockPerfect(page, ['wren', 'basil', 'juniper']);
   await expect(page.locator('#panel h2')).toHaveText('Nobody knew it was too soon.');
-  await expect(page.locator('.verdict-summary')).toContainText('Right. The rule was broken, but nobody knew it.');
+  await expect(page.locator('.verdict-summary')).toContainText('3 / 3');
+  await expect(page.locator('.verdict-summary')).toContainText('Right. Everyone was honest but fooled: the echo shell tricked them all.');
+  await expect(page.locator('.pick-right')).toHaveCount(3);
+  await expect(page.locator('.pick-wrong')).toHaveCount(0);
 });
 
 test('reset switches case', async ({ page }) => {
@@ -138,9 +151,7 @@ test('solving marks the case and offers the next one', async ({ page }) => {
     await page.locator('[data-quick-question]').click();
     await expect(page.locator('.speech.investigator')).toHaveCount(1);
   }
-  await page.locator('nav [data-go="report"]').click();
-  await page.locator('[name="suspect"][value="none"]').check();
-  await page.getByRole('button', { name: 'See what happened' }).click();
+  await lockPerfect(page, ['wren', 'basil', 'juniper']);
   const ordered = (await (await page.request.get('/api/cases')).json()).cases.sort((a, b) => a.order - b.order);
   const next = ordered[ordered.findIndex(c => c.id === 'tower-echo-bell') + 1] || ordered[0];
   await expect(page.locator('#next-case')).toHaveText(`Next case: ${next.title}`);
