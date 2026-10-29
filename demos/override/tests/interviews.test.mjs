@@ -7,10 +7,11 @@ import { modelConfig, loadEndpoints, buildMessages, answerInterview, InterviewPr
 import { InterviewProviderError as FromErrors } from '../server/errors.mjs';
 import { LlmRouter } from '../server/llm.mjs';
 import { cases } from '../server/cases/index.mjs';
+import { identityCast, partOf, resolve } from '../server/cases.mjs';
 
 const kase = cases[0];
 
-const session = (extra = {}) => ({ interviews: { momo: [], pip: [], nori: [] }, ...extra });
+const session = (extra = {}) => ({ cast: identityCast(kase), interviews: { momo: [], pip: [], nori: [], kiki: [] }, ...extra });
 const ENDPOINTS = JSON.stringify([{ name: 'a', baseUrl: 'https://a.test/v1', model: 'ma', keyEnv: 'OVERRIDE_ENDPOINT_A_KEY' }]);
 const live = { OVERRIDE_LLM_API_KEY: 'test-key', OVERRIDE_LLM_MODEL: 'reasoning-model' };
 
@@ -31,7 +32,7 @@ const okJson = (body, status = 200) => ({ ok: true, status, json: async () => bo
 
 test('modelConfig defaults to rehearsal', () => {
   assert.deepEqual(modelConfig({}), {
-    mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'interview-v3', maxCompletionTokens: 2048, timeoutMs: 60000,
+    mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'interview-v4', maxCompletionTokens: 2048, timeoutMs: 60000,
     maxInFlight: 200, failover: { failures: 5, windowMs: 30000 },
   });
 });
@@ -111,8 +112,8 @@ test('InterviewProviderError is shared with errors.mjs', () => {
 });
 
 test('rehearsal answers carry no provenance and need no router', async () => {
-  const out = await answerInterview(modelConfig({}), kase, session(), 'nori', 'Did you hear the bell?', null);
-  assert.deepEqual(out, { answer: 'I never heard the bell. I saw Pip carrying bananas and assumed snack time had started. I should have checked instead of guessing.', provenance: null, reasoning: null });
+  const out = await answerInterview(modelConfig({}), kase, session(), 'kiki', 'Did you hear the bell?', null);
+  assert.deepEqual(out, { answer: 'I stayed by the bell like the keeper said. It never rang. I didn’t eat any bananas.', provenance: null, reasoning: null });
 });
 
 test('answer_passes_context: the router gets the built messages, ids and onAttempt', async () => {
@@ -200,13 +201,30 @@ test('timeouts, connection failures, and malformed provider JSON receive distinc
 });
 
 test('buildMessages keeps character knowledge, and history separate', () => {
-  const s = session({ interviews: { momo: [{ question: 'Q1', answer: 'A1' }], pip: [], nori: [] } });
+  const s = session({ interviews: { momo: [{ question: 'Q1', answer: 'A1' }], pip: [], nori: [], kiki: [] } });
   const messages = buildMessages(kase, s, 'momo', 'Q2');
   assert.deepEqual(messages.map(m => m.role), ['system', 'user', 'assistant', 'user']);
-  assert.match(messages[0].content, /You play Momo/);
+  assert.match(messages[0].content, /You play Momo \(The planner\)/);
+  assert.match(messages[0].content, /interview-v4/);
   assert.equal(JSON.parse(messages[3].content).question, 'Q2');
   assert.deepEqual(JSON.parse(messages[3].content), { question: 'Q2' });
-  assert.ok(messages[0].content.includes(kase.knowledge.momo[0]));
+  const knowledge = partOf(kase, s.cast, 'momo').knowledge.map(t => resolve(kase, s.cast, t));
+  assert.ok(messages[0].content.includes(knowledge[0]));
+  assert.ok(knowledge[0].includes('Pip') && knowledge[0].includes('Nori') && knowledge[0].includes('Kiki'));
   assert.doesNotMatch(messages[0].content, /PUBLIC RECORDS|presentedEvidence/);
   assert.ok(!buildMessages(kase, s, 'pip', 'Q2').some(m => m.content === 'A1'));
+});
+
+test('names are resolved and no placeholder survives in any prompt, under identity and a shuffled cast', () => {
+  const ids = kase.characters.map(c => c.id);
+  const shuffled = Object.fromEntries(ids.map((id, i) => [id, identityCast(kase)[ids[(i + 1) % ids.length]]]));
+  for (const cast of [identityCast(kase), shuffled]) {
+    for (const id of ids) {
+      const messages = buildMessages(kase, session({ cast }), id, 'Why?');
+      assert.doesNotMatch(messages[0].content, /[{}]/, `${id} prompt`);
+    }
+  }
+  // Under the shuffle Momo holds the carrier part, so it is told about the planner by that holder's name.
+  const m = buildMessages(kase, session({ cast: shuffled }), 'momo', 'Why?')[0].content;
+  assert.match(m, /You play Momo \(The carrier\)/);
 });
