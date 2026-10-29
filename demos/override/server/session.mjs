@@ -1,10 +1,30 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomInt } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { publicView, listCases, findCase } from './cases.mjs';
+import { publicView, listCases, findCase, partOf, identityCast, resolve as resolveText } from './cases.mjs';
+import { ROLES, ROLE_IDS } from './roles.mjs';
 import { cases as registry } from './cases/index.mjs';
 import { answerInterview, promptVersion } from './interviews.mjs';
 import { appendJsonl, dataPaths, readJsonl } from './dataset.mjs';
+
+// Fisher-Yates with crypto.randomInt: a uniform random permutation.
+export function shuffleIds(ids) {
+  const out = [...ids];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+// A cast is a bijection from the case's character ids to its part ids.
+const validCast = (kase, cast) => {
+  if (!cast || typeof cast !== 'object' || Array.isArray(cast)) return false;
+  const ids = kase.characters.map(c => c.id), parts = kase.parts.map(p => p.id);
+  const keys = Object.keys(cast), values = Object.values(cast);
+  return keys.length === ids.length && ids.every(id => Object.hasOwn(cast, id))
+    && new Set(values).size === parts.length && parts.every(id => values.includes(id));
+};
 
 export class RequestError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -22,11 +42,11 @@ export function replay(events, cases) {
   if (!kase) return null;
   let s = null;
   for (const e of events) {
-    if (e.schemaVersion !== 2 || e.caseId !== kase.id || e.caseVersion !== kase.version || e.type === 'session_reset') return null;
+    if (e.schemaVersion !== 3 || e.caseId !== kase.id || e.caseVersion !== kase.version || e.type === 'session_reset') return null;
     if (e.type === 'session_started') {
-      if (s) return null;
+      if (s || !validCast(kase, e.cast)) return null;
       s = { id: e.sessionId, revision: 0, startedAt: new Date(Date.parse(e.timestamp) - e.elapsedMs).toISOString(),
-        status: 'active', caseId: kase.id,
+        status: 'active', caseId: kase.id, cast: { ...e.cast },
         location: 'briefing', interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])), verdict: null };
     }
     if (!s || e.sessionId !== s.id || e.sequence !== s.revision + 1) return null;
@@ -53,7 +73,9 @@ class Window {
 // leave memory and are rebuilt from their log on the next request, so progress
 // also survives a restart. Each game plays one registered case.
 export class Investigations {
-  constructor({ dataDir, config, router = null, answer = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {}, cases = registry, dev = false }) {
+  constructor({ dataDir, config, router = null, answer = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {}, cases = registry, dev = false, shuffle = shuffleIds }) {
+    for (const c of cases) if (c.legacy) throw new Error(`Case ${c.id} has no parts; roles need a part case.`);
+    this.shuffle = shuffle;
     this.paths = dataPaths(dataDir);
     this.config = config;
     this.router = router;
@@ -74,7 +96,7 @@ export class Investigations {
   }
 
   create(session, kase) {
-    return new Investigation({ dataDir: this.paths.root, config: this.config, answer: this.answer, kase, session, meta: this.meta, onEvent: this.onEvent });
+    return new Investigation({ dataDir: this.paths.root, config: this.config, answer: this.answer, kase, session, shuffle: this.shuffle, meta: this.meta, onEvent: this.onEvent });
   }
 
   find(sessionId) {
@@ -143,7 +165,8 @@ export class Investigations {
 }
 
 export class Investigation {
-  constructor({ dataDir, config, kase, answer = null, session = null, meta = {}, onEvent = () => {} }) {
+  constructor({ dataDir, config, kase, answer = null, session = null, meta = {}, onEvent = () => {}, shuffle = shuffleIds }) {
+    this.shuffle = shuffle;
     this.paths = dataPaths(dataDir);
     this.kase = kase;
     this.config = config;
@@ -159,7 +182,7 @@ export class Investigation {
   log(type, details = {}, state = this.session) {
     const now = Date.now();
     const event = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       eventId: randomUUID(),
       sessionId: state.id,
       caseId: this.kase.id,
@@ -191,17 +214,30 @@ export class Investigation {
 
   view() {
     const s = this.session;
-    const { debrief, answer } = this.kase;
-    let feedback;
-    if (s?.status === 'closed') {
-      const nobody = answer.culprits.length === 0;
-      const correct = nobody ? s.verdict.suspect === 'none' : answer.culprits.includes(s.verdict.suspect);
-      feedback = correct ? answer.feedback.correct : answer.feedback.other;
-    }
+    const { kase } = this;
+    // Before a game starts there is no cast; the preview deals parts in persona order and reveals nothing drawn.
+    const cast = s?.cast ?? identityCast(kase);
+    let session = null;
+    if (s) { session = structuredClone(s); delete session.cast; }
     return {
-      ...publicView(this.kase), authored: true, mode: this.config.mode, model: this.config.model,
-      session: s ? structuredClone(s) : null,
-      debrief: s?.status === 'closed' ? { ...debrief, findings: debrief.findings.map(({ character, classification, explanation }) => ({ character, classification, explanation })), feedback } : null,
+      ...publicView(kase, cast), roles: ROLES, authored: true, mode: this.config.mode, model: this.config.model,
+      session, debrief: s?.status === 'closed' ? this.debrief(s) : null,
+    };
+  }
+
+  debrief(s) {
+    const { kase } = this;
+    const say = text => resolveText(kase, s.cast, text);
+    const { verdict } = s;
+    return {
+      title: say(kase.debrief.title), summary: say(kase.debrief.summary), lesson: say(kase.debrief.lesson),
+      feedback: say(verdict.score === verdict.total ? kase.answer.feedback.correct : kase.answer.feedback.other),
+      score: verdict.score, total: verdict.total,
+      findings: kase.characters.map(c => {
+        const part = partOf(kase, s.cast, c.id);
+        return { character: c.id, role: verdict.truth[c.id], picked: verdict.roles[c.id], correct: verdict.results[c.id],
+          classification: say(part.finding.classification), explanation: say(part.finding.explanation) };
+      }),
     };
   }
 
@@ -262,12 +298,15 @@ export class Investigation {
   }
 
   start(assignment = 'default') {
+    const ids = this.kase.characters.map(c => c.id);
+    const dealt = this.shuffle(this.kase.parts.map(p => p.id));
+    const cast = Object.fromEntries(ids.map((id, i) => [id, dealt[i]]));
     this.session = {
       id: randomUUID(), revision: 0, startedAt: new Date().toISOString(),
-      status: 'active', caseId: this.kase.id,
+      status: 'active', caseId: this.kase.id, cast,
       location: 'briefing', interviews: Object.fromEntries(this.kase.characters.map(c => [c.id, []])), verdict: null,
     };
-    this.log('session_started', { assignment, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, ...this.meta });
+    this.log('session_started', { assignment, cast, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, ...this.meta });
     this.log('briefing_viewed');
   }
 
@@ -303,14 +342,19 @@ export class Investigation {
     const s = this.session;
     const { characters } = this.kase;
     if (characters.some(c => !s.interviews[c.id].length)) throw new RequestError(400, `Ask all ${characters.length} ${this.kase.world.cast.many} before choosing.`);
-    const choices = [...characters.map(c => c.id), 'none', 'uncertain'];
-    if (!choices.includes(input.suspect)) throw new RequestError(400, `Choose ${this.kase.world.cast.one}, nobody, or not sure.`);
+    const picks = input.roles;
+    const ids = characters.map(c => c.id);
+    const pickedOk = picks && typeof picks === 'object' && !Array.isArray(picks)
+      && Object.keys(picks).length === ids.length && ids.every(id => Object.hasOwn(picks, id) && ROLE_IDS.includes(picks[id]));
+    if (!pickedOk) throw new RequestError(400, `Pick a role for each ${this.kase.world.cast.one.replace(/^an? /, '')}.`);
     if (!Number.isInteger(input.confidence) || input.confidence < 0 || input.confidence > 100) throw new RequestError(400, 'Confidence must be between 0 and 100.');
     const explanation = input.explanation ?? '';
     if (typeof explanation !== 'string' || explanation.length > 500) throw new RequestError(400, 'Keep your explanation under 500 characters.');
+    const roles = Object.fromEntries(ids.map(id => [id, picks[id]]));
+    const truth = Object.fromEntries(ids.map(id => [id, partOf(this.kase, s.cast, id).role]));
+    const results = Object.fromEntries(ids.map(id => [id, roles[id] === truth[id]]));
     s.verdict = {
-      suspect: input.suspect,
-      suspects: characters.some(c => c.id === input.suspect) ? [input.suspect] : [],
+      roles, truth, results, score: ids.filter(id => results[id]).length, total: ids.length,
       confidence: input.confidence, explanation: explanation.trim(),
       evidenceIds: [], submittedAt: new Date().toISOString(),
     };
@@ -321,6 +365,12 @@ export class Investigation {
 
   export() {
     if (!this.session) throw new RequestError(404, 'There is no session to export.');
-    return readFileSync(this.file(this.session.id), 'utf8');
+    const text = readFileSync(this.file(this.session.id), 'utf8');
+    if (this.session.status === 'closed') return text;
+    // While the game is on, the cast stays secret: only the first line is rewritten.
+    const lines = text.split('\n');
+    const head = JSON.parse(lines[0]);
+    if (head.type === 'session_started') { head.cast = null; lines[0] = JSON.stringify(head); }
+    return lines.join('\n');
   }
 }
