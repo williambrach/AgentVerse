@@ -58,7 +58,7 @@ function loadPage(dir) {
   return files;
 }
 
-export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = new URL('./admin/', import.meta.url), router = null, investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {} }) {
+export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = new URL('./admin/', import.meta.url), router = null, investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {}, leaderboard = null }) {
   if (typeof token !== 'string' || !token) throw new Error('An admin token is required.');
   const want = digest(token);
   const authed = (req) => {
@@ -75,6 +75,8 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
   let streams = 0;
   const active = new Set();
   const needMonitor = () => { if (!monitor) throw new HttpError(409, 'The monitor is off.'); };
+
+  const needBoard = () => { if (!leaderboard) throw new HttpError(409, 'The leaderboard is off.'); };
 
   const stream = (req, res) => {
     needMonitor();
@@ -148,6 +150,20 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
       const { startedAt } = monitor.startRound({ label, reason });
       onSystem({ type: 'round_started', timestamp: Date.now(), label, reason, startedAt });
       return { label, startedAt };
+    },
+    'GET /admin/leaderboard': () => { needBoard(); return leaderboard.standings(); },
+    'POST /admin/leaderboard': async (body) => {
+      needBoard();
+      if (body.rankBy !== 'time' && body.rankBy !== 'coins') throw new HttpError(400, 'rankBy must be time or coins.');
+      leaderboard.setRankBy(body.rankBy);
+      return leaderboard.standings();
+    },
+    'POST /admin/teams/hidden': async (body) => {
+      needBoard();
+      if (typeof body.teamId !== 'string' || !UUID.test(body.teamId)) throw new HttpError(400, 'teamId must be a team id.');
+      if (typeof body.hidden !== 'boolean') throw new HttpError(400, 'hidden must be true or false.');
+      leaderboard.setHidden(body.teamId, body.hidden);
+      return leaderboard.standings();
     },
     'POST /admin/sessions/pause': async (body) => {
       if (typeof body.paused !== 'boolean') throw new HttpError(400, 'paused must be true or false.');

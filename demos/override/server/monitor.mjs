@@ -7,6 +7,7 @@ const KINDS = {
 };
 const SYSTEM_CAP = 20;
 const QUESTION_CAP = 2000;
+const TEAM_CAP = 5000;
 
 const isNum = (n) => typeof n === 'number' && Number.isFinite(n);
 
@@ -25,7 +26,7 @@ function isCorrect(ctx, caseId, suspect) {
   return culprits.length ? culprits.includes(suspect) : suspect === 'none';
 }
 
-export function toRow(e, ctx = {}) {
+export function toRow(e, ctx = {}, team = null) {
   const kind = KINDS[e?.type]; // story_revealed / evidence_selected (old logs) have no row
   if (!kind) return null;
   const at = Date.parse(e.timestamp);
@@ -35,7 +36,7 @@ export function toRow(e, ctx = {}) {
     player: String(e.sessionId ?? '').slice(0, 4), caseId: e.caseId ?? null, kind,
     character: e.character ?? null, text: null, ms: null, endpoint: null, failedOver: false,
     reason: null, verdict: null, elapsedMs: isNum(e.elapsedMs) ? e.elapsedMs : null,
-    cost: isNum(e.spend?.cost) ? e.spend.cost : null,
+    cost: isNum(e.spend?.cost) ? e.spend.cost : null, team,
   };
   if (kind === 'visit') row.text = e.location ?? null;
   else if (kind === 'question') row.text = e.question ?? null;
@@ -73,6 +74,7 @@ export function createMonitor(opts) {
   const subscribers = new Set();
   const questions = new Map(); // eventId -> at, for answer latency
   const system = [];
+  const teams = new Map(); // sessionId -> team name
   let round = { label: null, startedAt: 0 };
   let last = {};
   let failoverAt = null;
@@ -83,11 +85,19 @@ export function createMonitor(opts) {
     questions.set(e.eventId, row.at);
     if (questions.size > QUESTION_CAP) questions.delete(questions.keys().next().value);
   };
+  const noteTeam = (e) => {
+    if (e?.type !== 'session_started' || typeof e.team?.name !== 'string' || e.sessionId == null) return;
+    teams.delete(e.sessionId);
+    teams.set(e.sessionId, e.team.name);
+    if (teams.size > TEAM_CAP) teams.delete(teams.keys().next().value);
+  };
+  const rowOf = (e) => toRow(e, ctx, teams.get(e?.sessionId) ?? null);
   const push = (row) => { ring.push(row); if (ring.length > ringSize) ring.splice(0, ring.length - ringSize); };
 
   function observeGame(e) {
     try {
-      const row = toRow(e, ctx);
+      noteTeam(e);
+      const row = rowOf(e);
       if (!row) return;
       remember(e, row);
       push(row);
@@ -146,7 +156,8 @@ export function createMonitor(opts) {
     roundStats.reset();
     for (const e of events ?? []) {
       try {
-        const row = toRow(e, ctx);
+        noteTeam(e);
+        const row = rowOf(e);
         if (!row) continue;
         remember(e, row);
         push(row);
@@ -173,7 +184,7 @@ export function createMonitor(opts) {
         writeFailures5m: n(last.writeFailures5m), failoverAt, credentialsRejected5m: n(last.credentialsRejected5m),
       },
       history: windows.history(), funnel: roundStats.funnel(), tallies: roundStats.tallies(), router: r,
-      sessions: x.sessions ?? null, system: (Array.isArray(x.system) ? x.system : system).slice(-SYSTEM_CAP),
+      sessions: x.sessions ?? null, leaderboard: x.leaderboard ?? null, system: (Array.isArray(x.system) ? x.system : system).slice(-SYSTEM_CAP),
     };
   }
 
@@ -206,7 +217,8 @@ export function createMonitor(opts) {
       const qs = new Map();
       for (const e of events) if (e.type === 'interview_question') qs.set(e.eventId, Date.parse(e.timestamp));
       const c = { cases, mode, questions: qs };
-      return events.map((e) => toRow(e, c)).filter(Boolean);
+      const own = events.find((e) => e.type === 'session_started' && typeof e.team?.name === 'string')?.team.name ?? null;
+      return events.map((e) => toRow(e, c, own)).filter(Boolean);
     },
     observeGame, observeLlm, observeSystem, heartbeat, tick, load,
   };
