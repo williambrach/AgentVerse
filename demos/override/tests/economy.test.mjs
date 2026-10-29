@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { economyRules, createWallet, quote, spend } from '../server/economy.mjs';
+import { worlds } from '../server/worlds.mjs';
+import { economyRules, createWallet, quote, spend, minimumBudget } from '../server/economy.mjs';
 
 const COSTS = { ask: 2, inspect: 5, continue: 1 };
 const fresh = (env = { OVERRIDE_COIN_BUDGET: '15' }) => createWallet(economyRules(env));
@@ -13,10 +14,10 @@ test('rules_defaults_and_env', () => {
 });
 
 test('rules_validation', () => {
-  for (const v of ['5', '1000', '7.5', 'abc']) {
-    assert.throws(() => economyRules({ OVERRIDE_COIN_BUDGET: v }), { message: 'OVERRIDE_COIN_BUDGET must be an integer between 6 and 999.' });
+  for (const v of ['7', '1000', '7.5', 'abc']) {
+    assert.throws(() => economyRules({ OVERRIDE_COIN_BUDGET: v }), { message: 'OVERRIDE_COIN_BUDGET must be an integer between 8 and 999.' });
   }
-  assert.equal(economyRules({ OVERRIDE_COIN_BUDGET: '6' }).budget, 6);
+  assert.equal(economyRules({ OVERRIDE_COIN_BUDGET: '8' }).budget, 8);
   assert.equal(economyRules({ OVERRIDE_COIN_BUDGET: '999' }).budget, 999);
   assert.throws(() => economyRules({ OVERRIDE_REASONING_CHARGES: '3' }), { message: 'OVERRIDE_REASONING_CHARGES must be 1 or 2.' });
 });
@@ -32,7 +33,7 @@ test('quote_examples', () => {
   assert.deepEqual(quote(w, ['ask', 'continue'], 0), { cost: 3, ok: false, reason: 'No conversations left.' });
   const w2 = fresh(); w2.spent = 12;
   assert.deepEqual(quote(w2, ['inspect'], 0), { cost: 5, ok: false, reason: 'Not enough coins: this costs 5 and you have 3 left.' });
-  const w3 = fresh({ OVERRIDE_COIN_BUDGET: '6' }); w3.spent = 2;
+  const w3 = fresh({ OVERRIDE_COIN_BUDGET: '8' }); w3.spent = 4;
   assert.deepEqual(quote(w3, ['continue'], 4), { cost: 1, ok: false, reason: 'Save coins: you need 4 to ask everyone once.' });
 });
 
@@ -68,4 +69,14 @@ test('spend_updates_spent_and_charges_only', () => {
 test('unknown_tool_clue_throws', () => {
   assert.throws(() => quote(fresh(), ['clue'], 0), { message: 'Unknown tool: clue' });
   assert.throws(() => spend(fresh(), ['clue']), { message: 'Unknown tool: clue' });
+});
+
+test('budget_floor_fits_cast', () => {
+  const most = Math.max(...Object.values(worlds).map(w => w.agents));
+  assert.equal(minimumBudget(), COSTS.ask * most);
+  assert.equal(economyRules({ OVERRIDE_COIN_BUDGET: String(minimumBudget()) }).budget, minimumBudget());
+  assert.throws(() => economyRules({ OVERRIDE_COIN_BUDGET: String(minimumBudget() - 1) }), { message: `OVERRIDE_COIN_BUDGET must be an integer between ${minimumBudget()} and 999.` });
+  // The smallest allowed budget still asks every agent once.
+  const w = createWallet(economyRules({ OVERRIDE_COIN_BUDGET: String(minimumBudget()) }));
+  for (let i = 0; i < most; i++) { assert.equal(quote(w, ['ask'], (most - i - 1) * COSTS.ask).ok, true); spend(w, ['ask']); }
 });

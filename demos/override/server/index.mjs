@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { Investigations, RequestError } from './session.mjs';
 import { buildMessages, modelConfig } from './interviews.mjs';
 import { economyRules } from './economy.mjs';
+import { castCharacters, identityCast } from './cases.mjs';
 import { cases } from './cases/index.mjs';
 import { LlmRouter } from './llm.mjs';
 import { appendJsonl, dataPaths, lastRecord, readJsonl, setWriteObserver } from './dataset.mjs';
@@ -161,6 +162,12 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
 
   let sampler = null;
   let tickTimer = null;
+  const host = env.HOST || '127.0.0.1';
+  let server = null;
+  let admin = null;
+  // Release everything opened so far, so a failed start never leaves a listener or timer holding the process.
+  const abort = error => { clearInterval(tickTimer); sampler?.close(); admin?.close(); server?.close(); server?.closeAllConnections(); throw error; };
+  try {
   if (env.OVERRIDE_ADMIN_TOKEN) {
     sampler = createTrafficSampler({ registry, dataDir: paths.root, now: Date.now });
     let cached = null;
@@ -191,28 +198,29 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     console.warn('OVERRIDE_SECRET is not set: sign-ins will not survive a restart.');
   }
   const trustProxy = ['1', 'true'].includes(String(env.OVERRIDE_TRUST_PROXY).toLowerCase());
-  const server = createApp({ investigations, accessCode: env.OVERRIDE_ACCESS_CODE || '', secret, trustProxy, staticFiles: loadStatic(publicDir), metrics, onHeartbeat: (tab, sid) => monitor?.heartbeat(tab, sid) });
+  server = createApp({ investigations, accessCode: env.OVERRIDE_ACCESS_CODE || '', secret, trustProxy, staticFiles: loadStatic(publicDir), metrics, onHeartbeat: (tab, sid) => monitor?.heartbeat(tab, sid) });
   // Headers and bodies arrive fast; answers take up to 60 s. Keep-alive outlives a proxy's idle timeout.
   server.headersTimeout = 20_000;
   server.requestTimeout = 40_000;
   server.keepAliveTimeout = 75_000;
-  const host = env.HOST || '127.0.0.1';
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(portOf(env.PORT, 3001), host, 1024, resolve); });
 
-  let admin = null;
   if (env.OVERRIDE_ADMIN_TOKEN) {
-    // The probe asks the first registered case's first character its quick question.
-    const probeCase = cases[0];
-    const probeCharacter = probeCase.characters[0];
-    admin = createAdmin({
-      token: env.OVERRIDE_ADMIN_TOKEN, monitor, router, investigations, registry, dataDir,
-      probeMessages: buildMessages(probeCase, { interviews: Object.fromEntries(probeCase.characters.map(c => [c.id, []])) }, probeCharacter.id, probeCharacter.quickQuestion),
-      readSystem: () => readJsonl(paths.system).slice(-20), onSystem,
-    });
-    try {
+    {
+      // The probe asks the first registered case's first character its quick question, with the identity cast.
+      const probeCase = cases[0];
+      const cast = identityCast(probeCase);
+      const probeCharacter = probeCase.characters[0];
+      const probeQuestion = castCharacters(probeCase, cast)[0].quickQuestion;
+      admin = createAdmin({
+        token: env.OVERRIDE_ADMIN_TOKEN, monitor, router, investigations, registry, dataDir,
+        probeMessages: buildMessages(probeCase, { cast, interviews: Object.fromEntries(probeCase.characters.map(c => [c.id, []])) }, probeCharacter.id, probeQuestion),
+        readSystem: () => readJsonl(paths.system).slice(-20), onSystem,
+      });
       await new Promise((resolve, reject) => { admin.once('error', reject); admin.listen(portOf(env.OVERRIDE_ADMIN_PORT, 3002), '127.0.0.1', resolve); });
-    } catch (error) { clearInterval(tickTimer); sampler?.close(); server.close(); throw error; }
+    }
   }
+  } catch (error) { abort(error); }
 
   let closing = null;
   // Stop taking connections, let pending answers finish (up to the 60 s deadline plus margin), then drop what is left.
