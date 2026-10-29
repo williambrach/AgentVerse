@@ -77,7 +77,7 @@ test('mobile, reduced motion, failed interview retry and server restart recovery
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await fresh(page);
-  await expect(page.locator('#skip-walking')).toBeChecked();
+  await expect(page.locator('#skip-walking')).toHaveCount(0);
   await go(page, 'pip', 'Pip');
   await page.locator('#question').fill('Who told you the keeper said yes?');
   await page.route('**/api/interview', route => route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'Provider unavailable. Please retry.' }) }));
@@ -102,7 +102,6 @@ test('mobile, reduced motion, failed interview retry and server restart recovery
 test('compact notebook keeps drafts and reading position across interview pages', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await fresh(page);
-  await page.locator('#skip-walking').check();
   await go(page, 'pip', 'Pip');
   await page.locator('#question').fill('Did you check with the keeper?');
   await expect(page.locator('#present-evidence')).toHaveCount(0);

@@ -145,13 +145,15 @@ test('configure twice during loading keeps the last world', async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
-test('switching mid-walk or with the case board open', async ({ page }) => {
+test('switching from an open interview or with the case board open', async ({ page }) => {
   const errors = await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   await page.locator('nav [data-go="juniper"]').click();
-  await page.waitForTimeout(300);
+  // Juniper is not in the grove case: the switch must not render her interview against the new cast.
+  await expect(page.locator('#panel h2')).toHaveText('Juniper');
   await switchTo(page, 'banana-mystery');
   await settled(page, 'grove', ['momo', 'pip', 'nori']);
+  await expect(page.locator('#panel h2')).toHaveText('A bunch of trouble.');
   await expect.poll(() => page.evaluate(() => {
     const { x, y } = window.walkingTestGame.scene.getScene('banana-grove').player;
     return [Math.round(x), Math.round(y)];

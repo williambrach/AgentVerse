@@ -67,24 +67,31 @@ test('WASD and arrows animate all four directions and return to a facing idle po
   expect(errors).toEqual([]);
 });
 
-test('destination and ground clicks keep a continuous walk cycle and stop on arrival', async ({ page }) => {
+test('map clicks never move the investigator; destination buttons open the page in place', async ({ page }) => {
   await start(page);
-  await page.locator('#skip-walking').uncheck();
-  await page.locator('nav [data-go="momo"]').click();
-  const moving = await samples(page, 1400);
-  for (let pose = 0; pose < 4; pose++) expect(moving.some(value => value.frame === `up-${pose}`)).toBe(true);
-  await expect(page.locator('#panel h2')).toHaveText('Momo');
-  expect((await samples(page, 150)).at(-1).frame).toBe('left-0');
-
+  expect((await samples(page, 150)).at(-1)).toEqual({ frame: 'down-0', x: 244, y: 276 });
   const canvas = page.locator('#station canvas');
   const bounds = await canvas.boundingBox();
   await canvas.click({ position: { x: bounds.width * 300 / 480, y: bounds.height * 204 / 340 } });
-  const groundWalk = await samples(page, 2800);
-  expect(groundWalk.some(value => /-[13]$/.test(value.frame))).toBe(true);
-  const arrival = groundWalk.at(-1);
-  expect(arrival.x).toBeCloseTo(300, -1);
-  expect(arrival.y).toBeCloseTo(204, -1);
-  expect(arrival.frame).toMatch(/-0$/);
+  for (const value of await samples(page, 600)) expect(value).toEqual({ frame: 'down-0', x: 244, y: 276 });
+  const heading = await page.locator('#panel h2').textContent();
+  expect(heading).toBe('A bunch of trouble.');
+  await canvas.click({ position: { x: bounds.width * 116 / 480, y: bounds.height * 120 / 340 } });
+  await expect(page.locator('#panel h2')).toHaveText('A bunch of trouble.');
+  for (const value of await samples(page, 300)) expect(value).toEqual({ frame: 'down-0', x: 244, y: 276 });
+  await page.locator('nav [data-go="momo"]').click();
+  await expect(page.locator('#panel h2')).toHaveText('Momo');
+  expect((await samples(page, 200)).at(-1)).toEqual({ frame: 'down-0', x: 244, y: 276 });
+});
+
+test('the banana basket sits on the picnic blanket', async ({ page }) => {
+  await start(page);
+  const basket = await page.evaluate(() => {
+    const scene = window.walkingTestGame.scene.getScene('banana-grove');
+    const child = scene.children.list.find(item => item.texture?.key === 'jungle' && item.frame?.name === 'basket');
+    return child && { x: child.x, y: child.y, depth: child.depth };
+  });
+  expect(basket).toEqual({ x: 244, y: 221, depth: 216 });
 });
 
 test('blocked movement, typing, dialogs and reset leave the detective standing', async ({ page }) => {
@@ -106,7 +113,6 @@ test('blocked movement, typing, dialogs and reset leave the detective standing',
   const reset = (await samples(page, 150)).at(-1);
   expect(reset).toEqual({ frame: 'down-0', x: 244, y: 276 });
 
-  await page.locator('#skip-walking').check();
   await page.locator('nav [data-go="pip"]').click();
   await page.locator('#question').focus();
   await page.keyboard.down('w');
@@ -176,8 +182,6 @@ test('all three monkeys blink and gesture independently without leaving their po
 
 test('monkeys react on approach and remain solid and clickable during their gestures', async ({ page }) => {
   await start(page);
-  await page.locator('#skip-walking').check();
-  await page.locator('#skip-walking').uncheck();
   // Return focus to the game; keyboard movement pauses while an input is focused.
   await page.locator('#station canvas').click({ position: { x: 10, y: 10 } });
   await center(page, 116, 204);
@@ -192,9 +196,8 @@ test('monkeys react on approach and remain solid and clickable during their gest
   expect(greeting.some(value => value.npcs[0].frame === 'momo-2')).toBe(true);
   expect(greeting.some(value => value.npcs[0].frame === 'momo-3')).toBe(true);
   expect(blocked.at(-1).player.y).toBeCloseTo(152, 0);
-  const canvas = page.locator('#station canvas');
-  const bounds = await canvas.boundingBox();
-  await canvas.click({ position: { x: bounds.width * 116 / 480, y: bounds.height * 120 / 340 } });
+  // Hold E across a frame so the scene's JustDown check sees it.
+  await page.keyboard.press('e', { delay: 100 });
   await expect(page.locator('#panel h2')).toHaveText('Momo');
 });
 

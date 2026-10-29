@@ -40,7 +40,6 @@ test('deep link is dropped after start and ids are not injected', async ({ page 
 test('honest mistake to Nobody', async ({ page }) => {
   await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
-  await page.locator('#skip-walking').check();
   await expect(page.locator('nav [data-go]')).toHaveCount(4);
   await expect(page.locator('#reveal-button, .evidence-card, #present-evidence')).toHaveCount(0);
   const asks = [['wren', 'I thought the Headmistress rang it'], ['basil', 'sounded like the tower bell'], ['juniper', 'I didn’t look']];
@@ -76,7 +75,6 @@ test('reset switches case', async ({ page }) => {
 test('reset session starts the current case over', async ({ page }) => {
   await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
-  await page.locator('#skip-walking').check();
   await expect(page.locator('nav [data-go]')).toHaveCount(4);
   await expect(page.locator('#reveal-button, .evidence-card, #present-evidence')).toHaveCount(0);
   const before = (await (await page.request.get('/api/state')).json()).session;
@@ -132,7 +130,6 @@ test('a returning player can switch case from the intro', async ({ page }) => {
 test('solving marks the case and offers the next one', async ({ page }) => {
   await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
-  await page.locator('#skip-walking').check();
   for (const id of ['wren', 'basil', 'juniper']) {
     await page.locator(`nav [data-go="${id}"]`).click();
     await page.locator('[data-quick-question]').click();
@@ -190,7 +187,6 @@ test('authored character fields are escaped in the DOM', async ({ page }) => {
   });
   await page.goto('/');
   await page.locator('#begin-button').click();
-  await page.locator('#skip-walking').check();
   await page.locator('nav [data-go="momo"]').click();
   await expect(page.locator('#panel h2').first()).toContainText('<img');
   expect(await page.locator('#app img[src="x"]').count()).toBe(0);

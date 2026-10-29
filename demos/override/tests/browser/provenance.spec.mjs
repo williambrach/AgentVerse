@@ -16,7 +16,6 @@ const LEAKS = [
 test('export carries case provenance', async ({ page }) => {
   await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
-  await page.locator('#skip-walking').check();
   for (const id of ['wren', 'basil', 'juniper']) {
     await page.locator(`nav [data-go="${id}"]`).click();
     await page.locator('[data-quick-question]').click();
@@ -53,7 +52,6 @@ test('state never leaks the answer', async ({ browser, baseURL }) => {
     await page.goto('/');
     await page.locator(`.case-option input[name="case"][value="${id}"]`).check();
     await page.locator('#begin-button').click();
-    await page.locator('#skip-walking').check();
     const text = await (await page.request.get('/api/state')).text();
     expect(text.length).toBeGreaterThan(0);
     for (const phrase of LEAKS) expect(text, `${id}: ${phrase}`).not.toContain(phrase);
