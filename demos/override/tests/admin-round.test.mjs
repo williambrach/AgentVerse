@@ -14,8 +14,8 @@ const find = (el, pred, out = []) => { if (pred(el)) out.push(el); el.children.f
 const byClass = (el, cls) => find(el, (e) => e.className.split(' ').includes(cls));
 
 const catalog = [
-  { id: 'banana-mystery', title: 'The Banana Mystery', answer: ['momo'], characters: [{ id: 'momo', name: 'Momo' }, { id: 'pip', name: 'Pip' }, { id: 'nori', name: 'Nori' }] },
-  { id: 'tower-echo-bell', title: 'Lanterns Too Soon', answer: [], characters: [{ id: 'wren', name: 'Wren' }, { id: 'basil', name: 'Basil' }, { id: 'juniper', name: 'Juniper' }] },
+  { id: 'banana-mystery', title: 'The Banana Mystery', characters: [{ id: 'momo', name: 'Momo' }, { id: 'pip', name: 'Pip' }, { id: 'nori', name: 'Nori' }] },
+  { id: 'tower-echo-bell', title: 'Lanterns Too Soon', characters: [{ id: 'wren', name: 'Wren' }, { id: 'basil', name: 'Basil' }, { id: 'juniper', name: 'Juniper' }] },
 ];
 
 test('funnelRows example', () => {
@@ -33,22 +33,24 @@ test('funnel started 0 gives pct 0 everywhere, never NaN', () => {
   assert.ok(rows[0].steps.every((s) => s.pct === 0));
 });
 
-test('tallyRows example (answer [] = Nobody correct)', () => {
-  const snap = { tallies: { 'tower-echo-bell': { verdicts: 10, correct: 0.4, accused: { none: 4, wren: 6 }, medianMsToVerdict: 754000, medianQuestions: 7 } } };
-  const r = round.tallyRows(snap, catalog)[1];
-  assert.deepEqual(r, { caseId: 'tower-echo-bell', title: 'Lanterns Too Soon', verdicts: 10, correctPct: 40,
-    accused: [{ who: 'Wren', n: 6, pct: 60, correct: false }, { who: 'Nobody', n: 4, pct: 40, correct: true }], medianMin: '12:34', medianQuestions: 7 });
+const tower = { verdicts: 2, perfect: 1, rolesRight: 7, rolesTotal: 8,
+  byRole: { villain: { right: 2, total: 2 }, collaborator: { right: 0, total: 0 }, fooled: { right: 1, total: 2 }, honest: { right: 4, total: 4 } },
+  medianMsToVerdict: 754000, medianQuestions: 7 };
+
+test('tallyRows example (roles right, perfect, only roles with total > 0)', () => {
+  const r = round.tallyRows({ tallies: { 'tower-echo-bell': tower } }, catalog)[1];
+  assert.deepEqual(r, { caseId: 'tower-echo-bell', title: 'Lanterns Too Soon', verdicts: 2, perfect: 1, rolesPct: 88,
+    roles: [{ id: 'villain', label: 'Villain', right: 2, total: 2, pct: 100 }, { id: 'fooled', label: 'Honest but fooled', right: 1, total: 2, pct: 50 },
+      { id: 'honest', label: 'Honest', right: 4, total: 4, pct: 100 }], medianMin: '12:34', medianQuestions: 7 });
 });
 
-test('tallyRows zero verdicts and uncertain', () => {
+test('tallyRows zero verdicts, zero roles: null and never NaN', () => {
   const r0 = round.tallyRows({ tallies: {} }, catalog)[0];
-  assert.equal(r0.correctPct, null);
+  assert.equal(r0.rolesPct, null);
   assert.equal(r0.medianMin, '–');
-  const r = round.tallyRows({ tallies: { 'banana-mystery': { verdicts: 3, correct: 1 / 3, accused: { uncertain: 1, momo: 1, pip: 1 }, medianMsToVerdict: 61000, medianQuestions: 4 } } }, catalog)[0];
-  assert.equal(r.accused.find((a) => a.n === 1 && a.who === 'Not sure').correct, false);
-  assert.equal(r.accused.find((a) => a.who === 'Momo').correct, true);
-  assert.equal(r.accused.find((a) => a.who === 'Pip').correct, false);
-  assert.equal(r.correctPct, 33);
+  assert.deepEqual(r0.roles, []);
+  const r = round.tallyRows({ tallies: { 'banana-mystery': { verdicts: 3, perfect: 0, rolesRight: 1, rolesTotal: 3, byRole: {}, medianMsToVerdict: 61000, medianQuestions: 4 } } }, catalog)[0];
+  assert.equal(r.rolesPct, 33);
   assert.equal(r.medianMin, '1:01');
 });
 
@@ -62,12 +64,18 @@ test('renderFunnel sizes bars via CSSOM and writes text only', () => {
   assert.equal(byClass(root, 'case-box').length, 2);
 });
 
-test('renderTallies escapes nothing because it is text: markup stays literal', () => {
+test('renderTallies heading, one bar per role, markup stays literal', () => {
   const doc = makeDoc(); const root = new El('div', doc);
-  const cat = [{ id: 'c', title: '<b>x</b>', answer: [], characters: [{ id: 'a', name: '<img src=x>' }] }];
-  round.renderTallies(root, { tallies: { c: { verdicts: 1, correct: 0, accused: { a: 1 }, medianMsToVerdict: 1000, medianQuestions: 1 } } }, cat);
-  assert.ok(root.textContent.includes('<img src=x>'));
+  round.renderTallies(root, { tallies: { 'tower-echo-bell': tower } }, catalog);
+  assert.equal(byClass(root, 'tally-head')[0].textContent, '2 verdicts · 88 % roles right · 1 perfect');
+  assert.equal(byClass(root, 'bar-fill').length, 3);
+  assert.deepEqual(byClass(root, 'bar-fill').map((e) => e.style.width), ['100%', '50%', '100%']);
+  assert.deepEqual(byClass(root, 'step-n').map((e) => e.textContent), ['2/2 · 100 %', '1/2 · 50 %', '4/4 · 100 %']);
+  assert.ok(root.textContent.includes('Honest but fooled'));
+  const cat = [{ id: 'c', title: '<b>x</b>', characters: [] }];
+  round.renderTallies(root, { tallies: { c: { verdicts: 1, perfect: 0, rolesRight: 0, rolesTotal: 1, byRole: { honest: { right: 0, total: 1 } }, medianMsToVerdict: 1000, medianQuestions: 1 } } }, cat);
   assert.ok(byClass(root, 'case-title')[0].textContent === '<b>x</b>');
+  assert.equal(byClass(root, 'tally-head')[0].textContent, '1 verdicts · 0 % roles right · 0 perfect');
   round.renderTallies(root, { tallies: {} }, catalog);
   assert.ok(root.textContent.includes('No verdicts yet'));
 });
@@ -107,4 +115,24 @@ test('module never uses innerHTML', async () => {
   const { readFile } = await import('node:fs/promises');
   const src = await readFile(new URL('../server/admin/round.js', import.meta.url), 'utf8');
   assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|setAttribute\('style'/.test(src));
+});
+
+test('seam: real tallies() output and toRow verdict feed the admin readers', async () => {
+  const { createRoundStats } = await import('../server/monitor-round.mjs');
+  const { toRow } = await import('../server/monitor.mjs');
+  const log = await import('../server/admin/log.js');
+  const cs = [{ id: 'banana-mystery', characters: ['a', 'b', 'c', 'd'].map((id) => ({ id, name: id })) }];
+  const truth = { a: 'villain', b: 'collaborator', c: 'fooled', d: 'honest' };
+  const results = { a: true, b: false, c: true, d: true };
+  const v = { roles: { ...truth, b: 'honest' }, truth, results, score: 3, total: 4, confidence: 70, explanation: '', evidenceIds: [] };
+  const e = { sessionId: 's', caseId: 'banana-mystery', type: 'verdict_submitted', timestamp: 1, elapsedMs: 5000, character: null, verdict: v };
+  const stats = createRoundStats(cs);
+  stats.observe({ ...e, type: 'session_started' });
+  stats.observe(e);
+  const r = round.tallyRows({ tallies: stats.tallies() }, [{ id: 'banana-mystery', title: 'B', characters: [] }])[0];
+  assert.equal(r.verdicts, 1);
+  assert.equal(r.rolesPct, 75);
+  assert.deepEqual(r.roles.map((x) => [x.label, x.right, x.total, x.pct]), [['Villain', 1, 1, 100], ['Collaborator', 0, 1, 0], ['Honest but fooled', 1, 1, 100], ['Honest', 1, 1, 100]]);
+  const row = toRow(e, { cases: cs });
+  assert.equal(log.describe(row, []).text, '3/4 roles · 70 %');
 });

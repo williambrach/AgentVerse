@@ -32,28 +32,37 @@ function minutes(ms) {
   return `${Math.floor(s / 60)}:${pad(s % 60)}`;
 }
 
+// Mirrors ROLES in server/roles.mjs (ids and labels); this page runs in the
+// browser and cannot import server modules.
+const ROLE_LABELS = [
+  ['villain', 'Villain'],
+  ['collaborator', 'Collaborator'],
+  ['fooled', 'Honest but fooled'],
+  ['honest', 'Honest'],
+];
+
 export function tallyRows(snap, catalog) {
   const t = (snap && snap.tallies) || {};
   return (catalog || []).map((c) => {
     const row = t[c.id] || {};
     const verdicts = num(row.verdicts) ? row.verdicts : 0;
-    const names = new Map((c.characters || []).map((ch) => [ch.id, ch.name]));
-    const answer = Array.isArray(c.answer) ? c.answer : [];
-    const accused = Object.entries(row.accused || {})
-      .filter(([, n]) => num(n) && n > 0)
-      .map(([id, n]) => ({
-        who: id === 'none' ? 'Nobody' : id === 'uncertain' ? 'Not sure' : (names.get(id) || id),
-        n,
-        pct: pct(n, verdicts),
-        correct: id === 'uncertain' ? false : id === 'none' ? answer.length === 0 : answer.includes(id),
-      }))
-      .sort((a, b) => b.n - a.n);
+    const perfect = num(row.perfect) ? row.perfect : 0;
+    const rolesRight = num(row.rolesRight) ? row.rolesRight : 0;
+    const rolesTotal = num(row.rolesTotal) ? row.rolesTotal : 0;
+    const by = row.byRole || {};
+    const roles = ROLE_LABELS.map(([id, label]) => {
+      const r = by[id] || {};
+      const total = num(r.total) ? r.total : 0;
+      const right = num(r.right) ? r.right : 0;
+      return { id, label, right, total, pct: pct(right, total) };
+    }).filter((r) => r.total > 0);
     return {
       caseId: c.id,
       title: c.title,
       verdicts,
-      correctPct: verdicts > 0 && num(row.correct) ? Math.round(row.correct * 100) : null,
-      accused,
+      perfect,
+      rolesPct: verdicts > 0 && rolesTotal > 0 ? pct(rolesRight, rolesTotal) : null,
+      roles,
       medianMin: verdicts > 0 ? minutes(row.medianMsToVerdict) : '–',
       medianQuestions: verdicts > 0 && num(row.medianQuestions) ? row.medianQuestions : null,
     };
@@ -100,13 +109,14 @@ export function renderTallies(root, snap, catalog) {
       el(doc, 'div', 'muted', box, 'No verdicts yet');
       continue;
     }
-    const head = row.correctPct === null ? '–' : `${row.correctPct} %`;
-    el(doc, 'div', 'tally-head', box, `${row.verdicts} verdicts · ${head} correct · median ${row.medianMin} min · ${row.medianQuestions === null ? '–' : row.medianQuestions} questions`);
-    for (const a of row.accused) {
+    const head = row.rolesPct === null ? '–' : `${row.rolesPct} %`;
+    el(doc, 'div', 'tally-head', box, `${row.verdicts} verdicts · ${head} roles right · ${row.perfect} perfect`);
+    el(doc, 'div', 'tally-sub muted', box, `median ${row.medianMin} min · ${row.medianQuestions === null ? '–' : row.medianQuestions} questions`);
+    for (const r of row.roles) {
       const line = el(doc, 'div', 'step', box);
-      el(doc, 'span', 'step-l', line, a.who);
-      bar(doc, line, a.pct, a.correct ? 'good' : 'wrong');
-      el(doc, 'span', 'step-n', line, `${a.n} · ${a.pct} %${a.correct ? ' ✓' : ''}`);
+      el(doc, 'span', 'step-l', line, r.label);
+      bar(doc, line, r.pct, r.pct >= 50 ? 'good' : 'wrong');
+      el(doc, 'span', 'step-n', line, `${r.right}/${r.total} · ${r.pct} %`);
     }
   }
 }
