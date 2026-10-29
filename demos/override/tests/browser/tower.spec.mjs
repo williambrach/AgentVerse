@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { castOf, truthOf, sessionIdOf, pickRole, quickQuestionFor } from './cast.mjs';
 
 // Runs in the `tower` project (port 4318, dev tools on; the tower case no longer needs them).
 // The tower PNGs are routed to 404 so the tests behave the same with or without real art.
@@ -80,8 +81,8 @@ test('switching to a grove case brings the monkeys back', async ({ page }) => {
   const errors = await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   await switchTo(page, 'banana-mystery');
-  await settled(page, 'grove', ['momo', 'pip', 'nori']);
-  for (const name of ['Momo', 'Pip', 'Nori']) await expect(page.locator(`nav [data-go] >> text=${name}`)).toBeVisible();
+  await settled(page, 'grove', ['momo', 'pip', 'nori', 'kiki']);
+  for (const name of ['Momo', 'Pip', 'Nori', 'Kiki']) await expect(page.locator(`nav [data-go] >> text=${name}`)).toBeVisible();
   await expect(page.locator('#case-eyebrow')).toContainText('GROVE');
   expect(errors).toEqual([]);
 });
@@ -100,7 +101,7 @@ test('art that appears later replaces the placeholder', async ({ page }) => {
   page.art.bytes = {};
   for (const [tower, grove] of Object.entries(groveFiles)) page.art.bytes[tower] = await (await page.request.get(`/assets/banana/${grove}`)).body();
   await switchTo(page, 'banana-mystery');
-  await settled(page, 'grove', ['momo', 'pip', 'nori']);
+  await settled(page, 'grove', ['momo', 'pip', 'nori', 'kiki']);
   await switchTo(page, 'tower-echo-bell');
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   expect((await sceneState(page)).artSources).toEqual({ cast: 'file', idle: 'file', walk: 'file', props: 'file' });
@@ -110,7 +111,7 @@ test('one key press after round trips arrives once', async ({ page }) => {
   const errors = await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   await switchTo(page, 'banana-mystery');
-  await settled(page, 'grove', ['momo', 'pip', 'nori']);
+  await settled(page, 'grove', ['momo', 'pip', 'nori', 'kiki']);
   await switchTo(page, 'tower-echo-bell');
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   const visits = [];
@@ -128,20 +129,20 @@ test('one key press after round trips arrives once', async ({ page }) => {
 
 test('configure twice during loading keeps the last world', async ({ page }) => {
   const errors = await start(page, 'banana-mystery');
-  await settled(page, 'grove', ['momo', 'pip', 'nori']);
+  await settled(page, 'grove', ['momo', 'pip', 'nori', 'kiki']);
   await page.evaluate(() => {
     const scene = window.walkingTestGame.scene.getScene('banana-grove');
     const grove = scene.world;
     const tower = { ...grove, id: 'tower', art: { cast: '/assets/tower/apprentices.png', idle: '/assets/tower/apprentice-idle.png', walk: '/assets/tower/inspector-walk.png', props: '/assets/tower/tower-props.png' } };
-    const cast = ids => ids.map((id, i) => ({ id, name: id, color: ['#cf7a4a', '#6e9a5c', '#9a85c2'][i] }));
+    const cast = ids => ids.map((id, i) => ({ id, name: id, color: ['#cf7a4a', '#6e9a5c', '#9a85c2', '#c9a24a'][i] }));
     scene.configure(tower, cast(['wren', 'basil', 'juniper']));
-    scene.configure(grove, cast(['momo', 'pip', 'nori']));
+    scene.configure(grove, cast(['momo', 'pip', 'nori', 'kiki']));
   });
-  await settled(page, 'grove', ['momo', 'pip', 'nori']);
+  await settled(page, 'grove', ['momo', 'pip', 'nori', 'kiki']);
   await page.waitForTimeout(500);
   const state = await sceneState(page);
   expect(state.worldId).toBe('grove');
-  expect(state.npcs).toEqual(['momo', 'pip', 'nori']);
+  expect(state.npcs).toEqual(['momo', 'pip', 'nori', 'kiki']);
   expect(errors).toEqual([]);
 });
 
@@ -151,7 +152,7 @@ test('switching mid-walk or with the case board open', async ({ page }) => {
   await page.locator('nav [data-go="juniper"]').click();
   await page.waitForTimeout(300);
   await switchTo(page, 'banana-mystery');
-  await settled(page, 'grove', ['momo', 'pip', 'nori']);
+  await settled(page, 'grove', ['momo', 'pip', 'nori', 'kiki']);
   await expect.poll(() => page.evaluate(() => {
     const { x, y } = window.walkingTestGame.scene.getScene('banana-grove').player;
     return [Math.round(x), Math.round(y)];
@@ -167,7 +168,7 @@ test('nav follows the world on every switch', async ({ page }) => {
   for (const id of ['wren', 'basil', 'juniper']) await expect(page.locator(`nav [data-go="${id}"]`)).toHaveCount(1);
   await switchTo(page, 'banana-mystery');
   await expect(page.locator('#app')).toHaveAttribute('data-world', 'grove');
-  for (const id of ['momo', 'pip', 'nori']) await expect(page.locator(`nav [data-go="${id}"]`)).toHaveCount(1);
+  for (const id of ['momo', 'pip', 'nori', 'kiki']) await expect(page.locator(`nav [data-go="${id}"]`)).toHaveCount(1);
   await expect(page.locator('nav [data-go="wren"]')).toHaveCount(0);
   await switchTo(page, 'tower-echo-bell');
   await expect(page.locator('#app')).toHaveAttribute('data-world', 'tower');
@@ -200,7 +201,7 @@ test('the tower has its own colours, the grove keeps its own, and the case board
   await page.keyboard.press('Shift+Tab');
   expect(await page.locator('#restart-button').evaluate(el => getComputedStyle(el).outlineColor)).toBe('rgb(116, 102, 176)');
   await switchTo(page, 'banana-mystery');
-  await settled(page, 'grove', ['momo', 'pip', 'nori']);
+  await settled(page, 'grove', ['momo', 'pip', 'nori', 'kiki']);
   expect(await look()).toEqual({ theme: 'grove', page: 'rgb(232, 237, 218)', topbar: 'rgb(255, 249, 232)', title: 'The Banana Mystery · AgentVerse' });
   await page.locator('#reset-button').click();
   await page.locator('.case-option input[name="case"][value="tower-echo-bell"]').check();
@@ -226,7 +227,7 @@ test('station labels are sharp HTML over the canvas that follow its size and wor
   await page.setViewportSize({ width: 1100, height: 760 });
   await expect.poll(fit).toBe('0,0,0,0 font 7');
   await switchTo(page, 'banana-mystery');
-  await expect(labels).toHaveText(['MOMO', 'PIP', 'NORI', 'START HERE', 'YOUR GUESS']);
+  await expect(labels).toHaveText(['MOMO', 'PIP', 'NORI', 'KIKI', 'START HERE', 'YOUR GUESS']);
 });
 
 test('a tower session resumes from its cookie', async ({ page }) => {
@@ -266,4 +267,26 @@ test('the real tower art keeps its proportions, uses the corrected walk atlas an
   for (const y of look.drawn) expect(y).toBeLessThan(look.sheetHeight);
   await expect(page.locator('.room-nav .avatar-dot').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   expect(errors).toEqual([]);
+});
+
+test('the tower verdict goes through the role picker and every wizard is fooled', async ({ page }) => {
+  await start(page);
+  await settled(page, 'tower', ['wren', 'basil', 'juniper']);
+  const cast = castOf(await sessionIdOf(page), 'test-results/sessions-tower');
+  expect(Object.keys(cast)).toEqual(['wren', 'basil', 'juniper']);
+  const truth = truthOf(cast);
+  expect(Object.values(truth)).toEqual(['fooled', 'fooled', 'fooled']);
+  for (const id of ['wren', 'basil', 'juniper']) {
+    await page.locator(`nav [data-go="${id}"]`).click();
+    await expect(page.locator('#panel h2')).toBeVisible({ timeout: 15_000 });
+    await page.locator('[data-quick-question]').click();
+    await expect(page.locator('.speech.investigator')).toHaveCount(1, { timeout: 12_000 });
+    await expect(page.locator('.speech.investigator')).toContainText(quickQuestionFor(cast, id));
+  }
+  await page.locator('nav [data-go="report"]').click();
+  await expect(page.locator('fieldset.role-row')).toHaveCount(3);
+  for (const id of ['wren', 'basil', 'juniper']) await pickRole(page, id, truth[id]);
+  await page.locator('#lock-in').click();
+  await expect(page.locator('.verdict-summary')).toContainText('3 / 3');
+  await expect(page.locator('.pick-right')).toHaveCount(3);
 });
