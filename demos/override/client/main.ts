@@ -5,6 +5,9 @@ import './banana.css';
 import './case-board.css';
 import './fit.css';
 import './tower.css';
+import './tools.css';
+import './bubbles.css';
+import { HINTS, coinLabel, toolChip, toolBlock, toolsBlock, reasoningBlock, threadPanel, pluralise } from './tools';
 import { renderNotebook } from './notebook';
 import { createStation, type Station } from './station';
 import { postHeartbeat, startHeartbeat } from './heartbeat';
@@ -24,6 +27,12 @@ let pendingCharacter: string | null = null;
 let introVisible = true;
 let skipWalking = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let errorMessage = '';
+/** The agents' thread shows in the notebook instead of the location panel; `panel` is left alone. */
+let threadOpen = false;
+/** True while the Let them talk loop runs; any other player action sets it false. */
+let talking = false;
+let wakeTalk: (() => void) | undefined;
+let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
 interface CaseRow { id: string; title: string; lead: string; order: number; world?: string }
 let catalog: CaseRow[] = [];
 let selectedCase = '';
@@ -86,6 +95,7 @@ async function action(name: string, payload: object = {}, onSuccess?: () => void
         drafts = blankDrafts();
         reportDraft = { suspect: '', confidence: 70, explanation: '' };
         panel = 'briefing';
+        threadOpen = false;
         introVisible = true;
         station.resetPosition();
       }
@@ -99,14 +109,14 @@ function shell() {
   app.innerHTML = `
     <header class="topbar">
       <a class="wordmark" href="/" aria-label="The Override home"><span class="banana-mark" id="world-icon"></span><span>THE OVERRIDE<small>AGENTVERSE</small></span></a>
-      <div class="top-meta"><span class="authored-label">AUTHORED DEMONSTRATION</span><span id="mode-badge" class="mode-badge"></span></div>
+      <div class="top-meta"><span class="authored-label">AUTHORED DEMONSTRATION</span><span id="mode-badge" class="mode-badge"></span><span class="coin-wrap"><span id="coin-counter" class="mode-badge coin-badge" tabindex="0" aria-describedby="coin-tip" hidden></span><span id="coin-tip" class="coin-tip" role="tooltip">${escape(HINTS.coins)}</span></span></div>
       <button class="quiet-button" id="restart-button" title="Start this case over in a fresh session">${icon('reset')}<span>Reset session</span></button>
       <button class="quiet-button" id="reset-button" title="Choose another case or restart this one">${icon('cases')}<span>Cases</span></button>
     </header>
     <main class="workspace">
       <section class="world-column" id="world-column">
         <div class="world-heading"><div><span class="eyebrow" id="case-eyebrow"></span><h1 id="case-headline">${escape(state.copy.headline)}</h1></div><span class="case-status" id="case-status">AWAITING INVESTIGATOR</span></div>
-        <div class="station-frame"><div class="station-topline"><span><i class="live-dot"></i> <span id="case-topline">${escape(state.title.toUpperCase())}</span> / <span id="case-day"></span></span><span id="elapsed">00:00</span></div><div id="station"></div><div class="station-bottomline"><span id="movement-hint">WASD / ARROWS to walk · E to interact</span><span class="floor-label">2–3 MINUTE MYSTERY</span></div></div>
+        <div class="station-frame"><div class="station-topline"><span><i class="live-dot"></i> <span id="case-topline">${escape(state.title.toUpperCase())}</span> / <span id="case-day"></span></span><span id="elapsed">00:00</span></div><div id="station"></div><div class="station-bottomline"><span id="movement-hint">WASD / ARROWS to walk · E to interact</span><span id="tools-line"></span><span class="floor-label">2–3 MINUTE MYSTERY</span></div></div>
         <nav class="room-nav" id="room-nav"></nav>
         <div class="world-footer"><span><span id="quick-progress"></span></span><label class="skip-walk"><input id="skip-walking" type="checkbox" ${skipWalking ? 'checked' : ''}> Skip walking</label></div>
       </section>
@@ -156,12 +166,16 @@ function renderWorld() {
 
 async function visit(location: LocationId) {
   if (busy || introVisible) return;
+  stopTalking();
+  threadOpen = false;
   if (state.session?.status === 'closed') { panel = location; render(); return; }
   if (await action('visit', { location })) { panel = location; render(); }
 }
 
 function go(location: LocationId) {
   if (busy || !state.session) return;
+  stopTalking();
+  threadOpen = false;
   if (skipWalking || state.session.status === 'closed') void visit(location);
   else station.travel(location);
 }
@@ -169,6 +183,10 @@ function go(location: LocationId) {
 async function onClick(event: MouseEvent) {
   const button = (event.target as HTMLElement).closest<HTMLElement>('button');
   if (!button || (button as HTMLButtonElement).disabled) return;
+  if (button.id === 'continue-button') { void talk(); return; }
+  if (button.id === 'read-thread') { stopTalking(); threadOpen = true; render(); return; }
+  if (button.id === 'inspect-button') { stopTalking(); if (ids().includes(panel)) await action('inspect', { character: panel }); return; }
+  stopTalking();
   if (button.dataset.go) { go(button.dataset.go as LocationId); return; }
   if (button.dataset.quickQuestion && ids().includes(panel)) {
     drafts[panel] = button.dataset.quickQuestion;
@@ -181,6 +199,7 @@ async function onClick(event: MouseEvent) {
     dropCaseParam();
     introVisible = false;
     panel = state.session?.status === 'closed' ? 'report' : savedPanel();
+    threadOpen = false;
     render();
   }
   if (button.id === 'reset-button' || button.id === 'debrief-reset') showCases();
@@ -200,11 +219,12 @@ function savedPanel(): LocationId {
 
 /** Opens a fresh session on a case. The old session's records stay on the server. */
 async function startCase(caseId: string) {
+  stopTalking();
   if (!(await action('reset', { caseId }))) return;
   dropCaseParam();
   drafts = blankDrafts();
   reportDraft = { suspect: '', confidence: 70, explanation: '' };
-  panel = 'briefing'; station.resetPosition(); introVisible = false;
+  panel = 'briefing'; threadOpen = false; station.clearBubbles(); station.resetPosition(); introVisible = false;
   document.querySelector('#overlay-root')!.innerHTML = ''; render();
 }
 
@@ -233,6 +253,7 @@ function render() {
     button.classList.toggle('active', button.dataset.go === panel);
   });
   document.querySelectorAll<HTMLElement>('[data-check]').forEach(el => { el.innerHTML = session?.interviews[el.dataset.check!].length ? icon('check') : ''; });
+  renderTools();
   (document.querySelector('#export-button') as HTMLButtonElement).disabled = !session || busy;
   (document.querySelector('#reset-button') as HTMLButtonElement).disabled = !session || busy;
   (document.querySelector('#restart-button') as HTMLButtonElement).disabled = !session || busy;
@@ -242,14 +263,15 @@ function render() {
   station?.setEnabled(Boolean(session && !introVisible && !busy && !document.querySelector('#case-switch, #reset-confirm')));
   const target = document.querySelector<HTMLElement>('#panel')!;
   const sections: Record<string, string> = { briefing: 'Case briefing', ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
-  document.querySelector('#notebook-section')!.textContent = sections[panel];
+  document.querySelector('#notebook-section')!.textContent = threadOpen ? 'Thread' : sections[panel];
   document.querySelector('#notebook-index')!.textContent = `0${Object.keys(sections).indexOf(panel) + 1} / 0${Object.keys(sections).length}`;
   let markup: string;
-  if (session?.status === 'closed' && panel === 'report') markup = debriefPanel();
+  if (threadOpen && session) markup = threadPanel(session.thread, Object.fromEntries(state.characters.map(c => [c.id, c.name])), session.chatter.pending);
+  else if (session?.status === 'closed' && panel === 'report') markup = debriefPanel();
   else if (panel === 'briefing') markup = briefingPanel();
   else if (panel === 'report') markup = reportPanel();
   else markup = interviewPanel(panel);
-  if (renderNotebook(target, markup, `${session?.id}:${panel}:${session?.status}`, panel, Object.keys(sections))) bindForms();
+  if (renderNotebook(target, markup, `${session?.id}:${panel}:${session?.status}${threadOpen ? ':thread' : ''}`, panel, Object.keys(sections))) bindForms();
   if (introVisible) renderIntro();
   else {
     if (document.querySelector('#intro')) document.querySelector('#overlay-root')!.innerHTML = '';
@@ -322,14 +344,25 @@ function interviewPanel(characterId: string) {
   const turns = state.session?.interviews[characterId] || [];
   const closed = state.session?.status === 'closed';
   const next = state.characters.find(c => c.id !== characterId && !state.session?.interviews[c.id].length);
+  const economy = state.session?.economy;
+  const askBlock = economy ? toolsBlock(economy, ['ask'], reserveFor(characterId)) : { enabled: true, reason: null };
+  const inspectBlock = economy ? toolBlock(economy, 'inspect', reserveFor(null)) : { enabled: true, reason: null };
+  const canInspect = turns.length > 0 && inspectBlock.enabled;
+  const inspectNote = !turns.length ? `${escape(character.name)} has not spoken yet` : inspectBlock.reason ? escape(inspectBlock.reason) : economy ? escape(toolChip(economy, 'inspect')) : '';
+  const items = [
+    ...turns.map((turn, i) => ({ at: turn.timestamp, order: 0, html: `<div class="speech investigator" data-motion-key="question-${i}"><span>YOU</span><p>${escape(turn.question)}</p></div><div class="speech character" data-motion-key="answer-${i}"><span>${escape(character.name.toUpperCase())}</span><p>${escape(turn.answer)}</p></div>` })),
+    ...(state.session?.inspections || []).filter(n => n.character === characterId).map(n => ({ at: n.timestamp, order: 1, html: reasoningBlock(n, character.name) })),
+  ].sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.order - b.order);
   return `<div class="interview-heading"><div class="portrait ${castClass(characterId)}"><span class="pixel-person"></span></div><div><span class="eyebrow">${escape(world().text.castLabel)} ${character.room} OF 0${state.characters.length}</span><h2>${escape(character.name)}</h2><p>${escape(character.role)}</p></div><span class="interview-status"><i class="live-dot"></i>${state.mode === 'live' ? 'LIVE' : 'SCRIPTED'}</span></div>
     <div class="interview-transcript" id="transcript" role="log" aria-label="Interview transcript" aria-live="polite"><div class="speech character" data-motion-key="introduction"><span>${escape(character.name.toUpperCase())}</span><p>${escape(character.introduction)}</p></div>
-    ${turns.map((turn, i) => `<div class="speech investigator" data-motion-key="question-${i}"><span>YOU</span><p>${escape(turn.question)}</p></div><div class="speech character" data-motion-key="answer-${i}"><span>${escape(character.name.toUpperCase())}</span><p>${escape(turn.answer)}</p></div>`).join('')}
+    ${items.map(item => item.html).join('')}
     ${pendingCharacter === characterId && busy ? `<div class="speech investigator" data-motion-key="question-${turns.length}"><span>YOU</span><p>${escape(drafts[characterId])}</p></div><div class="speech character waiting" data-motion-key="waiting"><span>${escape(character.name.toUpperCase())}</span><p class="thinking">Thinking<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></p></div>` : ''}</div>
     ${closed ? '<div class="subtle-note">This conversation is saved in your session export.</div>' : `<form class="interview-compose" id="interview-form">
     ${!turns.length ? `<button class="quick-question" type="button" data-quick-question="${escape(character.quickQuestion)}" ${busy ? 'disabled' : ''}><small>QUICK QUESTION · TAP TO ASK</small><span>${escape(character.quickQuestion)} ${icon('arrow')}</span></button>` : ''}
     <label class="sr-only" for="question">Your question for ${escape(character.name)}</label><textarea id="question" name="question" rows="2" minlength="3" maxlength="1200" placeholder="${turns.length ? 'Ask a follow-up…' : 'Or type your own question…'}" required ${busy ? 'disabled' : ''}>${escape(drafts[characterId])}</textarea>
-    <div class="compose-bottom"><small>Short answers. Curious ${escape(world().text.many)}.</small><button type="submit" class="primary-button" ${busy ? 'disabled' : ''}>${busy ? 'Thinking…' : 'Ask question'} ${icon('arrow')}</button></div>
+    <div class="compose-bottom"><small>Short answers. Curious ${escape(world().text.many)}.</small><button type="submit" class="primary-button" ${economy ? 'aria-describedby="tip-ask"' : ''} ${busy || !askBlock.enabled ? 'disabled' : ''}>${busy ? 'Thinking…' : 'Ask question'} ${icon('arrow')}</button></div>
+    ${economy ? `<div class="tool-row"><span class="tool-chip" data-tool="ask">${escape(askBlock.reason || toolChip(economy, 'ask'))}</span> <span class="tool-hint" id="tip-ask">${escape(HINTS.ask)}</span></div>
+    <div class="tool-row"><button class="secondary-button" id="inspect-button" type="button" aria-describedby="tip-inspect" ${busy || !canInspect ? 'disabled' : ''}>Inspect reasoning</button> <span class="tool-chip" data-tool="inspect">${inspectNote}</span> <span class="tool-hint" id="tip-inspect">${escape(HINTS.inspect)}</span></div>` : ''}
     ${turns.length ? `<button class="secondary-button next-monkey" type="button" data-go="${escape(next?.id || 'report')}" ${busy ? 'disabled' : ''}>${next ? `Next: ask ${escape(next.name)}` : 'Ready to make your guess?'} ${icon('arrow')}</button>` : ''}</form>`}`;
 }
 
@@ -353,15 +386,86 @@ function debriefPanel() {
   const next = nextCase();
   return `${heading('MYSTERY SOLVED / AUTHORED DEMO', debrief.title, debrief.summary)}
     <div class="notebook-content"><div class="verdict-summary"><span class="eyebrow">YOUR GUESS · ${escape(chosen).toUpperCase()}</span><p>${escape(debrief.feedback)}</p></div>
+    ${spendSummary()}
     ${debrief.findings.map(f => `<section class="finding"><div class="finding-monkey"><i class="monkey-face ${castClass(f.character)}" aria-hidden="true"></i><div><span class="eyebrow">${escape(f.character.toUpperCase())}</span><h3>${escape(f.classification)}</h3></div></div><p>${escape(f.explanation)}</p></section>`).join('')}
     <div class="briefing-note"><p>${escape(debrief.lesson)}</p></div><p class="fine-print">These ${escape(world().text.many)} represent AI agents. This is an authored demonstration of intent and mistakes, not a validated research case.</p>
     ${next ? `<button class="primary-button" id="next-case" data-case="${escape(next.id)}">Next case: ${escape(next.title)} ${icon('arrow')}</button>` : ''}
     <div class="debrief-actions"><button class="${next ? 'secondary' : 'primary'}-button" id="debrief-reset">${next ? 'All cases' : 'Play again'} ${icon(next ? 'cases' : 'reset')}</button><button class="secondary-button" id="debrief-export">Export session ${icon('arrow')}</button></div></div>`;
 }
 
+/** Coins to keep back so the player can still ask everyone once, not counting the action's own target. */
+function reserveFor(target: string | null): number {
+  const session = state.session;
+  if (!session) return 0;
+  return session.economy.costs.ask * state.characters.filter(c => c.id !== target && !session.interviews[c.id].length).length;
+}
+
+function spendSummary(): string {
+  const session = state.session!;
+  const { economy } = session;
+  const questions = Object.values(session.interviews).reduce((sum, turns) => sum + turns.length, 0);
+  const spent = economy.budget == null ? `You spent ${economy.spent} coins` : `You spent ${economy.spent} of ${economy.budget} coins`;
+  const c = economy.charges;
+  return `<div class="briefing-note spend-summary"><span class="eyebrow">COINS</span><p>${escape(spent)}</p><small>${pluralise(questions, 'question')} · ${pluralise(c.inspect.used, 'inspection')} · ${pluralise(c.continue.used, 'conversation')}</small></div>`;
+}
+
+/** The coin counter and the bottom-line controls under the world. Rewritten only when their markup changes. */
+let toolsMarkup = '';
+function renderTools() {
+  const session = state.session;
+  const counter = document.querySelector<HTMLElement>('#coin-counter')!;
+  const active = Boolean(session && !introVisible);
+  counter.hidden = !active;
+  if (session) counter.textContent = coinLabel(session.economy);
+  document.querySelectorAll<HTMLElement>('.floor-label').forEach(el => { el.hidden = active; });
+  let markup = '';
+  if (session && active) {
+    const { economy, chatter } = session;
+    const block = toolBlock(economy, 'continue', reserveFor(null));
+    const can = session.status === 'active' && (chatter.pending > 0 || block.enabled);
+    const label = talking ? 'Listening…' : chatter.pending > 0 ? `Keep listening (${chatter.pending})` : 'Let them talk';
+    const chip = chatter.pending > 0 ? 'free' : block.reason || toolChip(economy, 'continue');
+    markup = `<span class="tool-tip" data-tip="${escape(HINTS.continue)}"><button class="secondary-button" id="read-thread" type="button" ${busy ? 'disabled' : ''}>Read thread</button> <button class="secondary-button" id="continue-button" type="button" aria-describedby="tip-continue" ${busy || talking || !can ? 'disabled' : ''}>${label}</button> <span class="tool-chip" data-tool="continue">${escape(chip)}</span><span class="tool-hint sr-only" id="tip-continue" role="tooltip">${escape(HINTS.continue)}</span></span>`;
+  }
+  if (markup !== toolsMarkup) { toolsMarkup = markup; document.querySelector('#tools-line')!.innerHTML = markup; }
+}
+
+function stopTalking() {
+  talking = false;
+  wakeTalk?.();
+}
+
+const pause = (ms: number) => new Promise<void>(resolve => { const t = setTimeout(resolve, ms); wakeTalk = () => { clearTimeout(t); resolve(); }; });
+
+/** Let them talk: opens the thread, then asks for one line at a time until the round ends or the player does something else. */
+async function talk() {
+  if (busy || talking || !state.session) return;
+  clearTimeout(bubbleTimer);
+  threadOpen = true;
+  talking = true;
+  render();
+  try {
+    while (talking) {
+      const before = state.session!.thread.length;
+      if (!(await action('continue'))) break;
+      const session = state.session!;
+      const line = session.thread[session.thread.length - 1];
+      if (session.thread.length > before && line) station.say(line.character, line.text);
+      if (session.chatter.pending <= 0) break;
+      const words = line ? line.text.trim().split(/\s+/).length : 0;
+      await pause(Math.min(8000, Math.max(3000, 1500 + 60 * words)));
+    }
+  } finally {
+    talking = false;
+    bubbleTimer = setTimeout(() => station.clearBubbles(), 8000);
+    render();
+  }
+}
+
 async function askQuestion() {
   if (busy || !ids().includes(panel)) return;
   const character: string = panel;
+  stopTalking();
   pendingCharacter = character;
   await action('interview', { character, question: drafts[character] }, () => { drafts[character] = ''; });
   pendingCharacter = null;
@@ -379,7 +483,7 @@ function bindForms() {
     document.querySelectorAll<HTMLInputElement>('[name="suspect"]').forEach(input => input.addEventListener('change', () => { reportDraft.suspect = input.value; }));
     document.querySelector('#confidence')!.addEventListener('change', event => { reportDraft.confidence = Number((event.target as HTMLSelectElement).value); });
     document.querySelector('#explanation')!.addEventListener('input', event => { reportDraft.explanation = (event.target as HTMLTextAreaElement).value; });
-    document.querySelector('#report-form')!.addEventListener('submit', async event => { event.preventDefault(); await action('verdict', reportDraft); });
+    document.querySelector('#report-form')!.addEventListener('submit', async event => { event.preventDefault(); stopTalking(); await action('verdict', reportDraft); });
   }
 }
 
