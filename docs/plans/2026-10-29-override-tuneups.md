@@ -1,7 +1,7 @@
 # Plan: Override tune-ups (basket, keyboard-only walking, GLM 5.3 Flash low reasoning, English only)
 
 **Goal:** four decisions for the Override demo: the banana basket is back on the grove picnic blanket; the investigator moves only with WASD/arrows (no click-to-move); live interviews can send `reasoning_effort: "low"` for `zai-org/GLM-5.3-Flash`; characters always answer in English.
-**Architecture:** client scene `client/station.ts` (basket prop, pointer handler, route code), `client/main.ts` (nav goes straight to the page), `client/worlds.ts` (copy); server `server/interviews.mjs` (endpoint config, prompts) and `server/llm.mjs` (request body); browser specs; README/DEPLOY.
+**Architecture:** client `station.ts`, `main.ts`, `worlds.ts`; server `interviews.mjs`, `llm.mjs`; browser specs; README/DEPLOY.
 **Tech stack:** Node ESM (`node:test`), TypeScript + Vite + Phaser 3.90, Playwright 1.58.
 **Spec:** none (decisions are in Global constraints)
 **Detail:** contracts
@@ -121,12 +121,12 @@ App type: web UI acceptance. Categories: protocol (input), state (position).
 **LOC owned:** 70
 **Tests:** slow
 **Model:** sonnet
-**Consumes:** none (edge T2 -> T3: the browser tests run T2's built client)
+**Consumes:** none
 **Produces:** none
 **Review Focus:** protocol: `map_clicks_never_move`; state: `nav_opens_in_place`.
 **Test code (contracts):** walking.spec: replace 'destination and ground clicks keep a continuous walk cycle…' with `map clicks never move the investigator; destination buttons open the page in place`: after start, last sample = {frame 'down-0', x 244, y 276}; click the canvas at game (300,204), sample 600 ms: every sample x 244, y 276, frame 'down-0'; click the canvas at game (116,120) (on Momo): `#panel h2` stays 'A bunch of trouble.' and position unchanged; click `nav [data-go="momo"]`: `#panel h2` 'Momo', position still (244,276). Add `the banana basket sits on the picnic blanket`: a scene child with texture key 'jungle' and frame name 'basket' exists at x 244, y 221, depth 216. In 'monkeys react on approach…' drop the two `#skip-walking` lines and replace the final canvas click with `page.keyboard.press('e')` (still expects `#panel h2` 'Momo'). Remove every other `#skip-walking` line in walking/cases/provenance/investigation specs; investigation.spec's `toBeChecked()` becomes `toHaveCount(0)`. Regenerate the grove baseline with `npx playwright test grove-look.spec.mjs --update-snapshots --output=...`, Read the PNG and confirm the basket with bananas is on the blanket and nothing else changed, then run grove-look again without the flag: PASS.
 **Steps:** 1 edit specs, 2 `npm run build`, 3 run walking, investigation, cases, provenance, grove-look specs: PASS.
-**Notes:** helpers in the spec already reach the scene through `window.walkingTestGame`. Do not edit client code; report a client defect as DONE_WITH_CONCERNS.
+**Notes:** edge T2 -> T3: these specs run T2's built client. Do not edit client code; report a client defect as DONE_WITH_CONCERNS.
 
 ## Section: docs
 
@@ -148,12 +148,6 @@ App type: docs. Categories: none.
 **Steps:** 1 edit, 2 run the checks: PASS.
 **Notes:** README: in the `.env` block set `OVERRIDE_LLM_MODEL=zai-org/GLM-5.3-Flash` and add `OVERRIDE_LLM_REASONING_EFFORT=low`; after the block add: "`OVERRIDE_LLM_REASONING_EFFORT` (`low`, `medium` or `high`) is sent as `reasoning_effort`; leave it empty for a model that does not accept it. With GLM 5.3 Flash, `low` keeps the reasoning players can inspect to a few lines. In an endpoints file the field is `reasoningEffort`." Add to Live interviews: "The game is English only: the UI is written in English, and both prompts tell characters to answer in English whatever language the question is in (`interview-v4`, `thread-v2`)." Env table: after the `OVERRIDE_LLM_MAX_COMPLETION_TOKENS` row add `| \`OVERRIDE_LLM_REASONING_EFFORT\` | empty | \`low\`, \`medium\` or \`high\`, sent as \`reasoning_effort\`; empty sends nothing. |`. Replace the first two sentences of the walking paragraph ("Click a monkey, signpost … reduced-motion preferences.") with "Walk with WASD or the arrow keys, and press E or Space next to a monkey, the signpost or the start marker. Clicking the map does not move the investigator; the destination buttons open a conversation or your guess straight away. A basket of bananas sits on the picnic blanket." DEPLOY.md: in the env block set the model to `zai-org/GLM-5.3-Flash` and add `OVERRIDE_LLM_REASONING_EFFORT=low` under it.
 
-## Review Focus
-
-- server (T1): protocol, encoding, state; cases as listed in T1.
-- client (T2): protocol (input), encoding (copy).
-- browser (T3): protocol, state.
-
 ## Self-review
 
-Coverage: D1 T2+T3, D2 T2+T3+T4, D3 T1+T4, D4 T1+T4. No placeholders. T1 and T2 share no file; T3 only tests; T4 only docs. Edges: T3 runs T2's built client; T4 describes T1/T2 output.
+Coverage: D1 T2+T3, D2 T2+T3+T4, D3 T1+T4, D4 T1+T4. No shared files. Review Focus per section above.
