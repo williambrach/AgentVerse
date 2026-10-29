@@ -49,7 +49,7 @@ test('research events use the new case version; reset keeps the previous session
     assert.equal(event.sequence, i + 1);
     assert.equal(event.sessionId, originalId);
     assert.equal(event.caseVersion, 'banana-authored-v2.0.0');
-    assert.equal(event.promptVersion, 'interview-v3');
+    assert.equal(event.promptVersion, 'interview-v4');
     assert.equal(event.revealedPosition, null);
     assert.equal(event.selectedEvidence, null);
     assert.notEqual(event.type, 'story_revealed');
@@ -481,7 +481,7 @@ test('prompt names the role once', () => {
     assert.ok(system.includes(`You play ${c.name} (${c.role})`));
     assert.equal(system.includes('the The'), false);
   }
-  assert.ok(buildMessages(cases[0], session, 'momo', 'Why?')[0].content.startsWith('You play Momo (The planner), a monkey in an authored two-minute banana mystery (banana-authored-v2.0.0, interview-v3).'));
+  assert.ok(buildMessages(cases[0], session, 'momo', 'Why?')[0].content.startsWith('You play Momo (The planner), a monkey in an authored two-minute banana mystery (banana-authored-v2.0.0, interview-v4).'));
 });
 
 test('a draft case id is rejected like an unknown one, with no log file', async t => {
@@ -510,9 +510,9 @@ import { createHash } from 'node:crypto';
 import { towerCase } from './fixtures/minimal-case.mjs';
 const sha = s => createHash('sha256').update(s).digest('hex').slice(0, 16);
 const blank = kase => ({ interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])) });
-test('grove prompts are pinned (interview-v3)', () => {
-  assert.equal(sha(buildMessages(cases[0], blank(cases[0]), 'momo', 'Why?')[0].content), '6010c893156e90b5');
-  assert.equal(sha(buildMessages(bananaControl, blank(bananaControl), 'momo', 'Why?')[0].content), '4ddacf4e8ed68d81');
+test('grove prompts are pinned (interview-v4)', () => {
+  assert.equal(sha(buildMessages(cases[0], blank(cases[0]), 'momo', 'Why?')[0].content), 'a8b98dc5a722e0a4');
+  assert.equal(sha(buildMessages(bananaControl, blank(bananaControl), 'momo', 'Why?')[0].content), '3f5f9c1ac821a032');
 });
 test('tower prompt asks for a little wizard personality', () => {
   const k = defineCase(towerCase());

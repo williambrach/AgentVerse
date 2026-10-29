@@ -10,7 +10,7 @@ test('prints the system prompt for a case and character', () => {
   const r = run('banana-mystery', 'momo');
   assert.equal(r.status, 0, r.stderr);
   assert.ok(r.stdout.startsWith('--- system'));
-  assert.ok(r.stdout.includes('You play Momo (The planner), a monkey in an authored two-minute banana mystery (banana-authored-v2.0.0, interview-v3).'));
+  assert.ok(r.stdout.includes('You play Momo (The planner), a monkey in an authored two-minute banana mystery (banana-authored-v2.0.0, interview-v4).'));
   assert.ok(!r.stdout.includes('the The'));
 });
 

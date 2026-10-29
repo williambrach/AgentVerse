@@ -15,7 +15,7 @@ test('thread_time_order: interviews and thread lines are numbered in time order'
   const [sys, user] = buildThreadMessages(kase, sess(), 'momo');
   assert.match(sys.content, /You play Momo/);
   assert.equal(user.content, '{"thread":[{"post":1,"author":"Momo","text":"A1"},{"post":2,"author":"Pip","text":"P1"}]}');
-  assert.equal(threadPromptVersion, 'thread-v1');
+  assert.equal(threadPromptVersion, 'thread-v2');
 });
 
 test('thread_has_no_questions: no question text reaches the prompt', () => {
@@ -45,8 +45,8 @@ test('answerThread: rehearsal uses the case chatter or a fallback, live passes m
 });
 
 test('interview prompt and promptVersion are pinned', () => {
-  const expected = { 'banana-mystery': '658e9a520d4161e5', 'tower-echo-bell': '831734bffcf4d128' };
-  assert.equal(promptVersion, 'interview-v3');
+  const expected = { 'banana-mystery': '678a8830e0ffb635', 'tower-echo-bell': 'd58b6c937098f0cb' };
+  assert.equal(promptVersion, 'interview-v4');
   for (const k of cases) {
     const id = k.characters[0].id;
     const s = { interviews: { [id]: [{ question: 'Q1?', answer: 'A1', timestamp: 't' }] } };

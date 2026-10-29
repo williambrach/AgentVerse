@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { modelConfig, loadEndpoints, buildMessages, answerInterview, InterviewProviderError } from '../server/interviews.mjs';
+import { modelConfig, loadEndpoints, buildMessages, buildThreadMessages, answerInterview, InterviewProviderError } from '../server/interviews.mjs';
 import { InterviewProviderError as FromErrors } from '../server/errors.mjs';
 import { LlmRouter } from '../server/llm.mjs';
 import { cases } from '../server/cases/index.mjs';
@@ -31,7 +31,7 @@ const okJson = (body, status = 200) => ({ ok: true, status, json: async () => bo
 
 test('modelConfig defaults to rehearsal', () => {
   assert.deepEqual(modelConfig({}), {
-    mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'interview-v3', maxCompletionTokens: 2048, timeoutMs: 60000,
+    mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'interview-v4', maxCompletionTokens: 2048, timeoutMs: 60000,
     maxInFlight: 200, failover: { failures: 5, windowMs: 30000 },
   });
 });
@@ -40,7 +40,7 @@ test('legacy variables form endpoint a', () => {
   const config = modelConfig({ OVERRIDE_LLM_API_KEY: 'k', OVERRIDE_LLM_MODEL: 'm' });
   assert.equal(config.mode, 'live'); assert.equal(config.model, 'm');
   assert.match(config.endpointsHash, /^[0-9a-f]{16}$/);
-  assert.deepEqual(config.endpoints, [{ name: 'a', baseUrl: 'https://api.openai.com/v1', model: 'm', key: 'k', keyEnv: 'OVERRIDE_LLM_API_KEY', maxInFlight: 200, tokenParam: 'max_completion_tokens', timeoutMs: 60000, temperature: null }]);
+  assert.deepEqual(config.endpoints, [{ name: 'a', baseUrl: 'https://api.openai.com/v1', model: 'm', key: 'k', keyEnv: 'OVERRIDE_LLM_API_KEY', maxInFlight: 200, tokenParam: 'max_completion_tokens', timeoutMs: 60000, temperature: null, reasoningEffort: null }]);
   const tuned = modelConfig({ ...live, OVERRIDE_LLM_TIMEOUT_MS: '30000', OVERRIDE_LLM_MAX_IN_FLIGHT: '40', OVERRIDE_LLM_FAILOVER_FAILURES: '3', OVERRIDE_LLM_FAILOVER_WINDOW_MS: '10000', OVERRIDE_LLM_BASE_URL: 'https://inference.example/v1/' });
   assert.deepEqual([tuned.endpoints[0].timeoutMs, tuned.endpoints[0].maxInFlight, tuned.maxInFlight, tuned.failover, tuned.endpoints[0].baseUrl], [30000, 40, 40, { failures: 3, windowMs: 10000 }, 'https://inference.example/v1']);
 });
@@ -48,7 +48,7 @@ test('legacy variables form endpoint a', () => {
 test('loadEndpoints reads a file, applies defaults and resolves keys from the environment', () => {
   const read = path => { assert.equal(path, '/e.json'); return ENDPOINTS; };
   const { endpoints, hash } = loadEndpoints({ OVERRIDE_ENDPOINTS: '/e.json', OVERRIDE_ENDPOINT_A_KEY: 'ka' }, read);
-  assert.deepEqual(endpoints, [{ name: 'a', baseUrl: 'https://a.test/v1', model: 'ma', key: 'ka', keyEnv: 'OVERRIDE_ENDPOINT_A_KEY', maxInFlight: 50, tokenParam: 'max_completion_tokens', timeoutMs: 25000, temperature: null }]);
+  assert.deepEqual(endpoints, [{ name: 'a', baseUrl: 'https://a.test/v1', model: 'ma', key: 'ka', keyEnv: 'OVERRIDE_ENDPOINT_A_KEY', maxInFlight: 50, tokenParam: 'max_completion_tokens', timeoutMs: 25000, temperature: null, reasoningEffort: null }]);
   assert.match(hash, /^[0-9a-f]{16}$/);
 });
 
@@ -209,4 +209,32 @@ test('buildMessages keeps character knowledge, and history separate', () => {
   assert.ok(messages[0].content.includes(kase.knowledge.momo[0]));
   assert.doesNotMatch(messages[0].content, /PUBLIC RECORDS|presentedEvidence/);
   assert.ok(!buildMessages(kase, s, 'pip', 'Q2').some(m => m.content === 'A1'));
+});
+
+test('legacy_effort', () => {
+  const base = { OVERRIDE_LLM_API_KEY: 'k', OVERRIDE_LLM_MODEL: 'm' };
+  assert.equal(modelConfig({ ...base, OVERRIDE_LLM_REASONING_EFFORT: 'low' }).endpoints[0].reasoningEffort, 'low');
+  assert.equal(modelConfig(base).endpoints[0].reasoningEffort, null);
+  assert.equal(modelConfig({ ...base, OVERRIDE_LLM_REASONING_EFFORT: ' low ' }).endpoints[0].reasoningEffort, 'low');
+  assert.equal(modelConfig({ ...base, OVERRIDE_LLM_REASONING_EFFORT: '' }).endpoints[0].reasoningEffort, null);
+  for (const v of ['max', 'LOW']) assert.throws(() => modelConfig({ ...base, OVERRIDE_LLM_REASONING_EFFORT: v }), /OVERRIDE_LLM_REASONING_EFFORT must be low, medium or high\./);
+});
+
+test('endpoints_effort', () => {
+  const load = patch => loadEndpoints({ OVERRIDE_ENDPOINTS: '/e', K: 'k' }, () => JSON.stringify([{ name: 'a', baseUrl: 'https://a.test/v1', model: 'ma', keyEnv: 'K', ...patch }])).endpoints[0].reasoningEffort;
+  assert.equal(load({ reasoningEffort: 'low' }), 'low');
+  assert.equal(load({}), null);
+  assert.equal(load({ reasoningEffort: null }), null);
+  assert.throws(() => load({ reasoningEffort: 'max' }), /Endpoint a: reasoningEffort must be low, medium or high\./);
+  assert.throws(() => load({ reasoningEffort: 5 }), /Endpoint a: reasoningEffort must be low, medium or high\./);
+});
+
+test('hash_changes_with_effort', () => {
+  const hash = patch => loadEndpoints({ OVERRIDE_ENDPOINTS: '/e', K: 'k' }, () => JSON.stringify([{ name: 'a', baseUrl: 'https://a.test/v1', model: 'ma', keyEnv: 'K', ...patch }])).hash;
+  assert.notEqual(hash({ reasoningEffort: 'low' }), hash({}));
+});
+
+test('english_prompts', () => {
+  assert.ok(buildMessages(kase, { interviews: { momo: [], pip: [], nori: [] } }, 'momo', 'Why?')[0].content.includes('Always answer in English, even if the question is in another language, and do not comment on the language.'));
+  assert.ok(buildThreadMessages(kase, { interviews: { momo: [], pip: [], nori: [] } }, 'momo')[0].content.includes('Always write in English.'));
 });

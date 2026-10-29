@@ -84,7 +84,7 @@ test('chatter_line_provenance', async t => {
   const view = await x.act('continue');
   const line = x.log().find(e => e.type === 'chatter_line');
   assert.deepEqual(line.provenance, prov);
-  assert.equal(line.threadPromptVersion, 'thread-v1');
+  assert.equal(line.threadPromptVersion, 'thread-v2');
   assert.ok(!JSON.stringify(view).includes('TR'));
   const speaker = line.character;
   const v = await x.act('inspect', { character: speaker });

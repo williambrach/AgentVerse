@@ -37,7 +37,7 @@ export class LlmRouter {
   }) {
     this.eps = endpoints.map(e => ({
       ...e, baseUrl: e.baseUrl.replace(/\/$/, ''), host: new URL(e.baseUrl).host, maxInFlight: e.maxInFlight ?? 50,
-      tokenParam: e.tokenParam || 'max_completion_tokens', timeoutMs: e.timeoutMs ?? 25_000, temperature: e.temperature ?? null,
+      tokenParam: e.tokenParam || 'max_completion_tokens', timeoutMs: e.timeoutMs ?? 25_000, temperature: e.temperature ?? null, reasoningEffort: e.reasoningEffort ?? null,
       inFlight: 0, failureTimes: [], recent: [], lastSuccessAt: null, lastFailureAt: null, lastFailureReason: null, lastAlertAt: -Infinity,
     }));
     Object.assign(this, { maxInFlight, deadlineMs, maxCompletionTokens, failover, fetcher, now });
@@ -134,8 +134,8 @@ export class LlmRouter {
   // One HTTP call. Never throws: returns {ok, ...} so callers can trace every outcome.
   async call(idx, messages, budget, deadline) {
     const ep = this.eps[idx];
-    const params = { [ep.tokenParam]: budget, temperature: ep.temperature };
-    const body = { model: ep.model, messages, [ep.tokenParam]: budget, ...(ep.temperature === null ? {} : { temperature: ep.temperature }) };
+    const params = { [ep.tokenParam]: budget, temperature: ep.temperature, ...(ep.reasoningEffort ? { reasoning_effort: ep.reasoningEffort } : {}) };
+    const body = { model: ep.model, messages, [ep.tokenParam]: budget, ...(ep.temperature === null ? {} : { temperature: ep.temperature }), ...(ep.reasoningEffort ? { reasoning_effort: ep.reasoningEffort } : {}) };
     const remaining = Math.max(1, deadline.endsAt - this.now());
     const signal = AbortSignal.any([deadline.signal, AbortSignal.timeout(Math.min(ep.timeoutMs, remaining))]);
     const started = this.now();
@@ -210,7 +210,7 @@ export class LlmRouter {
       promptTokens: Number.isInteger(u?.prompt_tokens) ? u.prompt_tokens : null,
       completionTokens: Number.isInteger(u?.completion_tokens) ? u.completion_tokens : null,
       reasoningTokens: Number.isInteger(u?.completion_tokens_details?.reasoning_tokens) ? u.completion_tokens_details.reasoning_tokens : null,
-      samplingParams: result?.params ?? { [ep.tokenParam]: null, temperature: ep.temperature }, traceIds: track.traceIds, semanticRetry: track.semanticRetry,
+      samplingParams: result?.params ?? { [ep.tokenParam]: null, temperature: ep.temperature, ...(ep.reasoningEffort ? { reasoning_effort: ep.reasoningEffort } : {}) }, traceIds: track.traceIds, semanticRetry: track.semanticRetry,
     };
   }
   fail(code, track, idx, result) {

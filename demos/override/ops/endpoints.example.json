@@ -1,6 +1,6 @@
 [
-  { "name": "a", "baseUrl": "https://llm-a.example.com/v1", "model": "model-a", "keyEnv": "OVERRIDE_ENDPOINT_A_KEY", "maxInFlight": 50, "timeoutMs": 25000, "temperature": 0.7, "tokenParam": "max_completion_tokens" },
-  { "name": "b", "baseUrl": "https://llm-b.example.com/v1", "model": "model-b", "keyEnv": "OVERRIDE_ENDPOINT_B_KEY", "maxInFlight": 50, "timeoutMs": 25000, "temperature": 0.7, "tokenParam": "max_completion_tokens" },
-  { "name": "c", "baseUrl": "https://llm-c.example.com/v1", "model": "model-c", "keyEnv": "OVERRIDE_ENDPOINT_C_KEY", "maxInFlight": 50, "timeoutMs": 25000, "temperature": 0.7, "tokenParam": "max_tokens" },
-  { "name": "d", "baseUrl": "https://llm-d.example.com/v1", "model": "model-d", "keyEnv": "OVERRIDE_ENDPOINT_D_KEY", "maxInFlight": 50, "timeoutMs": 25000, "temperature": 0.7, "tokenParam": "max_completion_tokens" }
+  { "name": "a", "baseUrl": "https://llm-a.example.com/v1", "model": "model-a", "keyEnv": "OVERRIDE_ENDPOINT_A_KEY", "maxInFlight": 50, "timeoutMs": 25000, "temperature": 0.7, "reasoningEffort": "low", "tokenParam": "max_completion_tokens" },
+  { "name": "b", "baseUrl": "https://llm-b.example.com/v1", "model": "model-b", "keyEnv": "OVERRIDE_ENDPOINT_B_KEY", "maxInFlight": 50, "timeoutMs": 25000, "temperature": 0.7, "reasoningEffort": "low", "tokenParam": "max_completion_tokens" },
+  { "name": "c", "baseUrl": "https://llm-c.example.com/v1", "model": "model-c", "keyEnv": "OVERRIDE_ENDPOINT_C_KEY", "maxInFlight": 50, "timeoutMs": 25000, "temperature": 0.7, "reasoningEffort": "low", "tokenParam": "max_tokens" },
+  { "name": "d", "baseUrl": "https://llm-d.example.com/v1", "model": "model-d", "keyEnv": "OVERRIDE_ENDPOINT_D_KEY", "maxInFlight": 50, "timeoutMs": 25000, "temperature": 0.7, "reasoningEffort": "low", "tokenParam": "max_completion_tokens" }
 ]

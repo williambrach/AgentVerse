@@ -400,3 +400,18 @@ test('an internal throw after a fetch still frees the slot', async () => {
   assert.equal(r.snapshot().endpoints[0].inFlight, 0);
   await r.idle();
 });
+
+test('effort_sent_only_when_set', async () => {
+  const f = fakeFetch({});
+  await new LlmRouter({ endpoints: [ep('a', { reasoningEffort: 'low' })], fetcher: f.fetcher }).complete({ messages: MSGS });
+  assert.equal(f.calls[0].body.reasoning_effort, 'low');
+  const g = fakeFetch({});
+  const out = await new LlmRouter({ endpoints: [ep('a')], fetcher: g.fetcher }).complete({ messages: MSGS });
+  assert.ok(!('reasoning_effort' in g.calls[0].body));
+  assert.ok(!('reasoning_effort' in out.provenance.samplingParams));
+  let n = 0;
+  const h = fakeFetch({ a: () => (++n === 1 ? length() : ok('Done.')) });
+  const o2 = await new LlmRouter({ endpoints: [ep('a', { reasoningEffort: 'low' })], fetcher: h.fetcher }).complete({ messages: MSGS });
+  assert.deepEqual(h.calls.map(c => c.body.reasoning_effort), ['low', 'low']);
+  assert.equal(o2.provenance.samplingParams.reasoning_effort, 'low');
+});
