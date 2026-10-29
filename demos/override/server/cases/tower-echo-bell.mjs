@@ -5,9 +5,9 @@ import { defineCase } from '../cases.mjs';
 export default defineCase({
   id: 'tower-echo-bell',
   version: 'tower-echo-bell-v1.0.0',
-  order: 5,
+  order: 2,
   world: 'tower',
-  status: 'draft',
+  status: 'ready',
   title: 'Lanterns Too Soon',
   copy: {
     headline: 'Was it time?',

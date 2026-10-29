@@ -4,7 +4,7 @@ import echo from '../server/cases/tower-echo-bell.mjs';
 const base = { selectedEvidence: null, revealedPosition: 1 };
 const shown = e => ({ ...base, selectedEvidence: e });
 test('echo bell is an honest mistake with no culprit', () => {
-  assert.equal(echo.status, 'draft'); assert.equal(echo.world.id, 'tower');
+  assert.equal(echo.status, 'ready'); assert.equal(echo.world.id, 'tower');
   assert.deepEqual(echo.answer.culprits, []);
   assert.deepEqual(echo.records.map(r => r.id), ['rule', 'shell', 'headmistress']);
   for (const list of Object.values(echo.knowledge)) for (const s of list) assert.doesNotMatch(s, /\b(lie|lied|lying|made up)\b/);

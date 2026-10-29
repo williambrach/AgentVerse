@@ -42,7 +42,7 @@ test('unknown world is the grove', () => {
 test('catalog rows name their world', () => {
   const rows = listCases(cases, { dev: true });
   assert.equal(rows.find(r => r.id === 'banana-mystery').world, 'grove');
-  assert.equal(rows.find(r => r.id === 'tower-bell-charm').world, 'tower');
+  assert.equal(rows.find(r => r.id === 'tower-echo-bell').world, 'tower');
 });
 
 test('the tower measures its art; the grove keeps its tuned tables', () => {
