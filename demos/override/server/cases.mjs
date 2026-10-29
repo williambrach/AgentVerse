@@ -108,7 +108,7 @@ export function publicView(kase) {
 const visible = (cases, dev) => cases.filter(c => dev || c.status === 'ready').sort((a, b) => a.order - b.order);
 
 export function listCases(cases, { dev = false } = {}) {
-  return visible(cases, dev).map(c => ({ id: c.id, title: c.title, lead: c.copy.intro.lead, order: c.order }));
+  return visible(cases, dev).map(c => ({ id: c.id, title: c.title, lead: c.copy.intro.lead, order: c.order, world: c.world.id }));
 }
 
 export function findCase(cases, id, { dev = false } = {}) {

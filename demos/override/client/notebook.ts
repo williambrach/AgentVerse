@@ -1,5 +1,4 @@
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const pageOrder = ['briefing', 'replay', 'momo', 'pip', 'nori', 'evidence', 'report'];
 let previousKey = '';
 let previousMarkup = '';
 let focus: { id: string; start?: number; end?: number } | null = null;
@@ -17,7 +16,7 @@ reducedMotion.addEventListener('change', () => {
 });
 
 /** Animate changes once, while keeping the reader's position and unfinished input. */
-export function renderNotebook(target: HTMLElement, markup: string, key: string, section: string) {
+export function renderNotebook(target: HTMLElement, markup: string, key: string, section: string, order: string[]) {
   if (key === previousKey && markup === previousMarkup) return false;
   const changedPage = key !== previousKey;
   const oldPage = target.querySelector<HTMLElement>('.notebook-page');
@@ -50,7 +49,7 @@ export function renderNotebook(target: HTMLElement, markup: string, key: string,
   const fresh = [...target.querySelectorAll<HTMLElement>('[data-motion-key]')].filter(el => !existing.has(el.dataset.motionKey));
   if (changedPage) {
     const oldSection = previousKey.split(':')[1];
-    const direction = pageOrder.indexOf(section) >= pageOrder.indexOf(oldSection) ? 1 : -1;
+    const direction = order.indexOf(section) >= order.indexOf(oldSection) ? 1 : -1;
     animate(page, [
       { opacity: .35, transform: `perspective(1200px) translateX(${direction * 24}px) rotateY(${direction * -9}deg)` },
       { opacity: 1, transform: 'perspective(1200px) translateX(0) rotateY(0deg)' },

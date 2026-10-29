@@ -1,8 +1,12 @@
 import type Phaser from 'phaser';
-import type { CharacterId } from './types';
+
+export type Frame = { x: number; y: number; w: number; h: number; anchorX: number; anchorY: number };
+export type IdleSpec = { textureKey: string; poses: Frame[]; scale: number; period: number; offset: number };
 
 const textureKey = 'monkey-idle';
 const cellSize = 362;
+const periods = [4800, 4300, 5600];
+const offsets = [0, 1200, 2600];
 const characters = {
   momo: { row: 0, height: 47, sourceHeight: 317, period: 4800, offset: 0,
     anchors: [[169, 354], [169.5, 354], [169.5, 354], [171, 354]] },
@@ -10,6 +14,32 @@ const characters = {
     anchors: [[169.5, 332], [169, 332], [169, 332], [170, 332]] },
   nori: { row: 2, height: 44, sourceHeight: 310, period: 5600, offset: 2600,
     anchors: [[169.5, 313], [169.5, 314], [169.5, 314], [171, 314]] },
+};
+
+/** Idle spec for a cast slot: scale fits the tallest pose to `height`. */
+export function idleSpec(poses: Frame[], textureKey: string, height: number, slot: number): IdleSpec {
+  return {
+    textureKey, poses,
+    scale: height / Math.max(...poses.map((pose) => pose.h)),
+    period: periods[slot], offset: offsets[slot],
+  };
+}
+
+function groveSpec(config: typeof characters.momo): IdleSpec {
+  return {
+    textureKey,
+    poses: config.anchors.map(([anchorX, anchorY], pose) => ({
+      x: pose * cellSize, y: config.row * cellSize, w: cellSize, h: cellSize, anchorX, anchorY,
+    })),
+    scale: config.height / config.sourceHeight,
+    period: config.period, offset: config.offset,
+  };
+}
+
+export const groveIdle: Record<string, IdleSpec> = {
+  momo: groveSpec(characters.momo),
+  pip: groveSpec(characters.pip),
+  nori: groveSpec(characters.nori),
 };
 
 export function loadMonkeyIdle(scene: Phaser.Scene) {
@@ -23,15 +53,23 @@ export class MonkeyIdle {
   private reactionMs: number | null = null;
   private wasNearby = false;
 
-  constructor(scene: Phaser.Scene, private id: CharacterId, readonly x: number, readonly y: number) {
-    const config = characters[id];
-    const texture = scene.textures.get(textureKey);
-    for (let pose = 0; pose < 4; pose++) {
+  readonly x: number;
+  readonly y: number;
+  private id: string;
+  private spec: IdleSpec;
+
+  constructor(scene: Phaser.Scene, id: string, x: number, y: number, spec: IdleSpec = groveIdle[id]) {
+    this.id = id;
+    this.x = x;
+    this.y = y;
+    this.spec = spec;
+    const texture = scene.textures.get(spec.textureKey);
+    spec.poses.forEach((frame, pose) => {
       const name = `${id}-${pose}`;
-      if (!texture.has(name)) texture.add(name, 0, pose * cellSize, config.row * cellSize, cellSize, cellSize);
-    }
-    this.sprite = scene.add.sprite(x, y, textureKey, `${id}-0`)
-      .setScale(config.height / config.sourceHeight).setDepth(y);
+      if (!texture.has(name)) texture.add(name, 0, frame.x, frame.y, frame.w, frame.h);
+    });
+    this.sprite = scene.add.sprite(x, y, spec.textureKey, `${id}-0`)
+      .setScale(spec.scale).setDepth(y);
     this.reset();
   }
 
@@ -62,7 +100,7 @@ export class MonkeyIdle {
       this.reactionMs = null;
     }
 
-    const { period, offset } = characters[this.id];
+    const { period, offset } = this.spec;
     const phase = (this.elapsed + offset) % period;
     let pose = 0;
     if (phase >= 1000 && phase < 1150) pose = 1;
@@ -71,7 +109,7 @@ export class MonkeyIdle {
   }
 
   private showPose(pose: number) {
-    const [anchorX, anchorY] = characters[this.id].anchors[pose];
-    this.sprite.setFrame(`${this.id}-${pose}`).setOrigin(anchorX / cellSize, anchorY / cellSize);
+    const { anchorX, anchorY, w, h } = this.spec.poses[pose];
+    this.sprite.setFrame(`${this.id}-${pose}`).setOrigin(anchorX / w, anchorY / h);
   }
 }

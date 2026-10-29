@@ -1,32 +1,53 @@
 import Phaser from 'phaser';
-import type { LocationId } from './types';
-import { DetectiveWalk, loadDetectiveWalk, type WalkDirection } from './detective-walk';
-import { MonkeyIdle, loadMonkeyIdle } from './monkey-idle';
+import type { Character, LocationId } from './types';
+import { DetectiveWalk, groveWalk, walkSpec, type WalkDirection, type WalkSpec } from './detective-walk';
+import { MonkeyIdle, groveIdle, idleSpec, type IdleSpec } from './monkey-idle';
+import { sliceAtlas, type Frame } from './atlas';
+import { placeholderAtlas } from './placeholder-art';
+import { worldFor, type WorldPack } from './worlds';
 
 type Point = { x: number; y: number };
-const stops: Record<LocationId, Point & { title: string; label: string }> = {
-  momo: { x: 116, y: 156, title: 'Ask Momo', label: 'MOMO' },
-  pip: { x: 364, y: 156, title: 'Ask Pip', label: 'PIP' },
-  nori: { x: 364, y: 268, title: 'Ask Nori', label: 'NORI' },
-  replay: { x: 244, y: 236, title: 'Inspect the banana basket', label: 'BANANA BASKET' },
-  evidence: { x: 68, y: 220, title: 'Review your clues', label: 'CLUES' },
-  report: { x: 132, y: 276, title: 'Choose your suspect', label: 'YOUR GUESS' },
-  briefing: { x: 244, y: 276, title: 'Read the case', label: 'START HERE' },
-};
+type Stop = Point & { title: string; label: string };
+type ArtKind = 'cast' | 'idle' | 'walk' | 'props';
+export type ArtSource = 'file' | 'placeholder';
+const artKinds: ArtKind[] = ['cast', 'idle', 'walk', 'props'];
+const atlasDims: Record<ArtKind, [number, number]> = { cast: [4, 4], idle: [4, 3], walk: [4, 4], props: [2, 2] };
+const slotPoints: Point[] = [{ x: 116, y: 156 }, { x: 364, y: 156 }, { x: 364, y: 268 }];
+const groveColors = ['#cf7a4a', '#6e9a5c', '#9a85c2'];
+const groveCast: Character[] = ['Momo', 'Pip', 'Nori'].map((name, i) => ({
+  id: name.toLowerCase(), name, role: '', room: '', color: groveColors[i], introduction: '', quickQuestion: '',
+}));
+
+function buildStops(world: WorldPack, cast: Character[]): Record<string, Stop> {
+  const stops: Record<string, Stop> = {
+    replay: { x: 244, y: 236, title: world.text.clueTitle, label: world.text.clueLabel },
+    evidence: { x: 68, y: 220, title: 'Review your clues', label: 'CLUES' },
+    report: { x: 132, y: 276, title: 'Choose your suspect', label: 'YOUR GUESS' },
+    briefing: { x: 244, y: 276, title: 'Read the case', label: 'START HERE' },
+  };
+  cast.forEach((c, slot) => { stops[c.id] = { ...slotPoints[slot], title: `Ask ${c.name}`, label: c.name.toUpperCase() }; });
+  return stops;
+}
+const keyOf = (world: WorldPack, cast: Character[]) => `${world.id}|${cast.map(c => c.id).join(',')}`;
+function artKeys(world: WorldPack): Record<ArtKind, string> {
+  if (world.id === 'grove') return { cast: 'grove-cast', idle: 'monkey-idle', walk: 'detective-walk', props: 'jungle' };
+  return { cast: `${world.id}-cast`, idle: `${world.id}-idle`, walk: `${world.id}-walk`, props: `${world.id}-props` };
+}
 const grid = 8;
 const width = 480;
 const height = 340;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const treeSpots = [[18, 99, 98], [77, 78, 96], [149, 68, 90], [225, 55, 94], [303, 67, 98], [385, 77, 96], [465, 105, 105], [12, 185, 90], [472, 197, 94], [12, 292, 96], [473, 301, 100], [55, 362, 99], [214, 382, 95], [434, 365, 98]];
 
 export class Station extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Image;
   private avatar!: Phaser.GameObjects.Sprite;
   private walk!: DetectiveWalk;
   private shadow!: Phaser.GameObjects.Ellipse;
-  private npcs = new Map<LocationId, MonkeyIdle>();
+  private npcs = new Map<string, MonkeyIdle>();
   private blocked = new Set<string>();
   private route: Point[] = [];
-  private destination: LocationId | null = null;
+  private destination: string | null = null;
   private marker!: Phaser.GameObjects.Arc;
   private prompt!: Phaser.GameObjects.Text;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -35,33 +56,155 @@ export class Station extends Phaser.Scene {
   private currentHint = '';
   private direction: WalkDirection = 'down';
 
-  constructor(private onArrival: (location: LocationId) => void, private onHint: (hint: string) => void) { super('banana-grove'); }
+  worldId = 'grove';
+  artSources: Record<ArtKind, ArtSource> = { cast: 'file', idle: 'file', walk: 'file', props: 'file' };
+  private onArrival: (location: LocationId) => void;
+  private onHint: (hint: string) => void;
+  private world: WorldPack = worldFor('grove');
+  private cast: Character[] = groveCast;
+  private stops: Record<string, Stop> = buildStops(this.world, this.cast);
+  private builtKey = '';
+  private created = false;
+  private placeholders = new Set<string>();
+  private slices = new Map<string, Frame[]>();
+  private towerProps: Record<string, Frame> = {};
+
+  constructor(onArrival: (location: LocationId) => void, onHint: (hint: string) => void) {
+    super('banana-grove');
+    this.onArrival = onArrival;
+    this.onHint = onHint;
+  }
+
+  /** Switch world or cast: a no-op when both are unchanged, otherwise the scene restarts. */
+  configure(world: WorldPack, cast: Character[]) {
+    const next = cast.slice(0, slotPoints.length);
+    if (keyOf(world, next) === keyOf(this.world, this.cast)) return;
+    this.world = world;
+    this.cast = next;
+    this.worldId = world.id;
+    if (this.created) this.scene.restart({ world, cast: next });
+  }
+
+  init(data?: { world?: WorldPack; cast?: Character[] }) {
+    if (data?.world) this.world = data.world;
+    if (data?.cast) this.cast = data.cast.slice(0, slotPoints.length);
+    this.worldId = this.world.id;
+    this.builtKey = keyOf(this.world, this.cast);
+    this.stops = buildStops(this.world, this.cast);
+    this.created = false;
+    this.npcs = new Map();
+    this.blocked = new Set();
+    this.route = [];
+    this.destination = null;
+    this.player = undefined as unknown as Phaser.Physics.Arcade.Image;
+    this.currentHint = '';
+  }
 
   preload() {
-    loadDetectiveWalk(this);
-    loadMonkeyIdle(this);
-    this.load.image('jungle', '/assets/banana/jungle-props.png');
+    // A missing file (404, or HTML served by the dev server) fails the load and leaves no
+    // texture; create() then draws the placeholder for it.
+    const keys = artKeys(this.world);
+    // A placeholder would block the loader (it skips keys already in the texture cache) and keep
+    // stale colours, so drop it and let the file try again.
+    artKinds.forEach(kind => {
+      if (!this.placeholders.has(keys[kind])) return;
+      this.textures.remove(keys[kind]);
+      this.placeholders.delete(keys[kind]);
+      this.slices.delete(keys[kind]);
+    });
+    artKinds.forEach(kind => this.load.image(keys[kind], this.world.art[kind]));
+  }
+
+  /** Make sure each of the world's four textures exists: the file, or a code-drawn placeholder. */
+  private prepareArt() {
+    const keys = artKeys(this.world);
+    const colors = this.cast.map(c => c.color);
+    artKinds.forEach(kind => {
+      const key = keys[kind];
+      if (this.textures.exists(key) && !this.placeholders.has(key)) {
+        const image = this.textures.get(key).getSourceImage() as { width: number; height: number };
+        if (image.width > 0 && image.height > 0) { this.artSources[kind] = 'file'; return; }
+        this.textures.remove(key);
+        this.slices.delete(key);
+      }
+      if (!this.placeholders.has(key)) {
+        const atlas = placeholderAtlas(kind, kind === 'cast' || kind === 'idle' ? colors : []);
+        const canvas = document.createElement('canvas');
+        canvas.width = atlas.width; canvas.height = atlas.height;
+        canvas.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(atlas.data), atlas.width, atlas.height), 0, 0);
+        this.textures.addCanvas(key, canvas);
+        this.placeholders.add(key);
+      }
+      this.artSources[kind] = 'placeholder';
+    });
+  }
+
+  /** Frames measured from the texture's alpha, so regenerated art needs no tuned anchors. */
+  private framesOf(kind: ArtKind, key: string): Frame[] {
+    const cached = this.slices.get(key);
+    if (cached) return cached;
+    const image = this.textures.get(key).getSourceImage() as CanvasImageSource & { width: number; height: number };
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width; canvas.height = image.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(image, 0, 0);
+    const rgba = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const alpha = new Uint8Array(canvas.width * canvas.height);
+    for (let i = 0; i < alpha.length; i++) alpha[i] = rgba[i * 4 + 3];
+    const [cols, rows] = atlasDims[kind];
+    const frames = sliceAtlas(alpha, canvas.width, canvas.height, cols, rows);
+    this.slices.set(key, frames);
+    return frames;
   }
 
   create() {
-    const jungle = this.textures.get('jungle');
-    jungle.add('palm', 0, 0, 0, 650, 627);
-    jungle.add('basket', 0, 680, 75, 520, 552);
-    jungle.add('board', 0, 60, 640, 590, 570);
-    jungle.add('bell', 0, 680, 650, 560, 560);
-    this.drawClearing();
-    const foot = this.make.graphics({ x: 0, y: 0 });
-    foot.fillStyle(0xffffff).fillRect(0, 0, 12, 8).generateTexture('feet', 12, 8);
-    foot.destroy();
+    // configure() ran while loading: restart with the latest values instead of building the old world.
+    if (this.builtKey !== keyOf(this.world, this.cast)) { this.scene.restart({ world: this.world, cast: this.cast }); return; }
+    const grove = this.world.id === 'grove';
+    const keys = artKeys(this.world);
+    this.prepareArt();
+    this.cameras.main.setBackgroundColor(this.world.palette.ground);
+    if (grove) {
+      const jungle = this.textures.get('jungle');
+      if (!jungle.has('palm')) {
+        jungle.add('palm', 0, 0, 0, 650, 627);
+        jungle.add('basket', 0, 680, 75, 520, 552);
+        jungle.add('board', 0, 60, 640, 590, 570);
+        jungle.add('bell', 0, 680, 650, 560, 560);
+      }
+      this.drawClearing();
+    } else {
+      const props = this.textures.get(keys.props);
+      this.framesOf('props', keys.props).forEach((frame, i) => {
+        const name = ['bookshelf', 'cabinet', 'board', 'bell'][i];
+        this.towerProps[name] = frame;
+        if (!props.has(name)) props.add(name, 0, frame.x, frame.y, frame.w, frame.h);
+      });
+      this.drawTower();
+    }
+    if (!this.textures.exists('feet')) {
+      const foot = this.make.graphics({ x: 0, y: 0 });
+      foot.fillStyle(0xffffff).fillRect(0, 0, 12, 8).generateTexture('feet', 12, 8);
+      foot.destroy();
+    }
     this.physics.world.setBounds(32, 76, width - 64, height - 104);
     // Trees form the perimeter; the center stays open for a two-minute visit.
     for (let y = 0; y < height / grid; y++) for (let x = 0; x < width / grid; x++) {
       if (x < 4 || x > 55 || y < 10 || y > 38) this.blocked.add(`${x},${y}`);
     }
-    (['momo', 'pip', 'nori'] as const).forEach(id => {
-      const p = stops[id];
+    this.cast.forEach((member, slot) => {
+      const id = member.id;
+      const p = this.stops[id];
       this.add.ellipse(p.x, p.y - 13, 25, 7, 0x314c34, .22).setDepth(p.y - 18);
-      const npc = new MonkeyIdle(this, id, p.x, p.y - 12);
+      let spec: IdleSpec;
+      if (grove) spec = groveIdle[id] ?? Object.values(groveIdle)[slot];
+      else {
+        spec = idleSpec(this.framesOf('idle', keys.idle).slice(slot * 4, slot * 4 + 4), keys.idle, 46, slot);
+        // Frame names are per character id; drop any left from an earlier cast so they are re-measured.
+        const texture = this.textures.get(keys.idle);
+        for (let pose = 0; pose < 4; pose++) texture.remove(`${id}-${pose}`);
+      }
+      const npc = new MonkeyIdle(this, id, p.x, p.y - 12, spec);
       this.npcs.set(id, npc);
       this.label(p.x, p.y - 66, p.label);
       // Leave room for both the NPC's feet and the investigator's collision body.
@@ -69,39 +212,51 @@ export class Station extends Phaser.Scene {
         if (Math.abs(x * grid + 4 - p.x) < 14 && Math.abs(y * grid + 4 - (p.y - 12)) < 10) this.blocked.add(`${x},${y}`);
       }
     });
-    this.player = this.physics.add.image(stops.briefing.x, stops.briefing.y, 'feet').setVisible(false).setCollideWorldBounds(true);
-    (['momo', 'pip', 'nori'] as const).forEach(id => { const p = stops[id]; const feet = this.physics.add.staticImage(p.x, p.y - 12, 'feet').setVisible(false); this.physics.add.collider(this.player, feet); });
+    this.player = this.physics.add.image(this.stops.briefing.x, this.stops.briefing.y, 'feet').setVisible(false).setCollideWorldBounds(true);
+    this.cast.forEach(({ id }) => { const p = this.stops[id]; const feet = this.physics.add.staticImage(p.x, p.y - 12, 'feet').setVisible(false); this.physics.add.collider(this.player, feet); });
     this.shadow = this.add.ellipse(this.player.x, this.player.y + 1, 22, 6, 0x314c34, .22);
-    this.walk = new DetectiveWalk(this, this.player.x, this.player.y);
+    const walk = grove ? groveWalk : walkSpec(this.framesOf('walk', keys.walk), keys.walk, 46);
+    this.walk = new DetectiveWalk(this, this.player.x, this.player.y, walk);
     this.avatar = this.walk.sprite;
     (['briefing', 'replay', 'evidence', 'report'] as const).forEach(id => {
-      const p = stops[id];
+      const p = this.stops[id];
       if (id === 'briefing') { this.label(p.x, p.y + 33, p.label); return; }
-      const kind = id === 'replay' ? 'basket' : 'board';
+      const kind = id === 'replay' ? (grove ? 'basket' : 'cabinet') : 'board';
       const size = id === 'replay' ? 45 : 38;
-      this.add.image(p.x, p.y - 15, 'jungle', kind).setOrigin(.5, 1).setDisplaySize(size, size).setDepth(p.y - 20);
+      this.prop(keys.props, kind, p.x, p.y - 15, size).setDepth(p.y - 20);
       this.label(p.x, p.y - size - 25, p.label);
     });
-    this.add.image(282, 111, 'jungle', 'bell').setOrigin(.5, 1).setDisplaySize(39, 39).setDepth(95);
+    this.prop(keys.props, 'bell', 282, 111, 39).setDepth(95);
     this.marker = this.add.circle(0, 0, 10).setStrokeStyle(2, 0xffeb9b).setVisible(false).setDepth(2);
     this.prompt = this.add.text(0, 0, '', { fontFamily: 'monospace', fontSize: '8px', color: '#384d3a', backgroundColor: '#fff5d9', padding: { x: 5, y: 3 } }).setOrigin(.5, 0).setDepth(1000);
+    this.game.canvas.setAttribute('aria-label', `${this.world.text.place} with ${this.cast.map(c => c.name).join(', ')} and your ${this.world.text.investigator}. Click ${this.world.text.clickOne}, use the destination buttons, or walk with WASD and arrows.`);
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,SPACE', false) as typeof this.keys;
     this.input.keyboard!.removeCapture(['W', 'A', 'S', 'D', 'E', 'SPACE', 'UP', 'DOWN', 'LEFT', 'RIGHT']);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!this.enabled) return;
       const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-      const hit = Object.entries(stops).find(([id, point]) => {
-        const sprite = this.npcs.get(id as LocationId)?.sprite;
+      const hit = Object.entries(this.stops).find(([id, point]) => {
+        const sprite = this.npcs.get(id)?.sprite;
         return (sprite && sprite.getBounds().contains(world.x, world.y)) || Phaser.Math.Distance.Between(world.x, world.y, point.x, point.y - 25) < 28;
       });
-      if (hit) this.travel(hit[0] as LocationId);
+      if (hit) this.travel(hit[0]);
       else { this.destination = null; this.route = this.findRoute(world); this.marker.setVisible(false); }
       (document.activeElement as HTMLElement | null)?.blur();
     });
     this.input.keyboard!.on('keydown', (event: KeyboardEvent) => {
       if (this.enabled && !this.typing() && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) event.preventDefault();
     });
+    this.created = true;
+    // configure() may have run while this build was loading.
+    if (this.builtKey !== keyOf(this.world, this.cast)) this.scene.restart({ world: this.world, cast: this.cast });
+  }
+
+  private prop(key: string, name: string, x: number, y: number, size: number) {
+    const image = this.add.image(x, y, key, name);
+    const frame = this.towerProps[name];
+    if (this.world.id === 'grove' || !frame) return image.setOrigin(.5, 1).setDisplaySize(size, size);
+    return image.setOrigin(frame.anchorX / frame.w, frame.anchorY / frame.h).setDisplaySize(size * frame.w / frame.h, size);
   }
 
   private drawClearing() {
@@ -121,12 +276,32 @@ export class Station extends Phaser.Scene {
     // The stolen bananas ended up at the monkeys' picnic blanket.
     for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++) g.fillStyle((x + y) % 2 ? 0xe5af88 : 0xf8e3be).fillRect(205 + x * 12, 190 + y * 10, 12, 10);
     g.lineStyle(2, 0xc98c6e).strokeRect(204, 189, 62, 32);
-    const trees = [[18, 99, 98], [77, 78, 96], [149, 68, 90], [225, 55, 94], [303, 67, 98], [385, 77, 96], [465, 105, 105], [12, 185, 90], [472, 197, 94], [12, 292, 96], [473, 301, 100], [55, 362, 99], [214, 382, 95], [434, 365, 98]];
-    trees.forEach(([x, y, size]) => this.add.image(x, y, 'jungle', 'palm').setOrigin(.5, 1).setDisplaySize(size, size).setDepth(y < 100 ? 5 : y));
+    treeSpots.forEach(([x, y, size]) => this.add.image(x, y, 'jungle', 'palm').setOrigin(.5, 1).setDisplaySize(size, size).setDepth(y < 100 ? 5 : y));
+  }
+
+  private drawTower() {
+    const g = this.add.graphics().setDepth(0);
+    g.fillStyle(Phaser.Display.Color.HexStringToColor(this.world.palette.ground).color).fillRect(0, 0, width, height);
+    const random = new Phaser.Math.RandomDataGenerator(['wizard-tower-v1']);
+    for (let i = 0; i < 700; i++) {
+      const x = random.between(0, 119) * 4, y = random.between(0, 84) * 4;
+      g.fillStyle(random.pick([0x655d78, 0x544d63, 0x6a6280])).fillRect(x, y, 4, 2);
+    }
+    // The lighter flagstone hall sits where the grove path is.
+    g.fillStyle(0x474160).fillRoundedRect(42, 86, 396, 226, 48);
+    g.fillStyle(0x9a93ae).fillRect(72, 100, 336, 196).fillRect(48, 124, 384, 148).fillRect(96, 84, 288, 220);
+    g.fillStyle(0xaaa3bf).fillRect(80, 108, 320, 180).fillRect(56, 132, 368, 132).fillRect(104, 92, 272, 204);
+    for (let y = 120; y < 288; y += 24) g.fillStyle(0x8a8399, .55).fillRect(80, y, 320, 1);
+    for (let row = 0; row < 7; row++) for (let x = 80 + (row % 2) * 20; x < 400; x += 40) g.fillStyle(0x8a8399, .55).fillRect(x, 108 + row * 24, 1, 24);
+    // A round lilac rug where the grove has its blanket.
+    g.fillStyle(0x6f5a99).fillEllipse(235, 205, 86, 54);
+    g.fillStyle(0xb9a3dc).fillEllipse(235, 205, 76, 44);
+    g.lineStyle(2, 0x8d74b8).strokeEllipse(235, 205, 52, 28);
+    treeSpots.forEach(([x, y, size]) => this.prop(artKeys(this.world).props, 'bookshelf', x, y, size).setDepth(y < 100 ? 5 : y));
   }
 
   private label(x: number, y: number, text: string) {
-    return this.add.text(x, y, text, { fontFamily: 'monospace', fontSize: '7px', color: '#40533c', backgroundColor: '#fff6dd', padding: { x: 4, y: 3 } }).setOrigin(.5).setDepth(800);
+    return this.add.text(x, y, text, { fontFamily: 'monospace', fontSize: '7px', color: this.world.palette.label, backgroundColor: this.world.palette.labelBg, padding: { x: 4, y: 3 } }).setOrigin(.5).setDepth(800);
   }
   private typing() { return Boolean(document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')); }
   setEnabled(enabled: boolean) { this.enabled = enabled; }
@@ -134,23 +309,24 @@ export class Station extends Phaser.Scene {
     this.route = []; this.destination = null;
     this.npcs.forEach(npc => npc.reset());
     if (this.player) {
-      (this.player.body as Phaser.Physics.Arcade.Body).reset(stops.briefing.x, stops.briefing.y);
+      (this.player.body as Phaser.Physics.Arcade.Body).reset(this.stops.briefing.x, this.stops.briefing.y);
       this.direction = 'down';
       this.walk.reset(this.player.x, this.player.y);
       this.marker.setVisible(false);
     }
   }
   travel(location: LocationId) {
-    if (!this.player || !this.enabled) return;
+    const stop = this.stops[location];
+    if (!this.player || !this.enabled || !stop) return;
     this.destination = location;
-    this.route = this.findRoute(stops[location]);
-    this.marker.setPosition(stops[location].x, stops[location].y).setVisible(Boolean(this.route.length));
+    this.route = this.findRoute(stop);
+    this.marker.setPosition(stop.x, stop.y).setVisible(Boolean(this.route.length));
     if (!this.route.length) this.arrive();
   }
   private arrive() {
     const destination = this.destination;
     this.destination = null; this.marker.setVisible(false);
-    if (destination && Phaser.Math.Distance.Between(this.player.x, this.player.y, stops[destination].x, stops[destination].y) < 18) this.onArrival(destination);
+    if (destination && Phaser.Math.Distance.Between(this.player.x, this.player.y, this.stops[destination].x, this.stops[destination].y) < 18) this.onArrival(destination);
   }
   private findRoute(target: Point): Point[] {
     const key = (p: Point) => `${p.x},${p.y}`;
@@ -196,11 +372,11 @@ export class Station extends Phaser.Scene {
       Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 54));
     this.shadow.setPosition(this.player.x, this.player.y + 1).setDepth(this.player.y - 1);
     this.marker.setAlpha(reducedMotion.matches ? 1 : .65 + Math.sin(time / 220) * .25);
-    const near = Object.entries(stops).find(([, p]) => Phaser.Math.Distance.Between(this.player.x, this.player.y, p.x, p.y) < 18);
-    const hint = near ? `E / SPACE · ${near[1].title}` : this.destination ? `Walking to ${stops[this.destination].label.toLowerCase()}…` : 'Click a monkey or use WASD / arrows to explore.';
+    const near = Object.entries(this.stops).find(([, p]) => Phaser.Math.Distance.Between(this.player.x, this.player.y, p.x, p.y) < 18);
+    const hint = near ? `E / SPACE · ${near[1].title}` : this.destination ? `Walking to ${this.stops[this.destination].label.toLowerCase()}…` : this.world.text.hint;
     if (hint !== this.currentHint) { this.currentHint = hint; this.onHint(hint); }
     this.prompt.setVisible(Boolean(near && this.enabled && !this.typing())).setPosition(this.player.x, this.player.y + 14).setText(near ? `[E] ${near[1].title}` : '');
-    if (near && this.enabled && !this.typing() && (Phaser.Input.Keyboard.JustDown(this.keys.E) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE))) this.onArrival(near[0] as LocationId);
+    if (near && this.enabled && !this.typing() && (Phaser.Input.Keyboard.JustDown(this.keys.E) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE))) this.onArrival(near[0]);
   }
 }
 export function createStation(onArrival: (location: LocationId) => void, onHint: (hint: string) => void) {

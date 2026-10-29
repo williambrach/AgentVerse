@@ -427,8 +427,8 @@ test('unknown case is rejected', async t => {
 test('catalog lists the ready cases in order', t => {
   const { games } = newGames(t);
   assert.deepEqual(games.catalog(), [
-    { id: 'banana-mystery', title: 'The Banana Mystery', lead: 'The bananas are gone.\nThe bell never rang.', order: 1 },
-    { id: 'banana-control', title: 'The Banana Mix-up', lead: 'The bananas are gone.\nBut did anyone break the rule?', order: 2 },
+    { id: 'banana-mystery', title: 'The Banana Mystery', lead: 'The bananas are gone.\nThe bell never rang.', order: 1, world: 'grove' },
+    { id: 'banana-control', title: 'The Banana Mix-up', lead: 'The bananas are gone.\nBut did anyone break the rule?', order: 2, world: 'grove' },
   ]);
 });
 

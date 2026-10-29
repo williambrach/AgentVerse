@@ -2,6 +2,12 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/browser',
+  // Keep the snapshot names from before the projects existed (no project name in the file name).
+  snapshotPathTemplate: '{snapshotDir}/{testDir}/{testFileDir}/{testFileName}-snapshots/{arg}{-snapshotSuffix}{ext}',
+  projects: [
+    { name: 'default', testIgnore: 'tower.spec.mjs' },
+    { name: 'tower', testMatch: 'tower.spec.mjs', use: { baseURL: 'http://127.0.0.1:4318' } },
+  ],
   fullyParallel: false,
   workers: 1,
   timeout: 75_000,
@@ -12,10 +18,19 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },
-  webServer: {
-    command: 'node server/index.mjs',
-    url: 'http://127.0.0.1:4317/api/access',
-    reuseExistingServer: false,
-    env: { PORT: '4317', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: './test-results/sessions' },
-  },
+  webServer: [
+    {
+      command: 'node server/index.mjs',
+      url: 'http://127.0.0.1:4317/api/access',
+      reuseExistingServer: false,
+      env: { PORT: '4317', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: './test-results/sessions' },
+    },
+    {
+      // Dev tools on, so the draft tower cases are visible. Only the tower project talks to this server.
+      command: 'node server/index.mjs',
+      url: 'http://127.0.0.1:4318/api/access',
+      reuseExistingServer: false,
+      env: { PORT: '4318', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DEV_TOOLS: '1', OVERRIDE_DATA_DIR: './test-results/sessions-tower' },
+    },
+  ],
 });

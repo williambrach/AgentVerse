@@ -43,7 +43,7 @@ test('publicView sends only the allowlist', () => {
 test('listCases and findCase hide drafts unless dev', () => {
   const ready1 = defineCase({ ...copy(), id: 'r-case', title: 'R', order: 1, status: 'ready' });
   const draft0 = defineCase({ ...copy(), id: 'd-case', title: 'D', order: 0, status: 'draft' });
-  assert.deepEqual(listCases([ready1, draft0]), [{ id: 'r-case', title: 'R', lead: 'L1\nL2', order: 1 }]);
+  assert.deepEqual(listCases([ready1, draft0]), [{ id: 'r-case', title: 'R', lead: 'L1\nL2', order: 1, world: 'grove' }]);
   assert.deepEqual(listCases([ready1, draft0], { dev: true }).map(r => r.order), [0, 1]);
   assert.equal(findCase([ready1, draft0], 'nope'), undefined);
   assert.equal(findCase([ready1, draft0], 'd-case'), undefined);

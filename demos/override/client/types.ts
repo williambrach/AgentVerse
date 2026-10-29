@@ -1,4 +1,4 @@
-export type CharacterId = 'momo' | 'pip' | 'nori';
+export type CharacterId = string;
 export type LocationId = CharacterId | 'briefing' | 'replay' | 'evidence' | 'report';
 export interface Character { id: CharacterId; name: string; role: string; room: string; color: string; introduction: string; quickQuestion: string }
 export interface Evidence { id: string; chapter: number; time: string; source: string; title: string; kind: string; text: string }
@@ -18,6 +18,7 @@ export interface Session {
 }
 export interface CaseState {
   caseId: string; caseVersion: string; contentHash: string; title: string; order: number; copy: CaseCopy; clueCount: number; authored: boolean; mode: 'live' | 'rehearsal'; model: string | null;
+  world: { id: string; place: string; cast: { one: string; many: string }; clueSpot: string };
   characters: Character[]; chapters: { title: string; subtitle: string }[];
   session: Session | null; records: Evidence[];
   debrief: null | { title: string; summary: string; lesson: string; feedback: string; findings: { character: CharacterId; classification: string; explanation: string; evidence: string[] }[] };

@@ -36,3 +36,8 @@
   .case-board .intro-card { overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) { .case-option { transform: none !important; } }
+
+/* The preview line shows the selected case's world, whatever world the page is in. */
+.monkey-line[data-world="tower"] .monkey-face { background: var(--cast-color) url('/assets/tower/apprentices.png') 0 0 / 256px 256px no-repeat; }
+.monkey-line[data-world="tower"] .monkey-face.slot-1 { background-position-x: -64px; }
+.monkey-line[data-world="tower"] .monkey-face.slot-2 { background-position-x: -128px; }
