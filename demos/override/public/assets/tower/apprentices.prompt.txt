@@ -1,5 +1,5 @@
-Generate in order: 1 of 4. Attach as style reference: public/assets/banana/monkeys.png.
-Output: apprentices.png (keep the original pixels and alpha).
+Generate in order: 1 of 4. Attach as style reference: /Users/williambrach/Developer/AgentVerse/demos/override/public/assets/banana/monkeys.png
+Save the output as: /Users/williambrach/Developer/AgentVerse/demos/override/public/assets/tower/apprentices.png (keep the original pixels and alpha).
 
 Use case: stylized-concept. Asset type: original pixel-art game character sprite atlas, genuinely transparent background.
 Style reference: the attached image. Match ONLY its pixel-art style: chunky crisp 16-bit handheld RPG sprites, dark outlines, simple three-tone shading, warm limited palette, same character scale and cell layout. Do NOT draw monkeys or copy any character from it.

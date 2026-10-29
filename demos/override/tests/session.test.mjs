@@ -378,14 +378,14 @@ const newGames = (t, options = {}) => {
   };
   return { games, act, dir };
 };
-const talkToAll = async (act, id) => { for (const character of ['momo', 'pip', 'nori']) await act(id, 'interview', { character, question: 'What happened?' }); };
+const talkToAll = async (act, id, kase = cases[0]) => { for (const { id: character } of kase.characters) await act(id, 'interview', { character, question: 'What happened?' }); };
 
 test('every registered case keeps its answer off the wire before the verdict', async t => {
   for (const kase of cases) {
-    const { games, act } = newGames(t);
+    const { games, act } = newGames(t, { dev: true });
     const id = (await act(undefined, 'start', { caseId: kase.id })).session.id;
     await act(id, 'reveal');
-    await talkToAll(act, id);
+    await talkToAll(act, id, kase);
     const wire = JSON.stringify(games.view(id));
     const secrets = [...Object.values(kase.knowledge).flat(), kase.debrief.title, kase.debrief.summary, kase.debrief.lesson,
       ...kase.debrief.findings.map(f => f.explanation), kase.answer.feedback.correct, kase.answer.feedback.other];
@@ -479,8 +479,9 @@ test('replay needs a registered case with the same version', async t => {
 test('prompt names the role once', () => {
   const session = { revealedPosition: 1, selectedEvidence: null, interviews: { momo: [], pip: [], nori: [] } };
   for (const kase of cases) {
-    const system = buildMessages(kase, session, 'momo', 'Why?')[0].content;
-    assert.ok(system.includes('You play Momo (The planner)'));
+    const c = kase.characters[0];
+    const system = buildMessages(kase, blank(kase), c.id, 'Why?')[0].content;
+    assert.ok(system.includes(`You play ${c.name} (${c.role})`));
     assert.equal(system.includes('the The'), false);
   }
   assert.ok(buildMessages(cases[0], session, 'momo', 'Why?')[0].content.startsWith('You play Momo (The planner), a monkey in an authored two-minute banana mystery (banana-authored-v1.0.0, banana-interview-v2).'));
@@ -488,7 +489,7 @@ test('prompt names the role once', () => {
 
 test('a draft case id is rejected like an unknown one, with no log file', async t => {
   const { defineCase } = await import('../server/cases.mjs');
-  const draft = defineCase({ ...JSON.parse(JSON.stringify(bananaControl)), rehearsal: bananaControl.rehearsal, id: 'draft-case', status: 'draft' });
+  const draft = defineCase({ ...JSON.parse(JSON.stringify({ ...bananaControl, world: undefined })), rehearsal: bananaControl.rehearsal, id: 'draft-case', status: 'draft' });
   const { act, dir } = newGames(t, { cases: [...cases, draft] });
   for (const action of ['start', 'reset']) {
     await assert.rejects(act(undefined, action, { caseId: 'draft-case' }), error => error.status === 400 && /Unknown case/.test(error.message));
@@ -506,4 +507,35 @@ test('dev mode shows draft cases and lets them start', async t => {
   assert.deepEqual(on.games.catalog().map(c => c.id), [ready.id, 'mini-draft']);
   const view = await on.games.mutate(undefined, 'start', { caseId: 'mini-draft' });
   assert.equal(view.caseId, 'mini-draft');
+});
+
+import { createHash } from 'node:crypto';
+import { towerCase } from './fixtures/minimal-case.mjs';
+const sha = s => createHash('sha256').update(s).digest('hex').slice(0, 16);
+const blank = kase => ({ revealedPosition: 1, selectedEvidence: null, interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])) });
+test('grove prompts are byte-identical', () => {
+  assert.equal(sha(buildMessages(cases[0], blank(cases[0]), 'momo', 'Why?')[0].content), '80d48cb3131e1eb3');
+  assert.equal(sha(buildMessages(bananaControl, blank(bananaControl), 'momo', 'Why?')[0].content), '40df3449ac780dd8');
+});
+test('tower prompt asks for a little wizard personality', () => {
+  const k = defineCase(towerCase());
+  const system = buildMessages(k, blank(k), 'wren', 'Why?')[0].content;
+  assert.ok(system.includes('A little wizard personality is welcome'));
+  assert.equal(system.includes('monkey'), false);
+});
+test('tower errors speak of apprentices and the potion cabinet', async t => {
+  const k = defineCase(towerCase());
+  const { act } = newGames(t, { cases: [k] });
+  const id = (await act(undefined, 'start', { caseId: k.id })).session.id;
+  await assert.rejects(act(id, 'interview', { character: 'wren', question: 'Hi?' }), /Inspect the potion cabinet before asking the apprentices\./);
+  await assert.rejects(act(id, 'interview', { character: 'momo', question: 'Hi?' }), /Choose one of the 3 apprentices\./);
+  await assert.rejects(act(id, 'verdict', { suspect: 'wren', confidence: 50 }), /ask all 3 apprentices before choosing/);
+  await act(id, 'reveal'); await talkToAll(act, id, k);
+  await assert.rejects(act(id, 'verdict', { suspect: 'momo', confidence: 50 }), /Choose an apprentice, nobody, or not sure\./);
+});
+test('grove errors keep their wording', async t => {
+  const { act } = newGames(t);
+  const id = (await act(undefined, 'start')).session.id;
+  await assert.rejects(act(id, 'interview', { character: 'momo', question: 'Hi?' }), /Inspect the basket before asking the monkeys\./);
+  await assert.rejects(act(id, 'interview', { character: 'wren', question: 'Hi?' }), /Choose one of the 3 monkeys\./);
 });

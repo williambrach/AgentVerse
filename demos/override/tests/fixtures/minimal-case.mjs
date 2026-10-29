@@ -25,3 +25,17 @@ export const minimalCase = {
   },
   rehearsal: (session, characterId) => `scripted ${characterId}`,
 };
+
+export function towerCase() {
+  const d = JSON.parse(JSON.stringify(minimalCase));
+  const rename = { momo: 'wren', pip: 'basil', nori: 'juniper' };
+  d.id = 'mini-tower';
+  d.world = 'tower';
+  d.prompt = { setting: 'a test apprentice', use: ['potions'], avoid: ['override'] };
+  d.characters.forEach(c => { c.id = rename[c.id]; c.name = c.name === 'Momo' ? 'Wren' : c.name === 'Pip' ? 'Basil' : 'Juniper'; });
+  d.knowledge = Object.fromEntries(Object.entries(d.knowledge).map(([k, v]) => [rename[k], v]));
+  d.answer.culprits = ['wren'];
+  d.debrief.findings[0].character = 'wren';
+  d.rehearsal = minimalCase.rehearsal;
+  return d;
+}

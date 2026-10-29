@@ -62,8 +62,8 @@ A case is one module in `server/cases/`, registered in `server/cases/index.mjs`.
 
 - Set `status: 'draft'` while writing. Draft cases are hidden unless the server runs with `OVERRIDE_DEV_TOOLS=1` (forced off when `NODE_ENV=production`).
 - Run `npm run cases:prompt -- <case> <character> --chapter 1 [--evidence id] [--question "..."]` to print the exact prompt a character receives.
-- Keep the character ids `momo`, `pip`, and `nori`; sprites and CSS key on them.
-- `server/cases/override-v1.mjs` stays archived and unregistered. The live cases are `banana-mystery` and `banana-control`.
+- A case has exactly three characters with unique ids matching `/^[a-z][a-z0-9]{1,15}$/`, and an optional `world` (`grove` by default, or `tower`; see `server/worlds.mjs`). The client's sprites and CSS still key on `momo`, `pip` and `nori`, so tower cases stay drafts until the client supports their world.
+- `server/cases/override-v1.mjs` stays archived and unregistered. The live cases are `banana-mystery` and `banana-control`. Three wizard-tower drafts wait for art, client support and live validation: `tower-bell-charm` (Juniper rang the bell with a spell), `tower-missing-yes` (Basil kept quiet about a no) and `tower-echo-bell` (an honest mistake; the answer is Nobody).
 
 ## Research records
 

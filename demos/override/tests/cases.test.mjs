@@ -22,7 +22,7 @@ test('defineCase names the failing path', () => {
   const bad = (fn, pattern) => assert.throws(() => defineCase(edit(fn)), pattern);
   bad(d => { d.id = 'Bad ID'; }, /^Error: case Bad ID: id: |^case Bad ID: id: /);
   bad(d => { delete d.copy.report.title; }, /copy\.report\.title/);
-  bad(d => { d.characters = [d.characters[0], d.characters[2], d.characters[1]]; }, /characters/);
+  bad(d => { delete d.characters[2].room; }, /characters\[2\]\.room/);
   bad(d => { d.records.push({ ...d.records[0] }); }, /records\[1\]\.id/);
   bad(d => { d.records[0].chapter = 2; }, /records\[0\]\.chapter/);
   bad(d => { d.knowledge.pip = ['a', 'b']; }, /knowledge\.pip/);
@@ -33,7 +33,7 @@ test('defineCase names the failing path', () => {
 
 test('publicView sends only the allowlist', () => {
   const view = publicView(defineCase(minimalCase));
-  assert.deepEqual(Object.keys(view), ['caseId', 'caseVersion', 'contentHash', 'title', 'order', 'copy', 'characters', 'chapters', 'clueCount']);
+  assert.deepEqual(Object.keys(view), ['caseId', 'caseVersion', 'contentHash', 'title', 'order', 'copy', 'world', 'characters', 'chapters', 'clueCount']);
   assert.deepEqual(Object.keys(view.characters[0]), ['id', 'name', 'role', 'room', 'color', 'introduction', 'quickQuestion']);
   assert.equal(view.clueCount, 1);
   assert.equal(view.caseId, 'mini-case');
@@ -55,4 +55,51 @@ test('banana-mystery validates', () => {
   assert.deepEqual(bananaMystery.answer.culprits, ['momo']);
   assert.equal(bananaMystery.version, 'banana-authored-v1.0.0');
   assert.ok(bananaMystery.rehearsal({ selectedEvidence: null }, 'nori', 'x').includes('assumed snack time'));
+});
+
+import { worlds } from '../server/worlds.mjs';
+import { towerCase } from './fixtures/minimal-case.mjs';
+import bananaControl from '../server/cases/banana-control.mjs';
+const grove = { id: 'grove', place: 'Banana Grove', cast: { one: 'a monkey', many: 'monkeys' }, clueSpot: 'basket' };
+const tower = { id: 'tower', place: 'Wizard Tower', cast: { one: 'an apprentice', many: 'apprentices' }, clueSpot: 'potion cabinet' };
+test('worlds registry', () => {
+  assert.deepEqual(worlds.grove, { ...grove, persona: 'monkey' });
+  assert.deepEqual(worlds.tower, { ...tower, persona: 'wizard' });
+});
+test('no world means the grove', () => assert.deepEqual(defineCase(copy()).world, { ...grove, persona: 'monkey' }));
+test('a tower case brings its own cast', () => {
+  const k = defineCase(towerCase());
+  assert.equal(k.world.id, 'tower');
+  assert.deepEqual(k.characters.map(c => c.id), ['wren', 'basil', 'juniper']);
+});
+test('unknown world', () => assert.throws(() => defineCase(copy({ world: 'moon' })), /case mini-case: world: must be one of grove, tower/));
+test('cast is three unique lowercase ids', () => {
+  assert.throws(() => defineCase(edit(d => { d.characters.pop(); })), /characters: must hold exactly 3 characters/);
+  assert.throws(() => defineCase(edit(d => { d.characters[1].id = 'momo'; })), /characters\[1\]\.id: duplicate character id momo/);
+  assert.throws(() => defineCase(edit(d => { d.characters[0].id = 'Momo'; })), /characters\[0\]\.id: must match/);
+});
+test('knowledge, culprits and findings follow the cast', () => {
+  const missing = towerCase(); delete missing.knowledge.juniper;
+  assert.throws(() => defineCase(missing), /knowledge\.juniper/);
+  const extra = towerCase(); extra.knowledge.momo = ['x'];
+  assert.throws(() => defineCase(extra), /knowledge\.momo: not a character/);
+  assert.throws(() => defineCase({ ...towerCase(), answer: { culprits: ['momo'], feedback: { correct: 'c', other: 'o' } } }), /answer\.culprits/);
+  const finding = towerCase(); finding.debrief.findings[0].character = 'pip';
+  assert.throws(() => defineCase(finding), /debrief\.findings\[0\]\.character/);
+});
+test('grove hashes are unchanged', () => {
+  assert.equal(bananaMystery.contentHash, '2da1093c9eb3');
+  assert.equal(bananaControl.contentHash, 'd1f7d8558985');
+});
+test('publicView shows the world without the persona', () => {
+  assert.deepEqual(publicView(defineCase(towerCase())).world, tower);
+  assert.deepEqual(publicView(bananaMystery).world, grove);
+});
+test('a defined case can be defined again, its world object resolves by id', () => {
+  const k = defineCase(towerCase());
+  const again = defineCase({ ...k, rehearsal: k.rehearsal });
+  assert.equal(again.world.id, 'tower');
+  assert.equal(defineCase({ ...copy(), world: { id: 'grove' } }).world.persona, 'monkey');
+  assert.throws(() => defineCase({ ...copy(), world: { id: 'moon' } }), /world: must be one of/);
+  assert.equal('persona' in publicView(again).world, false);
 });

@@ -284,10 +284,10 @@ export class Investigation {
 
   async interview(input) {
     const s = this.session;
-    const { characters } = this.kase;
+    const { characters, world: w } = this.kase;
     const character = characters.find(c => c.id === input.character);
-    if (!character) throw new RequestError(400, `Choose one of the ${characters.length} monkeys.`);
-    if (s.revealedPosition === 0) throw new RequestError(400, 'Inspect the basket before asking the monkeys.');
+    if (!character) throw new RequestError(400, `Choose one of the ${characters.length} ${w.cast.many}.`);
+    if (s.revealedPosition === 0) throw new RequestError(400, `Inspect the ${w.clueSpot} before asking the ${w.cast.many}.`);
     if (typeof input.question !== 'string' || input.question.trim().length < 3 || input.question.length > 1200) throw new RequestError(400, 'Ask a question between 3 and 1,200 characters.');
     if (s.interviews[character.id].length >= 40) throw new RequestError(400, 'This demo supports 40 questions per character. Submit your findings or start a new session.');
     if (!this.asked.take()) throw new RequestError(429, 'Slow down: at most 6 questions per minute.');
@@ -315,9 +315,9 @@ export class Investigation {
   verdict(input) {
     const s = this.session;
     const { characters, records } = this.kase;
-    if (!s.revealedPosition || characters.some(c => !s.interviews[c.id].length)) throw new RequestError(400, `Inspect the clues and ask all ${characters.length} monkeys before choosing.`);
+    if (!s.revealedPosition || characters.some(c => !s.interviews[c.id].length)) throw new RequestError(400, `Inspect the clues and ask all ${characters.length} ${this.kase.world.cast.many} before choosing.`);
     const choices = [...characters.map(c => c.id), 'none', 'uncertain'];
-    if (!choices.includes(input.suspect)) throw new RequestError(400, 'Choose a monkey, nobody, or not sure.');
+    if (!choices.includes(input.suspect)) throw new RequestError(400, `Choose ${this.kase.world.cast.one}, nobody, or not sure.`);
     if (!Number.isInteger(input.confidence) || input.confidence < 0 || input.confidence > 100) throw new RequestError(400, 'Confidence must be between 0 and 100.');
     const explanation = input.explanation ?? '';
     if (typeof explanation !== 'string' || explanation.length > 500) throw new RequestError(400, 'Keep your explanation under 500 characters.');

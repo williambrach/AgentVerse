@@ -1,5 +1,5 @@
-Generate in order: 4 of 4 (independent of the others). Attach as style reference: public/assets/banana/jungle-props.png.
-Output: tower-props.png (keep the original pixels and alpha).
+Generate in order: 4 of 4 (independent of the others). Attach as style reference: /Users/williambrach/Developer/AgentVerse/demos/override/public/assets/banana/jungle-props.png
+Save the output as: /Users/williambrach/Developer/AgentVerse/demos/override/public/assets/tower/tower-props.png (keep the original pixels and alpha).
 
 Use case: stylized-concept. Asset type: original pixel-art prop atlas for a cosy wizard school tower, genuine alpha transparency.
 Style reference: the attached prop sheet. Match ONLY its pixel-art style, scale and cell layout; do not copy its objects.
