@@ -51,3 +51,10 @@ test('the tower measures its art; the grove keeps its tuned tables', () => {
   assert.equal(worldFor('grove').heights, undefined);
   assert.equal(worldFor('grove').strideFix, undefined);
 });
+
+import { worlds as serverWorlds } from '../server/worlds.mjs';
+test('every world sets an agent count from 3 to 5', () => {
+  for (const w of Object.values(serverWorlds)) assert.ok(Number.isInteger(w.agents) && w.agents >= 3 && w.agents <= 5);
+  assert.equal(serverWorlds.grove.agents, 4);
+  assert.equal(serverWorlds.tower.agents, 3);
+});
