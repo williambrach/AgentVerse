@@ -163,6 +163,7 @@ Made on 2026-10-26, replacing the five open questions in the original plan.
 3. **Choosing a case:** URL parameter, or the case board at the start and behind **Cases** in the topbar. Balanced assignment waits for the study design.
 4. **Cast:** shared. Same three monkeys in every case. This removes the sprite, CSS and most of the client work from the critical path.
 5. **Progression:** chapter model, unchanged.
+6. **Two live cases (2026-10-29):** the registry is `banana-mystery` and `tower-echo-bell`, one per world. `banana-control`, `tower-bell-charm` and `tower-missing-yes` are archived and unregistered.
 
 ## Reconciling with backendplan.md
 

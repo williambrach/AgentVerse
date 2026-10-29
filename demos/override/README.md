@@ -58,12 +58,12 @@ Click a monkey, signpost, or destination to walk there. WASD/arrows and E/Space 
 
 ## Writing a case
 
-A case is one module in `server/cases/`, registered in `server/cases/index.mjs`. `banana-mystery.mjs` and `banana-control.mjs` are the examples to copy. The required fields and the allowlist of what reaches the browser are in the "Decided" section of [the cases spec](../../docs/plans/2026-10-26-override-cases.spec.md); they are not repeated here.
+A case is one module in `server/cases/`, registered in `server/cases/index.mjs`. `banana-mystery.mjs` (grove) and `tower-echo-bell.mjs` (tower) are the examples to copy. The required fields and the allowlist of what reaches the browser are in the "Decided" section of [the cases spec](../../docs/plans/2026-10-26-override-cases.spec.md); they are not repeated here.
 
 - Set `status: 'draft'` while writing. Draft cases are hidden unless the server runs with `OVERRIDE_DEV_TOOLS=1` (forced off when `NODE_ENV=production`).
 - Run `npm run cases:prompt -- <case> <character> --chapter 1 [--evidence id] [--question "..."]` to print the exact prompt a character receives.
 - A case has exactly three characters with unique ids matching `/^[a-z][a-z0-9]{1,15}$/`. Set `world: 'grove' | 'tower'` (default `grove`; see `server/worlds.mjs`) to choose the scene, sprites, cast art and wording. The tower art is described in `public/assets/tower/ARTWORK.md`; missing PNGs fall back to code-drawn placeholders.
-- `server/cases/override-v1.mjs` stays archived and unregistered. The live cases are `banana-mystery` and `banana-control`. Three wizard-tower drafts wait for live validation: `tower-bell-charm` (Juniper rang the bell with a spell), `tower-missing-yes` (Basil kept quiet about a no) and `tower-echo-bell` (an honest mistake; the answer is Nobody).
+- The live cases are `banana-mystery` (grove; Momo made up the permission) and `tower-echo-bell` (tower; an honest mistake, the answer is Nobody). Archived and unregistered: `override-v1`, `banana-control`, `tower-bell-charm`, `tower-missing-yes`; register one in `server/cases/index.mjs` to bring it back.
 
 ## Research records
 
