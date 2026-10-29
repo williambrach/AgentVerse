@@ -1,0 +1,40 @@
+- start 9a9e7e3
+- Ruling: worktree .superlite/worktrees/override-tuneups on superlite/override-tuneups from demo/override 9a9e7e3 - one feature, one worktree - cost if wrong: none
+- Ruling: the four pasted items are change requests for the Override demo - they name concrete game behaviour (basket sprite, click-to-move, model, language) - cost if wrong: a revert of this branch
+- Ruling: D1 basket returns as decoration at its pre-363bcd4 spot, no collider - walking tests stand the player at (244,220) on it; that is how it looked before - cost if wrong: player can walk over the basket
+- Ruling: D2 nav buttons open pages in place and Skip walking is removed - 'movement with WASD or arrow keys only' leaves no auto-walk to skip - cost if wrong: restore travel() from 9a9e7e3
+- Ruling: D3 reasoning effort is config (env/endpoints), not a code default - a non-reasoning model rejects reasoning_effort - cost if wrong: a deploy that forgets the env var gets long traces
+- Ruling: skip Wave 0 - existing codebase, no consumed interface needs a stub, test-cmd.json pre-written with empty setup - cost if wrong: none
+- unblocked: dispatched T1 T2 at 20:33:22; waiting on fixes: T3
+- checkpoint T2 6b804e91df client keyboard + basket
+- unblocked: dispatched T3 at 20:35:16; waiting on fixes: none
+- review: T2 package-reviewer dispatched (client package, single task, protocol focus)
+- checkpoint T1 80b80b3efa server effort + english
+- unblocked: dispatched T4 at 20:36:10; waiting on fixes: none
+- review: T1 package-reviewer dispatched (protocol/encoding/state focus)
+- review: T2 reviewed, 0 findings, no changes
+- Ruling: keep DEPLOY.md 'The SDU endpoint and model above match the demo's existing configuration.' - the coordinator updates the local .env to GLM-5.3-Flash + low, so it stays true - cost if wrong: one stale sentence
+- checkpoint T4 46087644ad docs
+- review: T1 reviewed, 0 findings, 149/149 pass
+- Ruling: OVERRIDE_LLM_REASONING_EFFORT is validated even when OVERRIDE_ENDPOINTS is set - a bad value fails fast at startup either way - cost if wrong: an operator must clear a stray legacy var
+- Ruling: admin/monitor snapshot does not show reasoningEffort - not asked for; samplingParams in provenance already records it per call - cost if wrong: one more field later
+- Ruling: T3 presses E with { delay: 100 } - Phaser JustDown can miss a down+up inside one frame - cost if wrong: none (test-only)
+- Ruling: no package review for T3 (test-only, green 9/9 walking + specs) and T4 (docs, coordinator read the diff) - final reviewer covers both - cost if wrong: a test-quality nit reaches final review
+- checkpoint T3 5c387055d8 browser acceptance
+- Ruling: seam incidents T2<->T3, T2<->T4, T1<->T4 'no module found' are checker false positives - pt_review cannot map worlds.* / interviews.* to client/worlds.ts / server/interviews.mjs; T3's browser specs run T2's real client and T1's tests run the real modelConfig/LlmRouter - cost if wrong: none
+- tests full passed=505 failed=0 skipped=0 seconds=30.9
+- tests full (direct node --test): 505 pass, 0 fail; tsc clean
+- Ruling: final-review findings 1-2 (seam 'no module found') answered by real-code tests: legacy_effort, endpoints_effort, hash_changes_with_effort, english_prompts, effort_sent_only_when_set, 'grove text is today's text', 'tower text' all pass - the Produces names stay as written; changing frozen blocks is not needed - cost if wrong: none
+- Ruling: final-review finding 3 (suite unconfirmed) answered: full unit 505/505, e2e run separately next
+- Ruling: [scope] interview English sentence becomes 'Always answer in English, even if the question is in another language, and do not comment on the language.' - live check: 1 of 5 answers named the rule when asked for Slovak; interview-v4 stays (unreleased) - cost if wrong: one more prompt tweak
+- checkpoint T1 af8402ab07 server effort + english
+- fix: interview English sentence (checkpoint af8402a), live recheck 4/4 English, in character
+- Ruling: plan over the 15k cap after adding T5 (15.9k) - the follow-up came after the build; trimming frozen blocks is not allowed - cost if wrong: a slightly larger prime for none (no new primes are built)
+- incident: full e2e 70/71; tower 'switching mid-walk or with the case board open' fails 3/3 - case board stuck on 'Opening…' after switching from an open Juniper interview; routed to fixer-opus (tier 3, unknown cause), T5 added to own tower.spec.mjs
+- unblocked: dispatched T5 at 20:44:44 (with the fixer-opus diagnosis); waiting on fixes: none
+- checkpoint T2 5b16650baf client keyboard + basket
+- checkpoint T5 a313ab68a1 tower spec follow-up
+- fix: case switch from an open interview (main.ts startCase resets the view in action's onSuccess; pre-existing, now default path) - checkpoints T2 5b16650, T5 a313ab6
+- tests full (direct): unit 505/505, tsc clean, Playwright 71/71 (all projects) after a fresh build
+- tests full passed=505 failed=0 skipped=0 seconds=31.0
+- final review: APPROVED (fresh reviewer, packet + evidence); freeze
