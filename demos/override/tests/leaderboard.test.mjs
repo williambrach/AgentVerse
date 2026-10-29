@@ -1,0 +1,154 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createLeaderboard } from '../server/leaderboard.mjs';
+import { cases } from '../server/cases/index.mjs';
+
+const iso = (s) => new Date(s * 1000).toISOString();
+const A = { id: 'A', name: 'Banana Squad' };
+const B = { id: 'B', name: 'Owls' };
+const C = { id: 'C', name: 'Lynx' };
+const board = (at = 0) => createLeaderboard(cases, { startedAt: at * 1000 });
+const start = (sid, team, caseId, s, extra = {}) => ({ type: 'session_started', sessionId: sid, caseId, timestamp: iso(s), team, ...extra });
+const verdict = (sid, suspect, s, extra = {}) => ({ type: 'verdict_submitted', sessionId: sid, timestamp: iso(s), verdict: { suspect }, ...extra });
+const feed = (lb, evs) => evs.forEach((e) => lb.observe(e));
+const names = (lb, o = { includeHidden: false, you: null }) => lb.standings(o).teams.map((t) => t.name);
+
+test('example standings', () => {
+  const lb = board();
+  feed(lb, [
+    start('a', A, 'banana-mystery', 0), { type: 'x', sessionId: 'a', timestamp: iso(10), spend: { total: 8 } }, verdict('a', 'momo', 120, { coins: { spent: 8, budget: 20 } }),
+    start('b', B, 'banana-mystery', 0), verdict('b', 'wren', 60, { coins: { spent: 4, budget: 20 } }),
+    start('c', C, 'banana-mystery', 0),
+  ]);
+  assert.deepEqual(lb.standings({ includeHidden: false, you: 'A' }), {
+    rankBy: 'time', startedAt: 0, teams: [
+      { rank: 1, teamId: 'A', name: 'Banana Squad', points: 1, played: 1, timeMs: 120000, coins: 8, hidden: false, you: true },
+      { rank: 2, teamId: 'B', name: 'Owls', points: 0, played: 1, timeMs: 60000, coins: 4, hidden: false, you: false },
+      { rank: null, teamId: 'C', name: 'Lynx', points: 0, played: 0, timeMs: 0, coins: 0, hidden: false, you: false },
+    ],
+  });
+  lb.setHidden('A', true);
+  assert.deepEqual(names(lb), ['Owls', 'Lynx']);
+  const all = lb.standings({ includeHidden: true, you: null }).teams;
+  assert.deepEqual(all.map((t) => [t.name, t.rank, t.hidden]), [['Banana Squad', null, true], ['Owls', 1, false], ['Lynx', null, false]]);
+});
+
+test('first_verdict_counts', () => {
+  const lb = board();
+  feed(lb, [start('a', A, 'banana-mystery', 0), verdict('a', 'momo', 10), verdict('a', 'wren', 20)]);
+  const [t] = lb.standings({}).teams;
+  assert.equal(t.points, 1); assert.equal(t.played, 1);
+});
+
+test('nobody_case', () => {
+  const lb = board();
+  feed(lb, [start('a', A, 'tower-echo-bell', 0), verdict('a', 'none', 5), start('b', B, 'tower-echo-bell', 0), verdict('b', 'wren', 5)]);
+  const t = Object.fromEntries(lb.standings({}).teams.map((x) => [x.name, x.points]));
+  assert.deepEqual(t, { 'Banana Squad': 1, Owls: 0 });
+});
+
+test('time_from_first_start', () => {
+  const lb = board();
+  feed(lb, [start('a', A, 'banana-mystery', 0), { type: 'session_reset', sessionId: 'a', timestamp: iso(30) }, start('a2', A, 'banana-mystery', 60), verdict('a2', 'momo', 150)]);
+  assert.equal(lb.standings({}).teams[0].timeMs, 150000);
+});
+
+test('coins_across_sessions', () => {
+  const lb = board();
+  feed(lb, [
+    start('s1', A, 'banana-mystery', 0), { type: 'interview_question', sessionId: 's1', timestamp: iso(5), spend: { total: 6 } },
+    start('s2', A, 'banana-mystery', 20), verdict('s2', 'momo', 50, { coins: { spent: 4, budget: 20 } }),
+    start('s3', A, 'banana-mystery', 60), { type: 'interview_question', sessionId: 's3', timestamp: iso(70), spend: { total: 9 } },
+    { type: 'interview_question', sessionId: 's2', timestamp: iso(80), spend: { total: 7 } },
+  ]);
+  assert.equal(lb.standings({}).teams[0].coins, 10);
+});
+
+test('rank_by_time_and_coins', () => {
+  const lb = board();
+  feed(lb, [
+    start('a', A, 'banana-mystery', 0), verdict('a', 'momo', 100, { coins: { spent: 12 } }),
+    start('b', B, 'banana-mystery', 0), verdict('b', 'momo', 200, { coins: { spent: 4 } }),
+  ]);
+  assert.deepEqual(names(lb), ['Banana Squad', 'Owls']);
+  lb.setRankBy('coins');
+  assert.equal(lb.standings({}).rankBy, 'coins');
+  assert.deepEqual(names(lb), ['Owls', 'Banana Squad']);
+});
+
+test('ties_share_rank and unranked_after_ranked', () => {
+  const lb = board();
+  feed(lb, [
+    start('c', C, 'banana-mystery', 0),
+    start('a', A, 'banana-mystery', 0), verdict('a', 'momo', 100, { coins: { spent: 2 } }),
+    start('b', B, 'banana-mystery', 0), verdict('b', 'momo', 100, { coins: { spent: 2 } }),
+    start('d', { id: 'D', name: 'Zed' }, 'banana-mystery', 0), verdict('d', 'momo', 300, { coins: { spent: 2 } }),
+  ]);
+  const t = lb.standings({}).teams;
+  assert.deepEqual(t.map((x) => x.rank), [1, 1, 3, null]);
+  assert.equal(t[3].name, 'Lynx');
+});
+
+test('reset_round', () => {
+  const lb = board(100);
+  feed(lb, [start('a', A, 'banana-mystery', 50), verdict('a', 'momo', 120), start('b', B, 'banana-mystery', 110)]);
+  assert.deepEqual(names(lb), ['Owls']);
+  lb.reset(500000);
+  assert.deepEqual(lb.standings({}), { rankBy: 'time', startedAt: 500000, teams: [] });
+  feed(lb, [start('c', C, 'banana-mystery', 400)]);
+  assert.deepEqual(names(lb), []);
+});
+
+test('restore_settings', () => {
+  const lb = board();
+  lb.restore([{ type: 'leaderboard_settings', rankBy: 'coins' }, { type: 'leaderboard_settings', rankBy: 'time' }, { type: 'leaderboard_settings', rankBy: 'coins' },
+    { type: 'team_hidden', teamId: 'A', hidden: true }, { type: 'team_hidden', teamId: 'B', hidden: true }, { type: 'team_hidden', teamId: 'A', hidden: false }]);
+  feed(lb, [start('a', A, 'banana-mystery', 0), start('b', B, 'banana-mystery', 0)]);
+  assert.equal(lb.standings({}).rankBy, 'coins');
+  assert.deepEqual(names(lb), ['Banana Squad']);
+});
+
+test('ignores_teamless_and_unknown_case', () => {
+  const lb = board();
+  feed(lb, [start('a', null, 'banana-mystery', 0), verdict('a', 'momo', 5), start('b', B, 'nope', 0), verdict('b', 'momo', 5)]);
+  assert.deepEqual(lb.standings({}).teams, []);
+});
+
+test('score_field_points', () => {
+  const lb = board();
+  feed(lb, [start('a', A, 'banana-mystery', 0), { ...verdict('a', 'x', 5), verdict: { suspect: 'x', score: 3 } }]);
+  assert.equal(lb.standings({}).teams[0].points, 3);
+});
+
+test('setRankBy_rejects', () => {
+  assert.throws(() => board().setRankBy('speed'));
+});
+
+test('never_throws', () => {
+  const lb = board();
+  for (const e of [null, undefined, {}, 5, { type: 'verdict_submitted' }, { type: 'session_started', team: 3 }]) lb.observe(e);
+  assert.deepEqual(lb.standings({}).teams, []);
+});
+
+test('name_latest', () => {
+  const lb = board();
+  feed(lb, [start('a', A, 'banana-mystery', 0), start('b', { id: 'A', name: 'Banana Squad 2' }, 'banana-mystery', 5)]);
+  assert.deepEqual(names(lb), ['Banana Squad 2']);
+});
+
+test('bad_numbers_and_out_of_order_starts', () => {
+  const lb = board();
+  feed(lb, [
+    start('a', A, 'banana-mystery', 50), start('a2', A, 'banana-mystery', 10),
+    { type: 'x', sessionId: 'a', timestamp: iso(60), spend: { total: -5 } },
+    { type: 'x', sessionId: 'a', timestamp: iso(61), spend: { total: NaN } },
+    verdict('a', 'momo', 100, { coins: { spent: -3 } }),
+    { type: 'session_started', timestamp: iso(5), caseId: 'banana-mystery', team: B },
+  ]);
+  const [row] = lb.standings({}).teams;
+  assert.equal(row.coins, 0);
+  assert.equal(row.timeMs, 90000);
+  assert.equal(lb.standings({}).teams.length, 1);
+  lb.reset('1970-01-01T00:08:20.000Z');
+  assert.equal(lb.standings({}).startedAt, 500000);
+});
