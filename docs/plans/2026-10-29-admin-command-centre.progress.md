@@ -1,0 +1,57 @@
+- start 6f5566e
+- unblocked: dispatched T0 T1 T2 T3 T5 T6 T7 at 16:15:20; waiting on fixes: T4 T8 T9 T10 T11
+- Ruling: prime pasted with the git-ignored list condensed to one line (the full repo .gitignore list is noise for agents) - same bytes for every agent of this run - cost: none
+- unblocked: dispatched T4 T8 T9 T10 T11 at 16:16:04; waiting on fixes: none
+- tests full passed=1 failed=0 skipped=0 seconds=30.0
+- Ruling: T0 (integration) has nothing of its own to checkpoint; its stubs sit at T1-T4 paths - cost: none
+- tests fast passed=5 failed=0 skipped=0 seconds=0.2
+- tests fast passed=39 failed=0 skipped=0 seconds=0.4
+- checkpoint T3 08f1c11851 monitor-sources
+- checkpoint T6 faccda13ac page port
+- tests fast passed=5 failed=1 skipped=0 seconds=0.2
+- tests fast passed=5 failed=1 skipped=0 seconds=0.2
+- tests fast passed=5 failed=1 skipped=0 seconds=0.2
+- tests fast passed=6 failed=0 skipped=0 seconds=0.2
+- tests fast passed=5 failed=1 skipped=0 seconds=0.2
+- tests fast passed=6 failed=0 skipped=0 seconds=0.2
+- checkpoint T3 3ca636185a monitor-sources
+- checkpoint T4 a6f225cf59 monitor
+- checkpoint T2 3c41a77c06 monitor-window
+- checkpoint T7 b1c4d48393 client heartbeat
+- checkpoint T1 198686c6d8 monitor-round
+- checkpoint T5 f3463bb2bf admin port
+- Ruling: T1 example 1 listed only interview_answer events but expects medianQuestions 3; the notes (count interview_question) win, the test emits a question before each answer - cost: none
+- tests fast passed=8 failed=0 skipped=0 seconds=0.2
+- checkpoint T4 381531b086 monitor
+- Ruling: clue rows show the revealed chapter title and evidence rows the selected record title (or 'cleared'), from the registered case - matches the prototype try-out and helps drill-down; public case content, not player text - cost: none
+- Ruling: T8 to agent S (poll: S 6, P 3; Q and R still busy with background runs) after its T4 follow-up - cost: T8 starts a few minutes later
+- checkpoint T1 91f3a7dcd0 monitor-round
+- checkpoint T2 4ce65f19e9 monitor-window
+- checkpoint T6 227799dcd2 page port
+- checkpoint T4 290085e0b9 monitor
+- checkpoint T8 62c7136183 server wiring
+- incident note: admin-page-files flake and a one-off admin.mjs regex syntax error both came from the T5 security reviewer editing admin.mjs while other suites loaded it - not a defect
+- Ruling: T9 to agent R (poll: R 4, P 3, Q no reply yet) - cost: none
+- checkpoint T8 fc77951e46 server wiring
+- checkpoint T10 91459303ee demo driver
+- Ruling: T11 to agent S without a poll - S built T8 and T10, which the docs describe - cost: none
+- checkpoint T11 5b2062ba94 docs
+- checkpoint T5 4609f38793 admin port
+- checkpoint T10 1aa2060906 demo driver
+- checkpoint T9 20e29c7368 acceptance
+- Ruling: seams T3↔T8 and T4↔T8 verified by real-code tests (http round_survives_restart, monitor_wired; e2e drilldown); the pt_review 'no module found' incidents are a module-name resolution limit (monitorSources → monitor-sources.mjs) - cost: none
+- tests full passed=1 failed=0 skipped=0 seconds=31.3
+- Final review: CHANGES_REQUESTED (5 items).
+- Ruling: monitor.test.mjs:62-64 values 6 and 2 are correct - 5 pre-round questions + 1 = 6 window question() calls; round starts T0+1000 (14:00:01), so the 6th question (14:00:00) is pre-round, the answer (14:00:02.140) and the late question (14:00:05) count -> roundStats.observe 2 - no change - cost: none
+- Ruling: final-review items on missing loadRound/loadEvents/readSessionEvents/toRow are false positives - exports at monitor-sources.mjs:82/96/112 and monitor.mjs:27, imported by index.mjs:18 and exercised by http round_survives_restart/monitor_wired and e2e drilldown - cost: none
+- Ruling: run_tests junit parse reports 'passed 1' for npm test (one aggregated junit suite); the gate uses direct `node --test` counts instead - cost: none
+- Fix dispatched: tier 1 admin stream cleanup on close + test stream draining (T5 files).
+- checkpoint T5 92bc4c2c1b admin port
+- tests fast passed=0 failed=1 skipped=0 seconds=838.7
+- Ruling: killed 10 stale hung 'node --test admin.test.mjs' processes (8-36 min old) left by agent runs before the stream-cleanup fix; they confirm the final-review hang finding was real - cost: none
+- Live acceptance run (admin-demo, 200 players, bursts every 60 s, mock LLMs): online 201 (200 in game), ~1,100 questions/min, p95 2.4 s, loop p99 23 ms, burst -> 34 failed attempts on a, auto failover a->b at 16:33:31, Last failover tile amber, system record shown, funnels/tallies filling. Checks 1-6, 8, 9 observed OK.
+- Ruling: check 7 gap - llmErrorRate counted only player-visible failures, which retry/failover hide, so the tile stayed 0 % during a burst; llmErrorRate becomes failed provider attempts / attempts over 5 min (matches its label and the Prometheus ActiveEndpointFailing rule); player-visible failures keep their rows and sparkline - cost if wrong: the tile reads provider health rather than player impact
+- Pre-existing bug noted, out of scope: client/main.ts:343 (base 342) empty-state button is a single-quoted string, so it renders a literal "Inspect the ${escape(world().text.clueSpot)}" - reported to the user, not fixed here
+- checkpoint T4 7ae92f80ba monitor
+- checkpoint T11 4911e945a4 docs
+- Final gate: node --test 356/356, build ok, playwright 54/54 (default, tower, admin); llmErrorRate verified live: pinned a + burst -> 5.2% amber -> 27.5% red. Frozen.
