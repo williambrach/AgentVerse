@@ -35,14 +35,19 @@ Put the endpoint, key, and model in the ignored `.env` file. The endpoint must i
 ```dotenv
 OVERRIDE_LLM_BASE_URL=https://ai.cloud.sdu.dk/v1
 OVERRIDE_LLM_API_KEY=your-key
-OVERRIDE_LLM_MODEL=zai-org/GLM-5.3
+OVERRIDE_LLM_MODEL=zai-org/GLM-5.3-Flash
+OVERRIDE_LLM_REASONING_EFFORT=low
 ```
+
+`OVERRIDE_LLM_REASONING_EFFORT` (`low`, `medium` or `high`) is sent as `reasoning_effort`; leave it empty for a model that does not accept it. With GLM 5.3 Flash, `low` keeps the reasoning players can inspect to a few lines. In an endpoints file the field is `reasoningEffort`.
 
 Restart the server after changing configuration. Coins are set the same way: `OVERRIDE_COIN_BUDGET` is empty for no budget, or an integer from 6 to 999, and `OVERRIDE_REASONING_CHARGES` is 1 or 2 (default 1). Credentials remain on the server and are excluded from the browser bundle, exports, Git, and Docker build context. The server uses native `fetch`; no OpenAI SDK or AgentVerse Python dependencies are required.
 
 `OVERRIDE_LLM_MAX_COMPLETION_TOKENS` defaults to 2,048. This includes internal reasoning tokens, not just the visible answer. A response cut off by that limit is retried once with twice the budget (up to 8,192); partial answers and reasoning-only responses are never shown as testimony. `OVERRIDE_LLM_TIMEOUT_MS` defaults to 60,000 and bounds both attempts together. Authentication, rate-limit, timeout, and response-limit failures have distinct player-facing messages and log reasons.
 
 With both key and model empty, interviews use a visibly labeled **scripted rehearsal** mode. This is useful for testing the full flow without a model. In live mode, provider failures are shown to the player and logged; the server never silently substitutes a scripted answer. Questions can be retried without losing the draft.
+
+The game is English only: the UI is written in English, and both prompts tell characters to answer in English whatever language the question is in (`interview-v4`, `thread-v2`).
 
 Each live request includes that character’s knowledge and that character’s previous questions and answers. Characters do not receive each other’s interview histories. The incident, knowledge, and hidden explanation are authored on the server; model outputs are fallible testimony, not changes to the ground truth. Prompt instructions limit invented facts and prompt injection, but cannot guarantee that a model will follow them. Validate live behavior before collecting research data.
 
@@ -73,7 +78,7 @@ Inspect reasoning shows how that character reasoned about their last line. Let t
 - **Without a check-in.** Old browsers and scripts that never join a team play as before but are not on the board.
 - **One data directory per event.** Team names persist in `teams.jsonl` and stay taken. Use a fresh `OVERRIDE_ENV` (data directory) for each event.
 
-Click a monkey, signpost, or destination to walk there. WASD/arrows and E/Space also work. **Skip walking** jumps directly to a destination and is enabled initially for reduced-motion preferences. Momo, Pip, and Nori blink and make small gestures on separate idle cycles, and react when you approach. Reduced-motion preferences disable these animations. The notebook retains its page turns; reduced-motion preferences disable those effects.
+Walk with WASD or the arrow keys, and press E or Space next to a monkey, the signpost or the start marker. Clicking the map does not move the investigator; the destination buttons open a conversation or your guess straight away. A basket of bananas sits on the picnic blanket. Momo, Pip, and Nori blink and make small gestures on separate idle cycles, and react when you approach. Reduced-motion preferences disable these animations. The notebook retains its page turns; reduced-motion preferences disable those effects.
 
 ## Writing a case
 
@@ -215,6 +220,7 @@ It prints a table per endpoint with review flags (empty, length, a character out
 | `OVERRIDE_ENDPOINTS` | unset | Path to the endpoints JSON; replaces the three above. |
 | `OVERRIDE_ENDPOINT_<X>_KEY` | unset | Keys named by `keyEnv` in the endpoints file. |
 | `OVERRIDE_LLM_MAX_COMPLETION_TOKENS` | 2048 | Token budget including reasoning (256 to 8192). |
+| `OVERRIDE_LLM_REASONING_EFFORT` | empty | `low`, `medium` or `high`, sent as `reasoning_effort`; empty sends nothing. |
 | `OVERRIDE_LLM_TIMEOUT_MS` | 60000 | Per-question deadline. |
 | `OVERRIDE_LLM_MAX_IN_FLIGHT` | 200 | Global cap on simultaneous LLM calls. |
 | `OVERRIDE_LLM_FAILOVER_FAILURES` | 5 | Failures that trigger failover. |
