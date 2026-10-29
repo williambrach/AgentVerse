@@ -12,13 +12,18 @@ import { WindowCounter, clientAddress, signToken, verifyToken } from './identity
 import { loadStatic, serveStatic } from './static.mjs';
 import { Registry, bindCollectors, createGameMetrics, observeGameEvent, observeLlmEvent, observeWrite } from './metrics.mjs';
 import { createAdmin } from './admin.mjs';
+import { createMonitor } from './monitor.mjs';
+import { createRoundStats } from './monitor-round.mjs';
+import { createPresence, createWindows } from './monitor-window.mjs';
+import { createTrafficSampler, loadEvents, loadRound, readSessionEvents } from './monitor-sources.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TOKEN_MS = 12 * 60 * 60_000;
 const actions = ['start', 'reset', 'reveal', 'evidence', 'visit', 'interview', 'verdict'];
+const tabPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export function createApp({ investigations, accessCode = '', secret = randomBytes(32).toString('hex'), trustProxy = false, staticFiles = null, metrics = null, publicDir = resolve(root, 'dist') }) {
+export function createApp({ investigations, accessCode = '', secret = randomBytes(32).toString('hex'), trustProxy = false, staticFiles = null, metrics = null, publicDir = resolve(root, 'dist'), onHeartbeat = null }) {
   const files = staticFiles || loadStatic(publicDir);
   // Only wrong codes count. Behind a proxy or a shared network, every player
   // arrives from one address, and correct sign-ins must not lock them out.
@@ -44,7 +49,7 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname.startsWith('/api/')) {
         const name = url.pathname.slice('/api/'.length);
-        route = ['health', 'access', 'cases', 'state', 'events', ...actions].includes(name) ? `/api/${name}` : '/api/other';
+        route = ['health', 'access', 'cases', 'state', 'events', 'heartbeat', ...actions].includes(name) ? `/api/${name}` : '/api/other';
         if (url.pathname === '/api/health' && req.method === 'GET') return json(res, 200, { ok: true });
         if (req.method === 'POST') {
           if (req.headers['sec-fetch-site'] === 'cross-site') throw new RequestError(403, 'Cross-site requests are not allowed.');
@@ -77,6 +82,12 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
         if (!validToken(req)) throw new RequestError(401, 'Enter the demo access code to continue.');
         // Each browser owns one investigation through its session cookie.
         const sessionId = cookie(req, 'override_session');
+        if (url.pathname === '/api/heartbeat' && req.method === 'POST') {
+          if (typeof input.tab !== 'string' || !tabPattern.test(input.tab)) throw new RequestError(400, 'Send a tab id.');
+          try { onHeartbeat?.(input.tab, sessionIdPattern.test(sessionId || '') ? sessionId : null); } catch { /* never fails a player */ }
+          res.writeHead(204, { 'Cache-Control': 'no-store' });
+          return res.end();
+        }
         if (url.pathname === '/api/cases' && req.method === 'GET') return json(res, 200, { cases: investigations.catalog() });
         if (url.pathname === '/api/state' && req.method === 'GET') return json(res, 200, investigations.view(sessionId));
         if (url.pathname === '/api/events' && req.method === 'GET') {
@@ -130,18 +141,47 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
   const registry = new Registry();
   const metrics = createGameMetrics(registry);
   setWriteObserver(write => observeWrite(metrics, write));
-  const onSystem = record => appendJsonl(paths.system, record, 'system');
+  // The monitor exists only with an admin token; closures are late-bound and never let it break a game.
+  let monitor = null;
+  const feed = (method, arg) => { try { monitor?.[method](arg); } catch { /* monitor must not affect games */ } };
+  const onSystem = record => { appendJsonl(paths.system, record, 'system'); feed('observeSystem', record); };
   // Traces are admin-only. Probes and anything without a valid session go to one shared file.
   const onTrace = record => appendJsonl(join(paths.traces, !record.probe && sessionIdPattern.test(record.sessionId || '') ? `${record.sessionId}.jsonl` : 'probes.jsonl'), record, 'trace');
   const router = config.mode === 'live' ? new LlmRouter({
     endpoints: config.endpoints, maxInFlight: config.maxInFlight, deadlineMs: config.timeoutMs, maxCompletionTokens: config.maxCompletionTokens,
-    failover: config.failover, restore: lastRecord(paths.system, r => r.type === 'llm_active'), onSystem, onTrace, onEvent: e => observeLlmEvent(metrics, e),
+    failover: config.failover, restore: lastRecord(paths.system, r => r.type === 'llm_active'), onSystem, onTrace, onEvent: e => { observeLlmEvent(metrics, e); feed('observeLlm', e); },
   }) : null;
   const investigations = new Investigations({
     dataDir, config, router, dev: devTools(env), meta: { env: envName, ...appVersion(env), endpointsHash: config.endpointsHash },
-    onEvent: e => observeGameEvent(metrics, e),
+    onEvent: e => { observeGameEvent(metrics, e); feed('observeGame', e); },
   });
   bindCollectors(registry, { router, investigations, dataDir });
+
+  let sampler = null;
+  let tickTimer = null;
+  if (env.OVERRIDE_ADMIN_TOKEN) {
+    sampler = createTrafficSampler({ registry, dataDir: paths.root, now: Date.now });
+    let cached = null;
+    let cachedAt = 0;
+    const extras = () => {
+      const at = Date.now();
+      if (!cached || at - cachedAt >= 1000 || at < cachedAt) {
+        cached = { router: router?.snapshot() ?? null, sessions: investigations.stats(), system: readJsonl(paths.system).slice(-20) };
+        cachedAt = at;
+      }
+      return cached;
+    };
+    monitor = createMonitor({
+      cases, roundStats: createRoundStats(cases), windows: createWindows({ now: Date.now }),
+      presence: createPresence({ now: Date.now, windowMs: 75_000, max: 5000 }),
+      sample: () => sampler.sample(), extras, readSession: id => readSessionEvents(paths.sessions, id),
+      now: Date.now, mode: config.mode === 'live' ? 'live' : 'rehearsal', ringSize: 1000,
+    });
+    const round = loadRound(paths.system);
+    monitor.load(loadEvents(paths.sessions, round.startedAt), round);
+    tickTimer = setInterval(() => { try { monitor.tick(); } catch { /* ignore */ } }, 5000);
+    tickTimer.unref();
+  }
 
   let secret = env.OVERRIDE_SECRET;
   if (!secret) {
@@ -149,7 +189,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     console.warn('OVERRIDE_SECRET is not set: sign-ins will not survive a restart.');
   }
   const trustProxy = ['1', 'true'].includes(String(env.OVERRIDE_TRUST_PROXY).toLowerCase());
-  const server = createApp({ investigations, accessCode: env.OVERRIDE_ACCESS_CODE || '', secret, trustProxy, staticFiles: loadStatic(publicDir), metrics });
+  const server = createApp({ investigations, accessCode: env.OVERRIDE_ACCESS_CODE || '', secret, trustProxy, staticFiles: loadStatic(publicDir), metrics, onHeartbeat: (tab, sid) => monitor?.heartbeat(tab, sid) });
   // Headers and bodies arrive fast; answers take up to 60 s. Keep-alive outlives a proxy's idle timeout.
   server.headersTimeout = 20_000;
   server.requestTimeout = 40_000;
@@ -163,13 +203,13 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     const probeCase = cases[0];
     const probeCharacter = probeCase.characters[0];
     admin = createAdmin({
-      token: env.OVERRIDE_ADMIN_TOKEN, router, investigations, registry, dataDir,
+      token: env.OVERRIDE_ADMIN_TOKEN, monitor, router, investigations, registry, dataDir,
       probeMessages: buildMessages(probeCase, { revealedPosition: 1, selectedEvidence: null, interviews: Object.fromEntries(probeCase.characters.map(c => [c.id, []])) }, probeCharacter.id, probeCharacter.quickQuestion),
       readSystem: () => readJsonl(paths.system).slice(-20), onSystem,
     });
     try {
       await new Promise((resolve, reject) => { admin.once('error', reject); admin.listen(portOf(env.OVERRIDE_ADMIN_PORT, 3002), '127.0.0.1', resolve); });
-    } catch (error) { server.close(); throw error; }
+    } catch (error) { clearInterval(tickTimer); sampler?.close(); server.close(); throw error; }
   }
 
   let closing = null;
@@ -177,6 +217,8 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
   const close = () => closing ||= (async () => {
     const closed = new Promise(resolve => server.close(resolve));
     server.closeIdleConnections();
+    clearInterval(tickTimer);
+    sampler?.close();
     admin?.close();
     admin?.closeAllConnections();
     await Promise.race([investigations.idle(), sleep(65_000)]);

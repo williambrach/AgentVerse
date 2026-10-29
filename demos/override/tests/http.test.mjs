@@ -266,3 +266,101 @@ test('the case catalog needs the access token and lists public rows only', async
   assert.deepEqual(await response.json(), { cases: rows });
   assert.equal((await fetch(`${base}/server/cases/tower-echo-bell.mjs`)).status, 404);
 });
+
+const adminHeaders = { Authorization: 'Bearer admin-token' };
+async function streamHello(server) {
+  const ctl = new AbortController();
+  try {
+    const res = await fetch(`${server.adminUrl}/admin/stream`, { headers: adminHeaders, signal: ctl.signal });
+    const reader = res.body.getReader();
+    let text = '';
+    while (!text.includes('\n')) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += Buffer.from(value).toString();
+    }
+    return JSON.parse(text.split('\n')[0]);
+  } finally { ctl.abort(); }
+}
+const beat = (url, tab, cookie, headers = {}) => fetch(`${url}/api/heartbeat`, { method: 'POST', headers: { ...json, ...(cookie ? { Cookie: cookie } : {}), ...headers }, body: JSON.stringify({ tab }) });
+const TAB = '3f1c2a4e-5b6d-4e7f-8a9b-0c1d2e3f4a5b';
+
+test('heartbeat_route: 204 with the cookie session, gated, validated, labelled, and no game touched', async t => {
+  const calls = [];
+  const dir = tmp(t);
+  const { createApp } = await import('../server/index.mjs');
+  const { Investigations } = await import('../server/session.mjs');
+  const { modelConfig } = await import('../server/interviews.mjs');
+  const { Registry, createGameMetrics } = await import('../server/metrics.mjs');
+  const registry = new Registry();
+  const inv = new Investigations({ dataDir: dir, config: modelConfig({}), router: null, dev: false, meta: {} });
+  const touched = [];
+  for (const m of ['find', 'view', 'mutate']) { const orig = inv[m]?.bind(inv); if (orig) inv[m] = (...a) => { touched.push(m); return orig(...a); }; }
+  const server = createApp({ investigations: inv, accessCode: 'code', secret: 's', staticFiles: new Map(), metrics: createGameMetrics(registry), onHeartbeat: (tab, sid) => calls.push([tab, sid]) });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  t.after(() => server.close());
+  const url = `http://127.0.0.1:${server.address().port}`;
+  assert.equal((await beat(url, TAB)).status, 401);
+  const access = (await login(url, 'code')).headers.get('set-cookie').split(';')[0];
+  const sid = '7f3a0000-0000-4000-8000-000000000000';
+  const ok = await beat(url, TAB, `${access}; override_session=${sid}`);
+  assert.equal(ok.status, 204);
+  assert.equal(await ok.text(), '');
+  assert.equal((await beat(url, TAB, access)).status, 204);
+  assert.equal((await beat(url, TAB, `${access}; override_session=../../x`)).status, 204);
+  assert.deepEqual(calls, [[TAB, sid], [TAB, null], [TAB, null]]);
+  assert.equal((await beat(url, 'x', access)).status, 400);
+  assert.equal((await beat(url, TAB, access, { 'Sec-Fetch-Site': 'cross-site' })).status, 403);
+  assert.deepEqual(touched, []);
+  assert.match(registry.render(), /override_http_requests_total\{route="\/api\/heartbeat",status="204"\} 3/);
+});
+
+test('monitor_wired: a played game reaches the admin stream and a heartbeat counts online', async t => {
+  const server = await boot(t, { OVERRIDE_ADMIN_TOKEN: 'admin-token' });
+  const p = await player(server.url);
+  await p.post('interview', { revision: p.revision, character: 'momo', question: 'Did the keeper say yes?' });
+  assert.equal((await beat(server.url, TAB, p.cookie)).status, 204);
+  const hello = await streamHello(server);
+  assert.equal(hello.type, 'hello');
+  const mine = hello.recent.filter(r => r.sessionId === p.id).map(r => r.kind);
+  assert.ok(mine.includes('start') && mine.includes('question') && mine.includes('answer'), mine.join());
+  assert.equal(hello.snapshot.funnel['banana-mystery'].started, 1);
+  assert.equal(hello.snapshot.players.online, 1);
+  assert.equal(hello.snapshot.players.onlineInGame, 1);
+});
+
+test('round_survives_restart: label, round count and recent rows come back from disk', async t => {
+  const dir = tmp(t);
+  const env = { PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 'secret-one', OVERRIDE_ADMIN_TOKEN: 'admin-token' };
+  const first = await startServer(env);
+  let closed = false;
+  t.after(() => { if (!closed) return first.close(); });
+  const set = await fetch(`${first.adminUrl}/admin/round`, { method: 'POST', headers: { ...json, ...adminHeaders }, body: JSON.stringify({ label: 'B' }) });
+  assert.equal(set.status, 200);
+  await new Promise(r => setTimeout(r, 5));
+  const p = await player(first.url);
+  await p.post('interview', { revision: p.revision, character: 'momo', question: 'Did the keeper say yes?' });
+  await first.close();
+  closed = true;
+  const second = await startServer(env);
+  t.after(() => second.close());
+  const hello = await streamHello(second);
+  assert.equal(hello.snapshot.round.label, 'B');
+  assert.equal(hello.snapshot.players.round, 1);
+  assert.ok(hello.recent.some(r => r.sessionId === p.id && r.kind === 'answer'));
+});
+
+test('no_admin_no_monitor: heartbeats still return 204 and nothing is kept', async t => {
+  const server = await boot(t, {});
+  assert.equal(server.admin, null);
+  assert.equal((await beat(server.url, TAB)).status, 204);
+});
+
+test('heartbeat_protocol: oversized, non-json and GET heartbeats are refused', async t => {
+  const server = await boot(t, {});
+  const post = (body, headers) => fetch(`${server.url}/api/heartbeat`, { method: 'POST', headers, body });
+  assert.equal((await post(JSON.stringify({ tab: TAB, pad: 'x'.repeat(20_000) }), json)).status, 413);
+  assert.equal((await post(JSON.stringify({ tab: TAB }), { 'Content-Type': 'text/plain' })).status, 415);
+  assert.equal((await post('[]', json)).status, 400);
+  assert.equal((await fetch(`${server.url}/api/heartbeat`)).status === 204, false);
+});
