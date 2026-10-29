@@ -507,7 +507,11 @@ function bindForms() {
   const question = document.querySelector<HTMLTextAreaElement>('#question');
   question?.addEventListener('input', () => { drafts[panel] = question.value; });
   question?.addEventListener('keydown', event => {
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) document.querySelector<HTMLFormElement>('#interview-form')?.requestSubmit();
+    // Enter sends; Shift+Enter keeps a newline; skip while an IME is composing.
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    const form = document.querySelector<HTMLFormElement>('#interview-form');
+    if (!form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled) form?.requestSubmit();
   });
   document.querySelector('#interview-form')?.addEventListener('submit', event => { event.preventDefault(); void askQuestion(); });
   if (document.querySelector('#report-form')) {

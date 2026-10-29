@@ -135,6 +135,20 @@ test('compact notebook keeps drafts and reading position across interview pages'
   expect(await scroller.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
 });
 
+test('Enter sends the question and Shift+Enter adds a new line', async ({ page }) => {
+  await fresh(page);
+  await go(page, 'pip', 'Pip');
+  const question = page.locator('#question');
+  await question.fill('Did you check');
+  await question.press('Shift+Enter');
+  await question.pressSequentially('with the keeper?');
+  await expect(question).toHaveValue('Did you check\nwith the keeper?');
+  await expect(page.locator('.speech.investigator')).toHaveCount(0);
+  await question.press('Enter');
+  await expect(page.locator('.speech.investigator')).toHaveCount(1);
+  await expect(question).toHaveValue('');
+});
+
 test('copy, counts and nav come from the active case', async ({ page }) => {
   await fresh(page);
   const before = await (await page.request.get('/api/state')).json();
