@@ -116,8 +116,8 @@ The server already sends `characters`, `chapters` and `records`. The client rend
 
 ## Step 3: Pick a case (half a day)
 
-- `?case=<id>` in the URL. The client sends `caseId` with `start`; the server validates it against the registry and falls back to the first `ready` case. **New case** keeps the same case.
-- `GET /api/cases` returns `id, title, order` for `ready` cases. Needed by the intro screen only if a menu is built later; cheap enough to add now.
+- `?case=<id>` in the URL. The client sends `caseId` with `start`; the server validates it against the registry and falls back to the first `ready` case. The **Cases** board (topbar) preselects the current case, so a restart keeps it.
+- `GET /api/cases` returns `id, title, lead, order` for `ready` cases. The case board lists them.
 - `session_started` already records `caseId`, `caseVersion`, `contentHash`. Add `assignment: 'fixed' | 'default'`.
 - README: remove "one shared active investigation per server" (already stale after the session work) and add a short "Writing a case" section pointing at `banana-control.mjs` as the annotated example.
 
@@ -142,7 +142,7 @@ Build these only when the trigger happens. Until then they are not on the list.
 
 | Item | Trigger |
 | --- | --- |
-| Case menu on the intro screen; balanced random assignment | The study design exists and says how players get cases (backendplan D1, 5.8). |
+| Balanced random assignment (the case board shipped on 2026-10-26) | The study design exists and says how players get cases (backendplan D1, 5.8). |
 | `cases.lock.json` with frozen hashes; a check that a frozen case cannot change without a version bump | A case is frozen for a study. |
 | Per-case stops and map presets (`grove`, `hut`) | A story needs a different layout. |
 | New cast: sprite atlas data in a JSON file, inline colours instead of per-character CSS | A story needs characters other than the three monkeys. Budget an art day per character. |
@@ -160,7 +160,7 @@ Made on 2026-10-26, replacing the five open questions in the original plan.
 
 1. **Format:** JS modules. The current case file is already a readable data file; YAML plus a schema library would add two dependencies, a hot-reload item and a rules DSL to get back what the language gives for free.
 2. **Override-v1:** stays archived and unregistered. It is a different game (ten minutes, four chapters, adult tone) and must not drive the design.
-3. **Choosing a case:** URL parameter only. Menu and balanced assignment wait for the study design.
+3. **Choosing a case:** URL parameter, or the case board at the start and behind **Cases** in the topbar. Balanced assignment waits for the study design.
 4. **Cast:** shared. Same three monkeys in every case. This removes the sprite, CSS and most of the client work from the critical path.
 5. **Progression:** chapter model, unchanged.
 

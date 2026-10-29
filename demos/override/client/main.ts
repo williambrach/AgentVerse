@@ -2,6 +2,8 @@ import './style.css';
 import './pixel.css';
 import './notebook.css';
 import './banana.css';
+import './case-board.css';
+import './fit.css';
 import { renderNotebook } from './notebook';
 import { createStation, type Station } from './station';
 import type { CaseState, CharacterId, Evidence, LocationId } from './types';
@@ -23,6 +25,19 @@ let selectedCase = '';
 let drafts: Record<string, string> = {};
 let reportDraft = { suspect: '', confidence: 70, explanation: '', evidenceIds: [] as string[] };
 
+// Solved cases are a per-browser convenience for the case list; research records stay on the server.
+const solvedKey = 'override.solved';
+const solved = new Set<string>((() => {
+  try { const saved = JSON.parse(localStorage.getItem(solvedKey) || '[]'); return Array.isArray(saved) ? saved.filter(id => typeof id === 'string') : []; }
+  catch { return []; }
+})());
+function markSolved(caseId: string) {
+  if (solved.has(caseId)) return;
+  solved.add(caseId);
+  try { localStorage.setItem(solvedKey, JSON.stringify([...solved])); } catch { /* Storage blocked: the badge lasts this visit. */ }
+}
+
+const caseNumber = (order: number) => String(order).padStart(3, '0');
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const icon = (name: string) => {
   const paths: Record<string, string> = {
@@ -35,6 +50,7 @@ const icon = (name: string) => {
     check: '<path d="m5 12 4 4L19 6"/>',
     person: '<circle cx="12" cy="8" r="3"/><path d="M5 21v-3a7 7 0 0 1 14 0v3"/>',
     reset: '<path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/>',
+    cases: '<rect x="3" y="4" width="7" height="7" rx="1"/><rect x="14" y="4" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   };
   return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.person}</svg>`;
 };
@@ -77,11 +93,11 @@ function shell() {
     <header class="topbar">
       <a class="wordmark" href="/" aria-label="The Override home"><span class="banana-mark">${icon('banana')}</span><span>THE OVERRIDE<small>AGENTVERSE</small></span></a>
       <div class="top-meta"><span class="authored-label">AUTHORED DEMONSTRATION</span><span id="mode-badge" class="mode-badge"></span></div>
-      <button class="quiet-button" id="reset-button" title="Start a fresh session">${icon('reset')}<span>New case</span></button>
+      <button class="quiet-button" id="reset-button" title="Choose another case or restart this one">${icon('cases')}<span>Cases</span></button>
     </header>
     <main class="workspace">
       <section class="world-column" aria-label="Banana Grove">
-        <div class="world-heading"><div><span class="eyebrow" id="case-eyebrow">CASE 00${escape(state.order)} <span class="slash">/</span> GROVE</span><h1 id="case-headline">${escape(state.copy.headline)}</h1></div><span class="case-status" id="case-status">AWAITING INVESTIGATOR</span></div>
+        <div class="world-heading"><div><span class="eyebrow" id="case-eyebrow">CASE ${caseNumber(state.order)} <span class="slash">/</span> GROVE</span><h1 id="case-headline">${escape(state.copy.headline)}</h1></div><span class="case-status" id="case-status">AWAITING INVESTIGATOR</span></div>
         <div class="station-frame"><div class="station-topline"><span><i class="live-dot"></i> <span id="case-topline">${escape(state.title.toUpperCase())}</span> / PICNIC DAY</span><span id="elapsed">00:00</span></div><div id="station"></div><div class="station-bottomline"><span id="movement-hint">WASD / ARROWS to walk · E to interact</span><span class="floor-label">2–3 MINUTE MYSTERY</span></div></div>
         <nav class="room-nav" aria-label="Grove destinations">
           <button data-go="replay">${icon('replay')}<span>Basket<small id="replay-count">Find ${state.clueCount} clues</small></span></button>
@@ -103,9 +119,9 @@ function shell() {
     const input = event.target as HTMLInputElement;
     if (input.name !== 'case') return;
     selectedCase = input.value;
-    if (!state.session) updateIntroPreview();
-    document.querySelectorAll('.case-option').forEach(el => el.classList.toggle('selected', el.contains(input)));
+    renderPreview();
   });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.querySelector('#case-switch')) closeCases(); });
   document.querySelector('#skip-walking')!.addEventListener('change', event => { skipWalking = (event.target as HTMLInputElement).checked; });
   setInterval(() => {
     const elapsed = document.querySelector('#elapsed');
@@ -142,6 +158,7 @@ async function onClick(event: MouseEvent) {
     return;
   }
   if (button.id === 'begin-button') {
+    if (state.session && selectedCase && selectedCase !== state.caseId) { await startCase(selectedCase); return; }
     if (!state.session && !(await action('start', selectedCase ? { caseId: selectedCase } : {}))) return;
     dropCaseParam();
     introVisible = false;
@@ -150,19 +167,21 @@ async function onClick(event: MouseEvent) {
   }
   if (button.id === 'reveal-button') await action('reveal');
   if (button.id === 'clear-evidence') await action('evidence', { evidenceId: null });
-  if (button.id === 'reset-button' || button.id === 'debrief-reset') showReset();
-  if (button.id === 'cancel-reset') { document.querySelector('#overlay-root')!.innerHTML = ''; station.setEnabled(true); }
-  if (button.id === 'confirm-reset') {
-    const resetCase = document.querySelector<HTMLSelectElement>('#reset-case')?.value;
-    if (await action('reset', resetCase ? { caseId: resetCase } : {})) {
-      dropCaseParam();
-      drafts = blankDrafts();
-      reportDraft = { suspect: '', confidence: 70, explanation: '', evidenceIds: [] };
-      panel = 'briefing'; station.resetPosition(); introVisible = false;
-      document.querySelector('#overlay-root')!.innerHTML = ''; render();
-    }
-  }
+  if (button.id === 'reset-button' || button.id === 'debrief-reset') showCases();
+  if (button.id === 'cancel-reset') closeCases();
+  if (button.id === 'confirm-reset') await startCase(selectedCase || state.caseId);
+  if (button.id === 'next-case') await startCase(button.dataset.case!);
   if (button.id === 'export-button' || button.id === 'debrief-export') window.location.assign('/api/events');
+}
+
+/** Opens a fresh session on a case. The old session's records stay on the server. */
+async function startCase(caseId: string) {
+  if (!(await action('reset', { caseId }))) return;
+  dropCaseParam();
+  drafts = blankDrafts();
+  reportDraft = { suspect: '', confidence: 70, explanation: '', evidenceIds: [] };
+  panel = 'briefing'; station.resetPosition(); introVisible = false;
+  document.querySelector('#overlay-root')!.innerHTML = ''; render();
 }
 
 function dropCaseParam() {
@@ -174,16 +193,17 @@ function render() {
   if (!state || !document.querySelector('#panel')) return;
   const session = state.session;
   if (!session) { panel = 'briefing'; introVisible = true; }
+  if (session?.status === 'closed') markSolved(session.caseId);
   document.querySelector('#case-headline')!.textContent = state.copy.headline;
   document.querySelector('#case-topline')!.textContent = state.title.toUpperCase();
-  document.querySelector('#case-eyebrow')!.innerHTML = `CASE 00${escape(state.order)} <span class="slash">/</span> GROVE`;
+  document.querySelector('#case-eyebrow')!.innerHTML = `CASE ${caseNumber(state.order)} <span class="slash">/</span> GROVE`;
   document.querySelector('#mode-badge')!.textContent = state.mode === 'live' ? 'LIVE INTERVIEWS' : 'SCRIPTED REHEARSAL';
   document.querySelector('#mode-badge')!.classList.toggle('rehearsal', state.mode === 'rehearsal');
   document.querySelector('#case-status')!.textContent = !session ? 'AWAITING INVESTIGATOR' : session.status === 'closed' ? 'CASE CLOSED' : 'INVESTIGATION OPEN';
   document.querySelector('#replay-count')!.textContent = session?.revealedPosition ? `${state.clueCount} clues found` : `Find ${state.clueCount} clues`;
   document.querySelector('#evidence-count')!.textContent = `${state.records.length} / ${state.clueCount} found`;
   const heard = session ? ids().filter(id => session.interviews[id].length).length : 0;
-  document.querySelector('#quick-progress')!.textContent = session?.status === 'closed' ? 'Mystery solved · Play again for a new case' : !session?.revealedPosition ? `1. Inspect the basket to find ${state.clueCount} clues` : heard < state.characters.length ? `2. Ask the monkeys · ${heard} / ${state.characters.length} heard` : '3. Ready to make your guess';
+  document.querySelector('#quick-progress')!.textContent = session?.status === 'closed' ? 'Mystery solved · Open Cases for the next one' : !session?.revealedPosition ? `1. Inspect the basket to find ${state.clueCount} clues` : heard < state.characters.length ? `2. Ask the monkeys · ${heard} / ${state.characters.length} heard` : '3. Ready to make your guess';
   document.querySelectorAll<HTMLButtonElement>('[data-go]').forEach(button => {
     button.disabled = busy || !session || introVisible;
     button.classList.toggle('active', button.dataset.go === panel);
@@ -194,7 +214,7 @@ function render() {
   const toast = document.querySelector<HTMLElement>('#toast')!;
   toast.hidden = !errorMessage;
   toast.textContent = errorMessage;
-  station?.setEnabled(Boolean(session && !introVisible && !busy));
+  station?.setEnabled(Boolean(session && !introVisible && !busy && !document.querySelector('#case-switch')));
   const target = document.querySelector<HTMLElement>('#panel')!;
   const sections: Record<string, string> = { briefing: 'Case briefing', replay: state.chapters[0]?.title || 'The basket', ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), evidence: 'Your clues', report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
   document.querySelector('#notebook-section')!.textContent = sections[panel];
@@ -208,41 +228,48 @@ function render() {
   else markup = interviewPanel(panel);
   if (renderNotebook(target, markup, `${session?.id}:${panel}:${session?.status}`, panel)) bindForms();
   if (introVisible) renderIntro();
-  else if (document.querySelector('#intro')) document.querySelector('#overlay-root')!.innerHTML = '';
+  else {
+    if (document.querySelector('#intro')) document.querySelector('#overlay-root')!.innerHTML = '';
+    if (document.querySelector('#case-switch')) renderPreview();
+  }
 }
 
-function introPreview() {
-  const row = state.session ? undefined : catalog.find(r => r.id === selectedCase);
+/** The case board: the case list beside a preview of the chosen case. Shown at the start (#intro) and from the topbar (#case-switch). */
+function caseBoard(id: 'intro' | 'case-switch') {
+  const status = (row: CaseRow) => state.session?.status === 'active' && state.session.caseId === row.id ? ['playing', 'Playing'] : solved.has(row.id) ? ['solved', 'Solved'] : ['new', 'New'];
+  const list = catalog.length < 2 ? '' : `<fieldset class="case-picker" id="case-list"><legend><span class="eyebrow">CASE FILES</span><b>${catalog.length} mysteries</b></legend>
+    ${catalog.map(row => { const [key, label] = status(row); return `<label class="case-option"><input type="radio" name="case" value="${escape(row.id)}" ${row.id === selectedCase ? 'checked' : ''}><span class="case-number">${caseNumber(row.order)}</span><span class="case-text"><b class="case-title">${escape(row.title)}</b><small class="case-lead">${escape(row.lead)}</small></span><span class="case-chip ${key}">${key === 'solved' ? icon('check') : ''}${label}</span></label>`; }).join('')}</fieldset>`;
+  return `<div class="modal-shade" id="${id}"><section class="case-board" role="dialog" aria-modal="true" aria-labelledby="intro-title">${list}<div class="intro-card" id="case-preview">${casePreview(id)}</div></section></div>`;
+}
+
+function casePreview(id: 'intro' | 'case-switch') {
+  const row = catalog.find(r => r.id === selectedCase);
+  const loaded = !row || row.id === state.caseId;
+  const active = state.session?.status === 'active';
   const title = row ? row.title : state.title;
-  return {
-    stamp: `CASE 00${escape(row ? row.order : state.order)} <span>AUTHORED DEMONSTRATION</span>`,
-    title: `${escape(title).replace(/ (\S+)$/, '<br>$1')}<span>.</span>`,
-    lead: escape(row ? row.lead : state.copy.intro.lead).replace(/\n/g, '<br>'),
-    showBody: !row || row.id === state.caseId,
-  };
+  const label = busy ? 'Opening…' : !state.session ? 'Let’s investigate' : !loaded ? 'Start this case' : id === 'intro' ? 'Continue mystery' : active ? 'Restart this case' : 'Play again';
+  const primary = `<button class="primary-button" id="${id === 'intro' ? 'begin-button' : 'confirm-reset'}" ${busy ? 'disabled' : ''}>${label} ${icon('arrow')}</button>`;
+  const note = active && (id === 'case-switch' || !loaded) ? `${loaded ? 'Restarting' : 'Starting it'} ends the case you’re in. Its records stay on the server.` : '';
+  return `<div class="intro-stamp">CASE ${caseNumber(row ? row.order : state.order)} <span>AUTHORED DEMONSTRATION</span></div>
+    <div class="monkey-line" aria-hidden="true">${state.characters.map(c => `<i class="monkey-face ${escape(c.id)}"></i>`).join('')}</div>
+    <span class="eyebrow">A 2–3 MINUTE MYSTERY</span><h2 id="intro-title">${escape(title).replace(/ (\S+)$/, '<br>$1')}<span>.</span></h2>
+    <p class="intro-lead">${escape(row ? row.lead : state.copy.intro.lead).replace(/\n/g, '<br>')}</p>
+    <p id="intro-body" ${loaded ? '' : 'hidden'}>${escape(state.copy.intro.body)}</p>
+    <div class="intro-flow"><span>01 <b>Find ${state.clueCount} clues</b></span><span>02 <b>Ask ${state.characters.length} monkeys</b></span><span>03 <b>Choose</b></span></div>
+    ${id === 'intro' ? primary : `<div class="reset-actions"><button class="secondary-button" id="cancel-reset">Keep investigating</button>${primary}</div>`}
+    <p class="fine-print">${note || `The monkeys are AI agents in an authored story. Questions, answers, and game actions are recorded. ${state.mode === 'rehearsal' ? 'This preview uses scripted replies.' : 'Their answers are generated live.'}`}</p>`;
 }
 
-function updateIntroPreview() {
-  const p = introPreview();
-  document.querySelector('.intro-stamp')!.innerHTML = p.stamp;
-  document.querySelector('#intro-title')!.innerHTML = p.title;
-  document.querySelector('.intro-lead')!.innerHTML = p.lead;
-  document.querySelector<HTMLElement>('#intro-body')!.hidden = !p.showBody;
+/** Refreshes only the preview, so the list keeps its scroll position and keyboard focus. */
+function renderPreview() {
+  const shade = document.querySelector<HTMLElement>('#intro, #case-switch');
+  if (shade) shade.querySelector('#case-preview')!.innerHTML = casePreview(shade.id as 'intro' | 'case-switch');
 }
 
 function renderIntro() {
-  const pv = introPreview();
-  document.querySelector('#overlay-root')!.innerHTML = `<div class="modal-shade" id="intro"><section class="intro-card" role="dialog" aria-modal="true" aria-labelledby="intro-title">
-    <div class="intro-stamp">${pv.stamp}</div>
-    <div class="monkey-line" aria-hidden="true">${state.characters.map(c => `<i class="monkey-face ${escape(c.id)}"></i>`).join('')}</div>
-    <span class="eyebrow">A 2–3 MINUTE MYSTERY</span><h2 id="intro-title">${pv.title}</h2>
-    <p class="intro-lead">${pv.lead}</p>
-    <p id="intro-body" ${pv.showBody ? '' : 'hidden'}>${escape(state.copy.intro.body)}</p>
-    <div class="intro-flow"><span>01 <b>Find ${state.clueCount} clues</b></span><span>02 <b>Ask ${state.characters.length} monkeys</b></span><span>03 <b>Choose</b></span></div>
-    ${state.session || !catalog.length ? '' : `<fieldset class="case-picker"><legend class="sr-only">Choose a mystery</legend>${catalog.map(row => `<label class="case-option ${row.id === selectedCase ? 'selected' : ''}"><input type="radio" name="case" value="${escape(row.id)}" ${row.id === selectedCase ? 'checked' : ''}><span><b class="case-title">${escape(row.title)}</b><small class="case-lead">${escape(row.lead)}</small></span></label>`).join('')}</fieldset>`}
-    <button class="primary-button" id="begin-button" ${busy ? 'disabled' : ''}>${busy ? 'Opening…' : state.session ? 'Continue mystery' : 'Let’s investigate'} ${icon('arrow')}</button>
-    <p class="fine-print">The monkeys are AI agents in an authored story. Questions, answers, and game actions are recorded. ${state.mode === 'rehearsal' ? 'This preview uses scripted replies.' : 'Their answers are generated live.'}</p>
-  </section></div>`;
+  if (document.querySelector('#intro')) { renderPreview(); return; }
+  document.querySelector('#overlay-root')!.innerHTML = caseBoard('intro');
+  document.querySelector('#case-list input:checked')?.scrollIntoView({ block: 'nearest' });
 }
 
 function heading(kicker: string, title: string, description: string) {
@@ -314,11 +341,13 @@ function debriefPanel() {
   const debrief = state.debrief!;
   const verdict = state.session!.verdict!;
   const chosen = state.characters.find(c => c.id === verdict.suspect)?.name || (verdict.suspect === 'none' ? 'Nobody' : 'Not sure');
+  const next = nextCase();
   return `${heading('MYSTERY SOLVED / AUTHORED DEMO', debrief.title, debrief.summary)}
     <div class="notebook-content"><div class="verdict-summary"><span class="eyebrow">YOUR GUESS · ${escape(chosen).toUpperCase()}</span><p>${escape(debrief.feedback)}</p></div>
     ${debrief.findings.map(f => `<section class="finding"><div class="finding-monkey"><i class="monkey-face ${escape(f.character)}" aria-hidden="true"></i><div><span class="eyebrow">${escape(f.character.toUpperCase())}</span><h3>${escape(f.classification)}</h3></div></div><p>${escape(f.explanation)}</p>${f.evidence.map(id => { const r = state.records.find(r => r.id === id)!; return `<details><summary>${escape(r.title)}</summary><p>${escape(r.text)}</p></details>`; }).join('')}</section>`).join('')}
     <div class="briefing-note"><p>${escape(debrief.lesson)}</p></div><p class="fine-print">These monkeys represent AI agents. This is an authored demonstration of intent and mistakes, not a validated research case.</p>
-    <button class="primary-button" id="debrief-reset">Play again ${icon('reset')}</button><button class="secondary-button" id="debrief-export">Export session ${icon('arrow')}</button></div>`;
+    ${next ? `<button class="primary-button" id="next-case" data-case="${escape(next.id)}">Next case: ${escape(next.title)} ${icon('arrow')}</button>` : ''}
+    <div class="debrief-actions"><button class="${next ? 'secondary' : 'primary'}-button" id="debrief-reset">${next ? 'All cases' : 'Play again'} ${icon(next ? 'cases' : 'reset')}</button><button class="secondary-button" id="debrief-export">Export session ${icon('arrow')}</button></div></div>`;
 }
 
 async function askQuestion() {
@@ -347,10 +376,27 @@ function bindForms() {
   }
 }
 
-function showReset() {
+function showCases() {
   station.setEnabled(false);
-  document.querySelector('#overlay-root')!.innerHTML = `<div class="modal-shade"><section class="reset-card" role="dialog" aria-modal="true" aria-labelledby="reset-title"><span class="eyebrow">NEXT PICNIC</span><h2 id="reset-title">Start a fresh mystery?</h2><p>This clears the active investigation and creates a new session ID. The current session’s research records remain on the server.</p>${catalog.length ? `<label for="reset-case">Next mystery</label><select id="reset-case">${catalog.map(row => `<option value="${escape(row.id)}" ${row.id === state.session?.caseId ? 'selected' : ''}>${escape(row.title)}</option>`).join('')}</select>` : ''}<div class="reset-actions"><button class="secondary-button" id="cancel-reset">Keep investigating</button><button class="primary-button" id="confirm-reset">Start new session ${icon('arrow')}</button></div></section></div>`;
-  document.querySelector<HTMLButtonElement>('#cancel-reset')!.focus();
+  selectedCase = state.caseId;
+  document.querySelector('#overlay-root')!.innerHTML = caseBoard('case-switch');
+  const current = document.querySelector<HTMLInputElement>('#case-list input:checked');
+  current?.scrollIntoView({ block: 'nearest' });
+  (current || document.querySelector<HTMLButtonElement>('#cancel-reset'))!.focus({ preventScroll: true });
+  document.querySelector('#case-switch')!.addEventListener('click', event => { if (event.target === event.currentTarget) closeCases(); });
+}
+
+function closeCases() {
+  if (busy) return;
+  document.querySelector('#overlay-root')!.innerHTML = '';
+  station.setEnabled(Boolean(state.session));
+  document.querySelector<HTMLButtonElement>('#reset-button')?.focus({ preventScroll: true });
+}
+
+/** The next case in catalog order that this browser has not solved yet. */
+function nextCase() {
+  const at = catalog.findIndex(row => row.id === state.caseId);
+  return [...catalog.slice(at + 1), ...catalog.slice(0, Math.max(at, 0))].find(row => !solved.has(row.id));
 }
 
 async function boot() {
@@ -366,9 +412,9 @@ async function boot() {
       return;
     }
     state = await api('state');
-    try { catalog = (await api('cases')).cases; } catch { catalog = []; }
+    try { catalog = ((await api('cases')).cases as CaseRow[]).sort((a, b) => a.order - b.order); } catch { catalog = []; }
     const wanted = new URLSearchParams(location.search).get('case');
-    selectedCase = catalog.find(row => row.id === wanted)?.id || catalog[0]?.id || '';
+    selectedCase = catalog.find(row => row.id === wanted)?.id || (state.session ? state.caseId : catalog[0]?.id) || '';
     drafts = blankDrafts();
     shell();
     render();

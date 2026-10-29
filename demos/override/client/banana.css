@@ -133,11 +133,3 @@
 }
 @media (prefers-reduced-motion: reduce) { .suspect-option { transform: none !important; } }
 
-.case-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border: 0; padding: 0; margin: 16px 0 0; min-width: 0; }
-.case-option { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 2px solid #d1d7b8; border-radius: 5px; background: #fffbed; cursor: pointer; min-width: 0; }
-.case-option.selected { background: #e7efd2; border-color: #8caa96; }
-.case-option input { accent-color: #769959; margin-top: 3px; }
-.case-title { display: block; font: 13px var(--mono); color: #526f40; }
-.case-lead { display: block; font-size: 11px; color: #8a9b72; margin-top: 4px; line-height: 1.4; }
-#reset-case { display: block; width: 100%; margin: 6px 0 14px; }
-@media (max-width: 640px) { .case-picker { grid-template-columns: 1fr; } }

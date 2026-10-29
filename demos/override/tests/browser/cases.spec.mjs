@@ -18,6 +18,7 @@ test('picker preview follows the selected case', async ({ page }) => {
   await radio(page, 'banana-control').check();
   await expect(page.locator('#intro-title')).toContainText('Mix-up');
   await expect(page.locator('.intro-lead')).toContainText('did anyone break the rule');
+  await expect(page.locator('#begin-button')).toHaveText('Let’s investigate');
   await radio(page, 'banana-mystery').check();
   await expect(page.locator('#intro-title')).toContainText('Mystery');
 });
@@ -61,11 +62,93 @@ test('reset switches case', async ({ page }) => {
   await page.locator('#begin-button').click();
   await expect(page.locator('#panel h2')).toHaveText('A bunch of trouble.');
   await page.locator('#reset-button').click();
-  await expect(page.locator('#reset-case')).toHaveValue('banana-mystery');
-  await page.locator('#reset-case').selectOption('banana-control');
+  await expect(page.locator('#case-switch input[value="banana-mystery"]')).toBeChecked();
+  await expect(page.locator('#case-switch input[value="banana-mystery"]')).toBeFocused();
+  await expect(page.locator('.case-option', { hasText: 'The Banana Mystery' }).locator('.case-chip')).toHaveText('Playing');
+  await expect(page.locator('#confirm-reset')).toHaveText('Restart this case');
+  await radio(page, 'banana-control').check();
+  await expect(page.locator('#confirm-reset')).toHaveText('Start this case');
+  await expect(page.locator('#intro-title')).toContainText('Mix-up');
   await page.locator('#confirm-reset').click();
   await expect(page.locator('#panel h2')).toHaveText('A mix-up at the picnic.');
+  await expect(page.locator('#case-switch')).toHaveCount(0);
 });
+
+test('a malformed solved list in storage does not break the page', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('override.solved', '{}'));
+  await page.goto('/');
+  await expect(page.locator('#begin-button')).toHaveText('Let’s investigate');
+  await expect(page.locator('.case-chip.solved')).toHaveCount(0);
+});
+
+test('case board closes with Escape and keeps the case', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#begin-button').click();
+  await page.locator('#reset-button').click();
+  await radio(page, 'banana-control').check();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#case-switch')).toHaveCount(0);
+  await expect(page.locator('#panel h2')).toHaveText('A bunch of trouble.');
+  await expect(page.locator('#reset-button')).toBeFocused();
+});
+
+test('a returning player can switch case from the intro', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('#begin-button').click();
+  await page.reload();
+  await expect(radio(page, 'banana-mystery')).toBeChecked();
+  await expect(page.locator('#begin-button')).toHaveText('Continue mystery');
+  await radio(page, 'banana-control').check();
+  await expect(page.locator('#begin-button')).toHaveText('Start this case');
+  await page.locator('#begin-button').click();
+  await expect(page.locator('#intro')).toHaveCount(0);
+  await expect(page.locator('#panel h2')).toHaveText('A mix-up at the picnic.');
+});
+
+test('solving marks the case and offers the next one', async ({ page }) => {
+  await page.goto('/?case=banana-control');
+  await page.locator('#begin-button').click();
+  await page.locator('#skip-walking').check();
+  await page.locator('nav [data-go="replay"]').click();
+  await page.locator('#reveal-button').click();
+  for (const id of ['momo', 'pip', 'nori']) {
+    await page.locator(`nav [data-go="${id}"]`).click();
+    await page.locator('[data-quick-question]').click();
+    await expect(page.locator('.speech.investigator')).toHaveCount(1);
+  }
+  await page.locator('nav [data-go="report"]').click();
+  await page.locator('[name="suspect"][value="none"]').check();
+  await page.getByRole('button', { name: 'See what happened' }).click();
+  const ordered = (await (await page.request.get('/api/cases')).json()).cases.sort((a, b) => a.order - b.order);
+  const next = ordered[ordered.findIndex(c => c.id === 'banana-control') + 1] || ordered[0];
+  await expect(page.locator('#next-case')).toHaveText(`Next case: ${next.title}`);
+  await page.locator('#debrief-reset').click();
+  await expect(page.locator('.case-option', { hasText: 'The Banana Mix-up' }).locator('.case-chip')).toHaveText('Solved');
+  await expect(page.locator('#confirm-reset')).toHaveText('Play again');
+  await page.locator('#cancel-reset').click();
+  await page.locator('#next-case').click();
+  await expect(page.locator('#case-eyebrow')).toContainText(`CASE ${String(next.order).padStart(3, '0')}`);
+  await expect(page.locator('#panel h2')).toHaveText(/.+/);
+});
+
+for (const [width, height] of [[1280, 720], [1366, 768], [1440, 900], [1920, 1080]]) {
+  test(`${width}×${height} fits one screen`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto('/');
+    const board = await page.locator('.case-board').boundingBox();
+    expect(board.y).toBeGreaterThanOrEqual(0);
+    expect(board.y + board.height).toBeLessThanOrEqual(height);
+    await page.locator('#begin-button').click();
+    await expect(page.locator('#intro')).toHaveCount(0);
+    expect(await page.evaluate(() => [document.documentElement.scrollHeight, document.documentElement.scrollWidth])).toEqual([height, width]);
+    for (const selector of ['.room-nav', '.dossier', '#export-button']) {
+      const box = await page.locator(selector).boundingBox();
+      expect(box.y + box.height, selector).toBeLessThanOrEqual(height);
+    }
+    const canvas = await page.locator('#station canvas').boundingBox();
+    expect(canvas.height).toBeGreaterThan(300);
+  });
+}
 
 test('phone width keeps the picker single column', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

@@ -1,8 +1,9 @@
 # Deploy The Banana Mystery
 
-Deploy the Override demo as one Docker web service. The [Dockerfile](Dockerfile) builds the browser game and serves it with the Node.js interview API from the same origin. The AgentVerse Python simulation is not required.
+There are two ways to deploy the Override demo. The AgentVerse Python simulation is not required for either.
 
-This guide uses Render for a hosted colleague demo. A [local Docker smoke test](#local-docker-smoke-test) is included below for checking the container before deployment or using another Docker host.
+- **[One Mac for a 200-player event](#hosting-200-players-on-a-mac).** The game server, admin page and metrics run on one Mac, reached over a Cloudflare Tunnel or a closed LAN. Use this for a study.
+- **One Docker web service for a small colleague demo.** The [Dockerfile](Dockerfile) builds the browser game and serves it with the Node.js interview API from the same origin. Sections 1–5 use Render; a [local Docker smoke test](#local-docker-smoke-test) checks the container before deployment or on another Docker host.
 
 ## Current deployment limits
 
@@ -47,6 +48,12 @@ In Render, create a **Web Service**, connect the AgentVerse repository, and sele
 Docker paths are relative to the selected root directory. Render builds the image using the Dockerfile, so a separate dashboard build command is unnecessary. See [Render's Docker guide](https://render.com/docs/docker) and [root-directory settings](https://render.com/docs/monorepo-support#root-relative-settings).
 
 Choose a paid web service if you need persistent investigation logs: Render's persistent disks require a paid service. See [persistent disk setup](https://render.com/docs/disks).
+
+The Docker image does not carry the whole 200-player backend yet:
+
+- `ops/` is not copied into the image. For [several endpoints with failover](README.md#llm-fallback), mount your endpoints file into the container and point `OVERRIDE_ENDPOINTS` at it. Single-endpoint mode works as is.
+- `scripts/` is not copied into the image. Run the preflight check from a checkout.
+- The admin listener binds 127.0.0.1 inside the container, so it cannot be reached from outside. `GET /api/health` returns `{"ok":true}` and also works as the health check path.
 
 ## 3. Configure environment variables
 
@@ -168,30 +175,80 @@ For a VPS deployment, place an HTTPS reverse proxy in front of the loopback-boun
 
 ## Hosting 200 players on a Mac
 
-Not included yet: launchd units, off-machine backup, and Grafana. Prometheus config and alert examples are in [ops/prometheus.yml](ops/prometheus.yml). Back up `data/` by hand until a backup job exists, and restart the server by hand after a crash.
+The game server runs straight from a checkout with `npm start`, without Docker. Not included yet: launchd units, off-machine backup, and Grafana. Prometheus config and alert examples are in [ops/prometheus.yml](ops/prometheus.yml). Back up `data/` by hand until a backup job exists, and restart the server by hand after a crash; games resume from their logs.
 
-**Machine**
+### 1. Install and check
 
+On the host Mac, with Node.js 22.6 or newer, from the repository root on `demo/override`:
+
+```sh
+git pull origin demo/override
+cd demos/override
+npm ci
+npm test
+npm run build
+```
+
+`npm start` serves the built `dist/` folder, so rebuild after every pull.
+
+### 2. Configure `.env`
+
+`npm start` reads `demos/override/.env`. Start from the example with `cp .env.example .env`, then set:
+
+```dotenv
+NODE_ENV=production
+OVERRIDE_ACCESS_CODE=<shared player password>
+OVERRIDE_SECRET=<output of: openssl rand -hex 32>
+OVERRIDE_ADMIN_TOKEN=<output of: openssl rand -hex 32>
+OVERRIDE_APP_COMMIT=<output of: git rev-parse --short HEAD>
+HOST=127.0.0.1
+OVERRIDE_TRUST_PROXY=1
+```
+
+- `NODE_ENV=production` keeps draft cases hidden, whatever `OVERRIDE_DEV_TOOLS` says.
+- `OVERRIDE_SECRET` keeps sign-ins valid across restarts. Without it, every restart signs all players out.
+- `OVERRIDE_ADMIN_TOKEN` starts the admin listener on `127.0.0.1:3002`. Without it, there is no admin page and no `/metrics`.
+- `HOST=127.0.0.1` with `OVERRIDE_TRUST_PROXY=1` is for a Cloudflare Tunnel: the login limiter then sees each player's own address. On a closed LAN, set `HOST=0.0.0.0` and leave `OVERRIDE_TRUST_PROXY` empty.
+- `OVERRIDE_APP_COMMIT` is recorded in every `session_started`. Update it after each pull.
+
+For the model, choose one:
+
+- **One endpoint:** set `OVERRIDE_LLM_BASE_URL`, `OVERRIDE_LLM_API_KEY` and `OVERRIDE_LLM_MODEL`, as in [section 3](#3-configure-environment-variables).
+- **Failover across several endpoints:** copy `ops/endpoints.example.json` to `ops/endpoints.json` and replace the example URLs and models. Then set `OVERRIDE_ENDPOINTS=ops/endpoints.json` and one `OVERRIDE_ENDPOINT_<X>_KEY` for each `keyEnv` in the file. The file holds no keys. When `OVERRIDE_ENDPOINTS` is set, the single-endpoint variables are ignored. See [LLM fallback](README.md#llm-fallback).
+
+### 3. Prepare the machine
+
+- Raise the connection queue limit: `sudo sysctl -w kern.ipc.somaxconn=1024`. macOS defaults to 128 and the server asks for 1024; below that, a burst of arrivals gets connection resets. The setting resets on reboot, so check it with `sysctl -n kern.ipc.somaxconn` before each event.
 - Run `caffeinate -dims` for the whole event. Turn Power Nap off, keep the power adapter connected and the lid open.
 - Turn off automatic macOS updates and scheduled restarts. Freeze the configuration 48 hours before, and do no development on the machine during the event.
 - Use Ethernet, not Wi-Fi.
-- Raise the connection queue limit: `sudo sysctl -w kern.ipc.somaxconn=1024` (the server asks for a queue of 1024).
 
-**Configuration**
+### 4. Rehearse
 
-- Set `OVERRIDE_SECRET` to a fixed random value so sign-ins survive restarts.
-- Set `OVERRIDE_ENDPOINTS` and the endpoint keys (see the README's LLM fallback section).
-- Set `OVERRIDE_ADMIN_TOKEN`. The admin listener binds 127.0.0.1 only: reach it with `ssh -L 3002:127.0.0.1:3002 user@mac`, never through the tunnel.
-- Over the internet, use a named Cloudflare Tunnel (`cloudflared`) to the game port only, and set `OVERRIDE_TRUST_PROXY=1` so the login limiter sees each player's own address. Cloudflare's 100 s proxy timeout exceeds the 60 s LLM deadline. On a closed LAN, use a fixed address or `.local` name, and check that the Wi-Fi does not isolate clients.
-
-**Runbook**
-
-Before:
-- Run `npm run loadtest` and `node --env-file-if-exists=.env scripts/preflight.mjs --capacity --out preflight.json`; review the report.
+- `npm run loadtest` plays 200 simulated players against a mock model, including endpoint failures and a server restart. All scenarios must pass.
+- `node --env-file-if-exists=.env scripts/preflight.mjs --capacity --out preflight.json` sends real questions to each configured endpoint, measures capacity in steps, and checks the connection queue limit. It exits with code 2 when the limit is below 1024. Review the report.
+- Do a full test session with `OVERRIDE_ENV=rehearsal`, so it is logged under `data/rehearsal/` instead of `data/live/`. `OVERRIDE_ENV` only chooses the data folder: interviews stay live while the model keys are set. For scripted answers, leave the model variables empty.
 - Test the backup target (a manual copy of `data/`).
 
+### 5. Start and expose
+
+```sh
+npm start
+```
+
+The startup line names the interview mode and both listeners, for example `The Banana Mystery: http://127.0.0.1:3001 · live interviews · admin http://127.0.0.1:3002`. A warning about `OVERRIDE_SECRET` means sign-ins will not survive a restart.
+
+- **Over the internet:** run a named Cloudflare Tunnel (`cloudflared`) to `http://localhost:3001` only. Cloudflare's 100 s proxy timeout exceeds the 60 s LLM deadline.
+- **On a closed LAN:** give players a fixed address or `.local` name, and check that the Wi-Fi does not isolate clients.
+
+From a machine outside, `curl --fail https://<your-host>/api/health` must return `{"ok":true}`.
+
+### 6. Run the event
+
+The admin page is `http://127.0.0.1:3002/admin`; paste the admin token into it. From another machine, open an SSH tunnel first with `ssh -L 3002:127.0.0.1:3002 user@mac`. Never expose the admin port through the Cloudflare Tunnel. Prometheus scrapes `/metrics` on the same port with the token ([ops/prometheus.yml](ops/prometheus.yml)).
+
 One hour before:
-- Start the server and confirm `/admin/health` is green. Smoke-test in rehearsal (`OVERRIDE_ENV=rehearsal`), then switch to live.
+- Start the server and confirm `/admin/health` is green.
 
 During:
 - Watch the admin page and `/metrics`. When pinning or moving endpoints, type the reason.
