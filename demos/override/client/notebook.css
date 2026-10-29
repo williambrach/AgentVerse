@@ -42,17 +42,6 @@
 .notebook-page .panel-heading { position: relative; background: linear-gradient(110deg, #fffef2 60%, #f1efdc); }
 .notebook-page .panel-heading::after { content: ''; position: absolute; top: 0; right: 0; width: 22px; height: 22px; background: linear-gradient(225deg, #d4d9cc 49%, #f9f7e6 50%); filter: drop-shadow(-1px 2px 1px #384b6420); }
 .notebook-page .notebook-content { padding-left: 22px; padding-right: 22px; }
-.notebook-page .evidence-card {
-  box-shadow: inset 0 0 0 2px #fff, 1px 3px 0 #d9d8c9, 0 6px 12px -8px #38506855;
-  transition: transform 170ms ease, box-shadow 170ms ease, border-color 170ms ease;
-}
-.notebook-page .evidence-card::before { content: ''; position: absolute; top: -5px; right: 16px; width: 29px; height: 9px; background: #e8dab0a6; border: 1px solid #c6b98955; transform: rotate(3deg); pointer-events: none; }
-.notebook-page .evidence-card.selected { border-color: #5e8799; box-shadow: inset 3px 0 #648c9f, 1px 3px 0 #bdcfc5, 0 7px 14px -8px #38506855; }
-.notebook-page .evidence-card.selected::before { background: #acc8b9bd; border-color: #829f8f80; }
-.selected-banner { background: #e7efdc; border: 1px solid #a9bf9d; box-shadow: 1px 3px 0 #d5dec8; }
-.presented-record { position: relative; box-shadow: 1px 3px 0 #ccd5c5; transform-origin: top left; }
-.presented-record::after { content: ''; position: absolute; top: 5px; right: 7px; width: 7px; height: 15px; border: 2px solid #8a9e9d; border-radius: 5px; transform: rotate(14deg); pointer-events: none; }
-.presented-record b { padding-right: 16px; }
 .briefing-note { box-shadow: 1px 3px 0 #d8ddc7; transform: rotate(-.5deg); }
 .interview-transcript { gap: 17px; }
 .speech { position: relative; transform-origin: bottom left; }
@@ -69,12 +58,11 @@
 @keyframes notebook-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .35; } 30% { transform: translateY(-4px); opacity: 1; } }
 .dossier button { transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease; }
 .dossier button:not(:disabled):active { transform: translateY(2px); }
-.dossier .primary-button svg, .present-to svg { transition: transform 180ms ease; }
-.dossier .primary-button:not(:disabled):hover svg, .present-to button:hover svg { transform: translateX(3px); }
+.dossier .primary-button svg{ transition: transform 180ms ease; }
+.dossier .primary-button:not(:disabled):hover svg{ transform: translateX(3px); }
 .interview-compose textarea { transition: box-shadow 180ms ease, border-color 180ms ease; }
 .interview-compose textarea:focus { border-color: #527e9c; outline: 0; box-shadow: 0 0 0 3px #7ca2b629, inset 0 2px 4px #526e880c; }
 @media (hover: hover) {
-  .notebook-page .evidence-card:hover { transform: translateY(-2px); border-color: #91abb7; box-shadow: inset 0 0 0 2px #fff, 1px 4px 0 #d9d8c9, 0 10px 16px -9px #38506855; }
   .dossier .primary-button:not(:disabled):hover { transform: translateY(-1px); box-shadow: inset 0 2px #799db4, 0 3px #b9c7c6; }
 }
 @media (max-width: 560px) {
@@ -86,9 +74,8 @@
 @media (min-width: 901px) and (max-height: 850px) {
   .notebook-page .interview-heading { padding: 14px 20px; }
   .notebook-page .interview-compose { padding: 12px 18px 14px; }
-  .notebook-page .presented-record { max-height: 78px; }
   .notebook-page .interview-transcript { min-height: 80px; padding: 16px 22px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dossier button, .dossier .evidence-card { transform: none !important; }
+  .dossier button{ transform: none !important; }
 }

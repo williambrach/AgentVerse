@@ -20,8 +20,6 @@ const groveCast: Character[] = ['Momo', 'Pip', 'Nori'].map((name, i) => ({
 
 function buildStops(world: WorldPack, cast: Character[]): Record<string, Stop> {
   const stops: Record<string, Stop> = {
-    replay: { x: 244, y: 236, title: world.text.clueTitle, label: world.text.clueLabel },
-    evidence: { x: 68, y: 220, title: 'Review your clues', label: 'CLUES' },
     report: { x: 132, y: 276, title: 'Choose your suspect', label: 'YOUR GUESS' },
     briefing: { x: 244, y: 276, title: 'Read the case', label: 'START HERE' },
   };
@@ -234,12 +232,11 @@ export class Station extends Phaser.Scene {
     const walk = grove ? groveWalk : this.measuredWalk(keys.walk);
     this.walk = new DetectiveWalk(this, this.player.x, this.player.y, walk);
     this.avatar = this.walk.sprite;
-    (['briefing', 'replay', 'evidence', 'report'] as const).forEach(id => {
+    (['briefing', 'report'] as const).forEach(id => {
       const p = this.stops[id];
       if (id === 'briefing') { this.label(p.x, p.y + 33, p.label); return; }
-      const kind = id === 'replay' ? (grove ? 'basket' : 'cabinet') : 'board';
-      const size = id === 'replay' ? 45 : 38;
-      this.prop(keys.props, kind, p.x, p.y - 15, size).setDepth(p.y - 20);
+      const size = 38;
+      this.prop(keys.props, 'board', p.x, p.y - 15, size).setDepth(p.y - 20);
       this.label(p.x, p.y - size - 25, p.label);
     });
     this.prop(keys.props, 'bell', 282, 111, 39).setDepth(95);

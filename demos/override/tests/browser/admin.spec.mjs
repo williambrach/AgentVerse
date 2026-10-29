@@ -16,7 +16,6 @@ async function player(request) {
     view = await res.json();
     return view;
   };
-  await act('reveal');
   return {
     id: sessionId,
     ask: (question, character = 'pip') => act('interview', { character, question }),

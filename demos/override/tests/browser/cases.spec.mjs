@@ -9,7 +9,7 @@ test('picker starts the chosen case', async ({ page }) => {
   await page.locator('#begin-button').click();
   await expect(page.locator('h1')).toHaveText('Was it time?');
   await expect(page.locator('#panel h2')).toHaveText('Lanterns, too soon.');
-  await expect(page.locator('.task-list li:first-child')).toContainText('Read all 3 clues');
+  await expect(page.locator('.task-list li:first-child')).toContainText('Ask 3');
   await expect(page.locator('.task-list li:first-child')).not.toContainText('the message');
 });
 
@@ -41,9 +41,8 @@ test('honest mistake to Nobody', async ({ page }) => {
   await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
   await page.locator('#skip-walking').check();
-  await page.locator('nav [data-go="replay"]').click();
-  await page.locator('#reveal-button').click();
-  await expect(page.locator('.evidence-card')).toHaveCount(3);
+  await expect(page.locator('nav [data-go]')).toHaveCount(4);
+  await expect(page.locator('#reveal-button, .evidence-card, #present-evidence')).toHaveCount(0);
   const asks = [['wren', 'I thought the Headmistress rang it'], ['basil', 'sounded like the tower bell'], ['juniper', 'I didn’t look']];
   for (const [id, text] of asks) {
     await page.locator(`nav [data-go="${id}"]`).click();
@@ -78,13 +77,12 @@ test('reset session starts the current case over', async ({ page }) => {
   await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
   await page.locator('#skip-walking').check();
-  await page.locator('nav [data-go="replay"]').click();
-  await page.locator('#reveal-button').click();
-  await expect(page.locator('.evidence-card')).toHaveCount(3);
+  await expect(page.locator('nav [data-go]')).toHaveCount(4);
+  await expect(page.locator('#reveal-button, .evidence-card, #present-evidence')).toHaveCount(0);
   const before = (await (await page.request.get('/api/state')).json()).session;
   await page.locator('#restart-button').click();
   await expect(page.locator('#reset-title')).toHaveText('Start Lanterns Too Soon over?');
-  await expect(page.locator('#reset-confirm')).toContainText('your chats with the apprentices');
+  await expect(page.locator('#reset-confirm')).toContainText('chats with the apprentices');
   await expect(page.locator('#cancel-restart')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.locator('#reset-confirm')).toHaveCount(0);
@@ -96,7 +94,8 @@ test('reset session starts the current case over', async ({ page }) => {
   const after = (await (await page.request.get('/api/state')).json()).session;
   expect(after.id).not.toBe(before.id);
   expect(after.caseId).toBe('tower-echo-bell');
-  expect(after.revealedPosition).toBe(0);
+  expect(after.revealedPosition).toBeUndefined();
+  expect(after.interviews).toEqual({ wren: [], basil: [], juniper: [] });
 });
 
 test('a malformed solved list in storage does not break the page', async ({ page }) => {
@@ -134,8 +133,6 @@ test('solving marks the case and offers the next one', async ({ page }) => {
   await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
   await page.locator('#skip-walking').check();
-  await page.locator('nav [data-go="replay"]').click();
-  await page.locator('#reveal-button').click();
   for (const id of ['wren', 'basil', 'juniper']) {
     await page.locator(`nav [data-go="${id}"]`).click();
     await page.locator('[data-quick-question]').click();
@@ -185,7 +182,7 @@ test('phone width keeps the picker single column', async ({ page }) => {
 
 test('authored character fields are escaped in the DOM', async ({ page }) => {
   const evil = '<img src=x onerror="window.__xss=1">';
-  await page.route(/\/api\/(state|start|reveal|visit|interview)$/, async route => {
+  await page.route(/\/api\/(state|start|visit|interview)$/, async route => {
     const res = await route.fetch();
     const body = await res.json();
     if (body.characters) body.characters = body.characters.map(c => ({ ...c, name: evil, role: evil }));

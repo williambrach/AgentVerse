@@ -32,16 +32,6 @@
 .briefing-note p { color: #54663e; }
 .task-list b { color: #576d43; }
 .task-list span, .subtle-note { color: #80906c; }
-.record-meta { color: #8b9468; }
-.evidence-card h3 { color: #566c41; font-size: 13px; }
-.evidence-card > p { color: #637453; font-size: 12px; }
-.record-source, .evidence-select { color: #87946d; }
-.notebook-page .evidence-card { border-color: #d0d3b3; background: #fffcec; }
-.notebook-page .evidence-card.selected { border-color: #89a36b; background: #f1f5df; box-shadow: inset 3px 0 #9aaf7e, 1px 3px #ced8b7, 0 7px 14px -8px #50633755; }
-.selected-banner { color: #668045; }
-.present-to button { color: #6e8a4f; }
-.basket-illustration { width: 120px; height: 108px; margin: 0 auto -20px; background: url('/assets/banana/jungle-props.png') -130px -14px / 240px 240px no-repeat; image-rendering: pixelated; }
-.replay-records .empty-state { padding-top: 12px; }
 .interview-heading { background: #f8f4df; border-color: #c4cea9; padding: 16px 20px; }
 .interview-heading h2 { color: #4f653f; }
 .interview-heading p { color: #8b9469; }
@@ -59,15 +49,11 @@
 .speech.character { border-color: #a3b58c; background: #fffbea; box-shadow: inset 0 0 0 2px #edf1da, 2px 3px #d0d8b9; color: #526746; }
 .speech.character::after { border-color: #a3b58c; background: #fffbea; }
 .speech.investigator { background: #e6edcf; border-color: #c4d1a6; color: #5b7146; }
-.speech > span, .speech.investigator i { color: #7e8e62; }
+.speech > span{ color: #7e8e62; }
 .speech p { font-size: 13px; line-height: 1.65; }
 .interview-compose { background: #f0f1da; border-color: #b5c49a; padding: 14px 20px; }
-.interview-compose > label { color: #7c8d62; }
 .interview-compose textarea { min-height: 60px; border-color: #a9bb8b; background: #fffcee; }
 .interview-compose textarea:focus { border-color: #77995e; box-shadow: 0 0 0 3px #a0b98029; }
-.interview-compose select { background: #fffbed; border-color: #bdc9a1; margin-bottom: 9px; }
-.interview-compose .presented-record { background: #faf4d9; color: #8a895c; max-height: 75px; margin-bottom: 9px; padding: 8px 11px; }
-.interview-compose .presented-record b { color: #74814e; }
 .compose-bottom { margin-top: 9px; }
 .compose-bottom small { color: #92a076; }
 .quick-question { display: block; text-align: left; width: 100%; margin-bottom: 14px; background: #e1ebc9; color: #4d703b; border: 1px solid #a7bd85; border-radius: 5px; padding: 11px 12px; box-shadow: 0 2px #c9d4ad; }
@@ -116,7 +102,6 @@
   .interview-transcript { min-height: 65px !important; }
   .interview-compose { padding: 10px 16px !important; }
   .quick-question { padding: 8px 10px; margin-bottom: 10px; }
-  .interview-compose .presented-record { max-height: 62px; }
   .next-monkey { margin-top: 9px; padding: 7px 10px; }
 }
 @media (max-width: 560px) {
@@ -146,7 +131,6 @@
 [data-world="tower"] .avatar-dot { background: url('/assets/tower/apprentices.png') 0 0 / 88px 88px no-repeat; }
 [data-world="tower"] .avatar-dot.slot-1 { background-position-x: -22px; }
 [data-world="tower"] .avatar-dot.slot-2 { background-position-x: -44px; }
-[data-world="tower"] .basket-illustration { background: url('/assets/tower/tower-props.png') -120px -4px / 240px 240px no-repeat; }
 /* A grove preview inside the tower page keeps the monkeys. */
 .monkey-line[data-world="grove"] .monkey-face { background: url('/assets/banana/monkeys.png') 0 0 / 256px 256px no-repeat; }
 .monkey-line[data-world="grove"] .monkey-face.pip { background-position-x: -64px; }

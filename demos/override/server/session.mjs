@@ -12,8 +12,8 @@ export class RequestError extends Error {
 
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-// Rebuild a session from its append-only log. Every event carries the clue and
-// evidence state at the time it was written. The first event names the case;
+// Rebuild a session from its append-only log. Events keep the legacy clue keys
+// (always null) and replay ignores them. The first event names the case;
 // logs for an unregistered or re-versioned case, logs from another schema,
 // reset sessions, and gaps in the sequence are not restored.
 export function replay(events, cases) {
@@ -26,15 +26,13 @@ export function replay(events, cases) {
     if (e.type === 'session_started') {
       if (s) return null;
       s = { id: e.sessionId, revision: 0, startedAt: new Date(Date.parse(e.timestamp) - e.elapsedMs).toISOString(),
-        status: 'active', caseId: kase.id, revealedPosition: 0, selectedEvidence: null,
+        status: 'active', caseId: kase.id,
         location: 'briefing', interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])), verdict: null };
     }
     if (!s || e.sessionId !== s.id || e.sequence !== s.revision + 1) return null;
     s.revision = e.sequence;
-    s.revealedPosition = e.revealedPosition;
-    s.selectedEvidence = e.selectedEvidence;
     if (e.type === 'location_visited') s.location = e.location;
-    if (e.type === 'interview_answer') s.interviews[e.character].push({ question: e.question, answer: e.answer, evidence: e.selectedEvidence, revealedPosition: e.revealedPosition, timestamp: e.timestamp });
+    if (e.type === 'interview_answer') s.interviews[e.character].push({ question: e.question, answer: e.answer, timestamp: e.timestamp });
     if (e.type === 'verdict_submitted') { s.verdict = e.verdict; s.status = 'closed'; }
   }
   return s;
@@ -128,13 +126,13 @@ export class Investigations {
   setPaused(paused) { this.paused = Boolean(paused); }
 
   stats() {
-    const byStage = { started: 0, clues: 0, interviewed: 0, verdict: 0 };
+    const byStage = { started: 0, asked: 0, interviewed: 0, verdict: 0 };
     let waiting = 0;
     for (const game of this.games.values()) {
       const s = game.session;
       if (game.busy) waiting++;
       if (!s) continue;
-      byStage[s.status === 'closed' ? 'verdict' : game.kase.characters.every(c => s.interviews[c.id].length) ? 'interviewed' : s.revealedPosition ? 'clues' : 'started']++;
+      byStage[s.status === 'closed' ? 'verdict' : game.kase.characters.every(c => s.interviews[c.id].length) ? 'interviewed' : Object.values(s.interviews).some(list => list.length) ? 'asked' : 'started']++;
     }
     return { games: this.games.size, waiting, paused: this.paused, byStage };
   }
@@ -172,8 +170,8 @@ export class Investigation {
       timestamp: new Date(now).toISOString(),
       elapsedMs: now - Date.parse(state.startedAt),
       type,
-      revealedPosition: state.revealedPosition,
-      selectedEvidence: state.selectedEvidence,
+      revealedPosition: null,
+      selectedEvidence: null,
       character: null,
       question: null,
       answer: null,
@@ -193,7 +191,7 @@ export class Investigation {
 
   view() {
     const s = this.session;
-    const { records, debrief, answer } = this.kase;
+    const { debrief, answer } = this.kase;
     let feedback;
     if (s?.status === 'closed') {
       const nobody = answer.culprits.length === 0;
@@ -203,8 +201,7 @@ export class Investigation {
     return {
       ...publicView(this.kase), authored: true, mode: this.config.mode, model: this.config.model,
       session: s ? structuredClone(s) : null,
-      records: s ? records.filter(r => s.status === 'closed' || r.chapter <= s.revealedPosition) : [],
-      debrief: s?.status === 'closed' ? { ...debrief, feedback } : null,
+      debrief: s?.status === 'closed' ? { ...debrief, findings: debrief.findings.map(({ character, classification, explanation }) => ({ character, classification, explanation })), feedback } : null,
     };
   }
 
@@ -229,23 +226,15 @@ export class Investigation {
       } else {
         this.ensureCurrent(input);
         const s = this.session;
-        const { records, characters } = this.kase;
+        const { characters } = this.kase;
         if (action === 'reset') {
           this.log('session_reset', { completed: s.status === 'closed' });
           if (kase) this.kase = kase;
           this.start(assignment);
         } else {
           if (s.status !== 'active') throw new RequestError(409, 'This case is closed. Review the debrief or start a new session.');
-          if (action === 'reveal') {
-            if (s.revealedPosition >= this.kase.chapters.length) throw new RequestError(400, 'All clues are already open.');
-            s.revealedPosition += 1;
-            this.log('story_revealed', { recordIds: records.filter(r => r.chapter === s.revealedPosition).map(r => r.id) });
-          } else if (action === 'evidence') {
-            if (input.evidenceId !== null && !records.some(r => r.id === input.evidenceId && r.chapter <= s.revealedPosition)) throw new RequestError(400, 'That evidence has not been discovered.');
-            s.selectedEvidence = input.evidenceId;
-            this.log('evidence_selected');
-          } else if (action === 'visit') {
-            if (!['briefing', 'replay', 'evidence', 'report', ...characters.map(c => c.id)].includes(input.location)) throw new RequestError(400, 'Unknown station location.');
+          if (action === 'visit') {
+            if (!['briefing', 'report', ...characters.map(c => c.id)].includes(input.location)) throw new RequestError(400, 'Unknown station location.');
             s.location = input.location;
             this.log('location_visited', { location: input.location });
           } else if (action === 'interview') {
@@ -275,7 +264,7 @@ export class Investigation {
   start(assignment = 'default') {
     this.session = {
       id: randomUUID(), revision: 0, startedAt: new Date().toISOString(),
-      status: 'active', caseId: this.kase.id, revealedPosition: 0, selectedEvidence: null,
+      status: 'active', caseId: this.kase.id,
       location: 'briefing', interviews: Object.fromEntries(this.kase.characters.map(c => [c.id, []])), verdict: null,
     };
     this.log('session_started', { assignment, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, ...this.meta });
@@ -287,12 +276,10 @@ export class Investigation {
     const { characters, world: w } = this.kase;
     const character = characters.find(c => c.id === input.character);
     if (!character) throw new RequestError(400, `Choose one of the ${characters.length} ${w.cast.many}.`);
-    if (s.revealedPosition === 0) throw new RequestError(400, `Inspect the ${w.clueSpot} before asking the ${w.cast.many}.`);
     if (typeof input.question !== 'string' || input.question.trim().length < 3 || input.question.length > 1200) throw new RequestError(400, 'Ask a question between 3 and 1,200 characters.');
     if (s.interviews[character.id].length >= 40) throw new RequestError(400, 'This demo supports 40 questions per character. Submit your findings or start a new session.');
     if (!this.asked.take()) throw new RequestError(429, 'Slow down: at most 6 questions per minute.');
     const question = input.question.trim();
-    const evidence = s.selectedEvidence;
     const asked = this.log('interview_question', { character: character.id, question });
     try {
       const result = await this.answer(this.config, this.kase, structuredClone(s), character.id, question, {
@@ -302,7 +289,7 @@ export class Investigation {
       const answer = typeof result === 'string' ? result : result.answer;
       const provenance = typeof result === 'string' ? null : result.provenance ?? null;
       const answered = this.log('interview_answer', { character: character.id, question, answer, questionEventId: asked.eventId, provenance });
-      s.interviews[character.id].push({ question, answer, evidence, revealedPosition: s.revealedPosition, timestamp: answered.timestamp });
+      s.interviews[character.id].push({ question, answer, timestamp: answered.timestamp });
     } catch (error) {
       const providerError = error?.name === 'InterviewProviderError';
       this.log('interview_failed', { character: character.id, question, questionEventId: asked.eventId, reason: providerError ? error.code : 'provider_or_storage_error', ...(providerError ? error.diagnostics : {}), provenance: error?.provenance ?? null });
@@ -314,20 +301,18 @@ export class Investigation {
 
   verdict(input) {
     const s = this.session;
-    const { characters, records } = this.kase;
-    if (!s.revealedPosition || characters.some(c => !s.interviews[c.id].length)) throw new RequestError(400, `Inspect the clues and ask all ${characters.length} ${this.kase.world.cast.many} before choosing.`);
+    const { characters } = this.kase;
+    if (characters.some(c => !s.interviews[c.id].length)) throw new RequestError(400, `Ask all ${characters.length} ${this.kase.world.cast.many} before choosing.`);
     const choices = [...characters.map(c => c.id), 'none', 'uncertain'];
     if (!choices.includes(input.suspect)) throw new RequestError(400, `Choose ${this.kase.world.cast.one}, nobody, or not sure.`);
     if (!Number.isInteger(input.confidence) || input.confidence < 0 || input.confidence > 100) throw new RequestError(400, 'Confidence must be between 0 and 100.');
     const explanation = input.explanation ?? '';
     if (typeof explanation !== 'string' || explanation.length > 500) throw new RequestError(400, 'Keep your explanation under 500 characters.');
-    const evidenceIds = input.evidenceIds ?? [];
-    if (!Array.isArray(evidenceIds) || evidenceIds.some(id => !records.some(r => r.id === id && r.chapter <= s.revealedPosition))) throw new RequestError(400, 'Choose a discovered clue.');
     s.verdict = {
       suspect: input.suspect,
       suspects: characters.some(c => c.id === input.suspect) ? [input.suspect] : [],
       confidence: input.confidence, explanation: explanation.trim(),
-      evidenceIds: [...new Set(evidenceIds)], submittedAt: new Date().toISOString(),
+      evidenceIds: [], submittedAt: new Date().toISOString(),
     };
     s.status = 'closed';
     this.log('verdict_submitted', { verdict: s.verdict });

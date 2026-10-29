@@ -1,7 +1,7 @@
 // In-process admin monitor: composes injected round stats, windows, presence and sources.
 const KINDS = {
-  session_started: 'start', briefing_viewed: 'briefing', location_visited: 'visit', story_revealed: 'clue',
-  evidence_selected: 'evidence', interview_question: 'question', interview_answer: 'answer',
+  session_started: 'start', briefing_viewed: 'briefing', location_visited: 'visit',
+  interview_question: 'question', interview_answer: 'answer',
   interview_failed: 'failure', verdict_submitted: 'verdict', debrief_viewed: 'debrief', session_reset: 'reset',
 };
 const SYSTEM_CAP = 20;
@@ -25,7 +25,7 @@ function isCorrect(ctx, caseId, suspect) {
 }
 
 export function toRow(e, ctx = {}) {
-  const kind = KINDS[e?.type];
+  const kind = KINDS[e?.type]; // story_revealed / evidence_selected (old logs) have no row
   if (!kind) return null;
   const at = Date.parse(e.timestamp);
   const prov = e.provenance && typeof e.provenance === 'object' ? e.provenance : null;
@@ -36,14 +36,7 @@ export function toRow(e, ctx = {}) {
     reason: null, verdict: null, elapsedMs: isNum(e.elapsedMs) ? e.elapsedMs : null,
   };
   if (kind === 'visit') row.text = e.location ?? null;
-  else if (kind === 'clue') {
-    const kase = ctx?.cases?.find?.((c) => c.id === e.caseId);
-    row.text = kase?.chapters?.[(e.revealedPosition ?? 0) - 1]?.title ?? null;
-  } else if (kind === 'evidence') {
-    const kase = ctx?.cases?.find?.((c) => c.id === e.caseId);
-    if (e.selectedEvidence == null) row.text = 'cleared';
-    else row.text = kase?.records?.find?.((r) => r.id === e.selectedEvidence)?.title ?? null;
-  } else if (kind === 'question') row.text = e.question ?? null;
+  else if (kind === 'question') row.text = e.question ?? null;
   else if (kind === 'answer' || kind === 'failure') {
     row.text = kind === 'answer' ? (e.answer ?? null) : (e.question ?? null);
     row.endpoint = prov?.endpoint ?? (ctx?.mode === 'rehearsal' ? 'rehearsal' : null);

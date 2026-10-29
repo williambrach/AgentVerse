@@ -10,7 +10,7 @@ async function withMock(opts, fn) {
 }
 
 test('capacity_steps', async () => {
-  await withMock({}, async mock => {
+  await withMock({ delayMs: [60, 60] }, async mock => {
     const report = await runPreflight({ endpoints: [endpointFor(mock)], capacity: true, steps: [2, 4] });
     const cap = report.endpoints[0].capacity;
     assert.deepEqual(cap.map(c => c.concurrency), [2, 4]);
@@ -18,7 +18,7 @@ test('capacity_steps', async () => {
       assert.equal(c.errors, 0);
       assert.ok(c.p50Ms >= 0 && c.p95Ms >= c.p50Ms);
     }
-    assert.equal(report.endpoints[0].fidelity.length, 36);
+    assert.equal(report.endpoints[0].fidelity.length, 9);
     assert.equal(mock.stats.maxInFlight >= 4, true);
   });
 });
@@ -46,7 +46,7 @@ test('fidelity_row_and_flags', async () => {
   await withMock({ content: 'I never heard the bell, so I guessed it was snack time.' }, async mock => {
     const report = await runPreflight({ endpoints: [endpointFor(mock)], steps: [1] });
     const rows = report.endpoints[0].fidelity;
-    const nori = rows.find(r => r.character === 'nori' && r.clue === null);
+    const nori = rows.find(r => r.character === 'nori');
     assert.deepEqual([nori.ok, nori.words, nori.flags], [true, 12, []]);
     const momo = rows.find(r => r.character === 'momo');
     assert.deepEqual(momo.flags, ['momo_no_admission']);

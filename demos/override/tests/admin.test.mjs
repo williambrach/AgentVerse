@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createAdmin } from '../server/admin.mjs';
 
 const SNAP = { active: 'a', pinned: false, inFlight: 0, queued: 0, maxInFlight: 200, endpoints: [{ name: 'a', model: 'model-a', apiBaseHost: 'a.test', inFlight: 0, maxInFlight: 50, queued: 0, lastSuccessAt: null, lastFailureAt: null, lastFailureReason: null, failures5m: 0 }] };
-const STATS = { games: 2, waiting: 1, paused: false, byStage: { started: 1, clues: 0, interviewed: 0, verdict: 1 } };
+const STATS = { games: 2, waiting: 1, paused: false, byStage: { started: 1, asked: 0, interviewed: 0, verdict: 1 } };
 
 function fakes() {
   const calls = [];
@@ -205,8 +205,8 @@ test('stream_hello_event_tick', async () => {
   assert.equal(s.r.headers['cache-control'], 'no-store');
   const hello = await s.next((l) => l.type === 'hello');
   assert.ok(hello.catalog && hello.snapshot && hello.recent);
-  monitor.push({ id: 2, kind: 'clue' });
-  assert.deepEqual(await s.next((l) => l.type === 'event'), { type: 'event', row: { id: 2, kind: 'clue' } });
+  monitor.push({ id: 2, kind: 'question' });
+  assert.deepEqual(await s.next((l) => l.type === 'event'), { type: 'event', row: { id: 2, kind: 'question' } });
   await s.next((l) => l.type === 'tick', 300);
   s.abort(); a.close();
 });

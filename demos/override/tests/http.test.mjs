@@ -27,7 +27,12 @@ test('HTTP access protects state and exports; malformed requests and cross-site 
   assert.equal(start.status, 200);
   const state = await start.json();
   assert.equal(state.mode, 'rehearsal');
-  assert.equal(state.records.length, 0);
+  assert.equal('records' in state, false);
+  for (const gone of ['reveal', 'evidence']) {
+    const r = await fetch(`${base}/api/${gone}`, { method: 'POST', headers, body: '{}' });
+    assert.equal(r.status, 404);
+    assert.match((await r.json()).error, /Unknown endpoint\./);
+  }
   assert.equal(state.debrief, null);
   const session = start.headers.get('set-cookie').split(';')[0];
   assert.equal(session, `override_session=${state.session.id}`);
@@ -64,15 +69,14 @@ test('each browser plays its own investigation, and correct sign-ins never count
     return { status: response.status, data };
   };
   const [first, second] = players;
-  await post(first, 'start'); await post(first, 'reveal');
+  await post(first, 'start');
   await post(second, 'start');
   assert.notEqual(first.state.session.id, second.state.session.id);
   // One player's pending answer does not block another player's game.
   const pending = post(first, 'interview', { character: 'pip', question: 'Who told you?' });
   await new Promise(resolve => setTimeout(resolve, 20));
-  assert.equal((await post(second, 'reveal')).status, 200);
   assert.equal((await post(second, 'interview', { character: 'nori', question: 'Did you hear the bell?' })).status, 200);
-  assert.equal((await post(first, 'reveal')).status, 409);
+  assert.equal((await post(first, 'visit', { location: 'report' })).status, 409);
   finish('Momo told me.');
   assert.equal((await pending).status, 200);
   const firstView = await (await fetch(`${base}/api/state`, { headers: { Cookie: first.cookie } })).json();
@@ -197,8 +201,8 @@ async function player(url) {
     const view = await (await fetch(`${url}/api/${action}`, { method: 'POST', headers: { ...json, Cookie: cookie }, body: JSON.stringify({ sessionId: state.session.id, ...body }) })).json();
     return view;
   };
-  const revealed = await post('reveal', { revision: state.session.revision });
-  return { id: state.session.id, cookie, revision: revealed.session.revision, post };
+  const visited = await post('visit', { revision: state.session.revision, location: 'report' });
+  return { id: state.session.id, cookie, revision: visited.session.revision, post };
 }
 
 test('traces_not_exported: a live interview writes a trace file but the player export has no prompts or keys', async t => {

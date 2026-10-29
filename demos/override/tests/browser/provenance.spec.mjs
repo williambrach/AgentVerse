@@ -17,8 +17,6 @@ test('export carries case provenance', async ({ page }) => {
   await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
   await page.locator('#skip-walking').check();
-  await page.locator('nav [data-go="replay"]').click();
-  await page.locator('#reveal-button').click();
   for (const id of ['wren', 'basil', 'juniper']) {
     await page.locator(`nav [data-go="${id}"]`).click();
     await page.locator('[data-quick-question]').click();
@@ -35,10 +33,12 @@ test('export carries case provenance', async ({ page }) => {
   expect(events.length).toBeGreaterThan(0);
   for (const e of events) {
     expect(e.caseId).toBe('tower-echo-bell');
-    expect(e.caseVersion).toBe('tower-echo-bell-v1.0.0');
+    expect(e.caseVersion).toBe('tower-echo-bell-v2.0.0');
     expect(e.contentHash).toMatch(/^[0-9a-f]{12}$/);
   }
   expect(events.find(e => e.type === 'session_started').assignment).toBe('fixed');
+  expect(events.some(e => e.type === 'story_revealed' || e.type === 'evidence_selected')).toBe(false);
+  for (const e of events) expect([e.revealedPosition, e.selectedEvidence]).toEqual([null, null]);
 });
 
 test('state never leaks the answer', async ({ browser, baseURL }) => {
@@ -53,8 +53,6 @@ test('state never leaks the answer', async ({ browser, baseURL }) => {
     await page.locator(`.case-option input[name="case"][value="${id}"]`).check();
     await page.locator('#begin-button').click();
     await page.locator('#skip-walking').check();
-    await page.locator('nav [data-go="replay"]').click();
-    await page.locator('#reveal-button').click();
     const text = await (await page.request.get('/api/state')).text();
     expect(text.length).toBeGreaterThan(0);
     for (const phrase of LEAKS) expect(text, `${id}: ${phrase}`).not.toContain(phrase);

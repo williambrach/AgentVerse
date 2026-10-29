@@ -19,7 +19,7 @@ import { createTrafficSampler, loadEvents, loadRound, readSessionEvents } from '
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TOKEN_MS = 12 * 60 * 60_000;
-const actions = ['start', 'reset', 'reveal', 'evidence', 'visit', 'interview', 'verdict'];
+const actions = ['start', 'reset', 'visit', 'interview', 'verdict'];
 const tabPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -204,7 +204,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     const probeCharacter = probeCase.characters[0];
     admin = createAdmin({
       token: env.OVERRIDE_ADMIN_TOKEN, monitor, router, investigations, registry, dataDir,
-      probeMessages: buildMessages(probeCase, { revealedPosition: 1, selectedEvidence: null, interviews: Object.fromEntries(probeCase.characters.map(c => [c.id, []])) }, probeCharacter.id, probeCharacter.quickQuestion),
+      probeMessages: buildMessages(probeCase, { interviews: Object.fromEntries(probeCase.characters.map(c => [c.id, []])) }, probeCharacter.id, probeCharacter.quickQuestion),
       readSystem: () => readJsonl(paths.system).slice(-20), onSystem,
     });
     try {

@@ -18,7 +18,7 @@ async function sources(t) {
   return {
     dataDir,
     router: { snapshot: () => ({ active: 'a', pinned: false, inFlight: 0, queued: 0, maxInFlight: 200, endpoints: [{ name: 'a', model: 'model-a', apiBaseHost: 'a.test', inFlight: 0, maxInFlight: 50, queued: 0, lastSuccessAt: null, lastFailureAt: null, lastFailureReason: null, failures5m: 0 }] }) },
-    investigations: { stats: () => ({ games: 2, waiting: 1, paused: false, byStage: { started: 1, clues: 0, interviewed: 0, verdict: 1 } }) },
+    investigations: { stats: () => ({ games: 2, waiting: 1, paused: false, byStage: { started: 1, asked: 0, interviewed: 0, verdict: 1 } }) },
   };
 }
 

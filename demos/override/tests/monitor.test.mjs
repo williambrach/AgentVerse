@@ -126,18 +126,10 @@ test('recent(0) is empty; startRound trims label', () => {
   assert.equal(m.startRound({ label: '   ' }).label, null);
 });
 
-test('clue and evidence rows carry readable text from the real case', async () => {
-  const { cases } = await import('../server/cases/index.mjs');
-  const kase = cases.find((c) => c.id === 'tower-echo-bell');
-  const ctx = { cases, mode: 'live' };
+test('story_revealed and evidence_selected (old logs) produce no row', () => {
   const base = { eventId: 'c1', sessionId: SID, caseId: 'tower-echo-bell', timestamp: q.timestamp };
-  assert.equal(toRow({ ...base, type: 'story_revealed', revealedPosition: 1 }, ctx).text, kase.chapters[0].title);
-  const rec = kase.records[0];
-  assert.equal(toRow({ ...base, type: 'evidence_selected', selectedEvidence: rec.id }, ctx).text, rec.title);
-  assert.equal(toRow({ ...base, type: 'evidence_selected', selectedEvidence: null }, ctx).text, 'cleared');
-  assert.equal(toRow({ ...base, type: 'evidence_selected', selectedEvidence: 'nope' }, ctx).text, null);
-  assert.equal(toRow({ ...base, type: 'story_revealed', revealedPosition: 99 }, ctx).text, null);
-  assert.equal(toRow({ ...base, caseId: 'zzz', type: 'story_revealed', revealedPosition: 1 }, ctx).text, null);
+  assert.equal(toRow({ ...base, type: 'story_revealed', revealedPosition: 1 }, {}), null);
+  assert.equal(toRow({ ...base, type: 'evidence_selected', selectedEvidence: 'x' }, {}), null);
 });
 
 test('llmErrorRate is failed provider attempts over 5 min, not player-visible failures', () => {

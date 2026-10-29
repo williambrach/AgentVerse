@@ -40,13 +40,6 @@ h1 { font-size: 25px; letter-spacing: -1.3px; }
 .briefing-note p { color: #4b624a; }
 .task-list b { color: #486277; }
 .task-list span { color: #72818a; }
-.evidence-card { background: #fffef5; border: 2px solid #c1cecf; border-radius: 4px; box-shadow: inset 0 0 0 2px #fff; }
-.evidence-card h3 { font-size: 12px; color: #45617a; }
-.evidence-card > p { color: #5c7180; }
-.evidence-card.selected { border-color: #648c9f; background: #edf6ee; box-shadow: inset 3px 0 #648c9f; }
-.evidence-select { color: #527991; }
-.record-source { color: #7f919a; }
-.chapter-heading h3 { color: #42647c; font-size: 15px; }
 .interview-heading { background: #f7f8e8; border-bottom: 2px solid #b5c9d0; }
 .interview-heading h2 { color: #324f67; font-size: 25px; }
 .portrait, .portrait.pip, .portrait.nori { height: 76px; width: 70px; flex-shrink: 0; border: 2px solid #8ca7b2; border-radius: 3px; background: linear-gradient(#c5def0 55%, #a6ce81 55%); box-shadow: inset 0 0 0 3px #f7f9e8; }
@@ -56,10 +49,8 @@ h1 { font-size: 25px; letter-spacing: -1.3px; }
 .speech.investigator { background: #e7f0de; border-color: #b5c7a6; color: #526a45; }
 .speech > span { color: #71889a; }
 .interview-compose { background: #e8eef0; border-top: 3px solid #9eb4c3; box-shadow: inset 0 2px #fffef0; }
-.interview-compose > label { color: #5c7b91; }
-.interview-compose select, select, textarea { border-color: #a4bac7; color: #4d687d; background: #fffef0; }
+select, textarea{ border-color: #a4bac7; color: #4d687d; background: #fffef0; }
 .interview-compose textarea { border: 2px solid #829fb3; }
-.interview-compose .presented-record { background: #f3f6e5; border-left-color: #8ea775; color: #6e835a; }
 .suggestions button { border-color: #afc4ce; background: #f5f8ed; color: #648497; }
 .compose-bottom small { color: #7c919e; }
 .report-form > label, .finding h3, .report-form legend { color: #4e7087; }

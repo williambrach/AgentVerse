@@ -146,7 +146,7 @@ export function renderControls(root, snap, opts) {
   st.statsHead.textContent = s ? `In memory (last 30 min): ${s.games} games · ${s.waiting} waiting for an answer · ` : '';
   st.statsState.textContent = s ? (s.paused ? 'new games paused' : 'accepting new games') : '';
   st.statsState.className = s?.paused ? 'ctl-stats-state ctl-paused' : 'ctl-stats-state';
-  st.statsStage.textContent = s?.byStage ? ` · by stage: started ${s.byStage.started ?? 0}, clues ${s.byStage.clues ?? 0}, interviewed ${s.byStage.interviewed ?? 0}, verdict ${s.byStage.verdict ?? 0}` : '';
+  st.statsStage.textContent = s?.byStage ? ` · by stage: started ${s.byStage.started ?? 0}, asked ${s.byStage.asked ?? 0}, interviewed ${s.byStage.interviewed ?? 0}, verdict ${s.byStage.verdict ?? 0}` : '';
 
   const recs = (snap.system ?? []).slice(-20).reverse();
   while (st.system.children.length > recs.length) st.system.removeChild(st.system.children.at(-1));

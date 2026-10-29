@@ -24,7 +24,6 @@ export function renderNotebook(target: HTMLElement, markup: string, key: string,
   const pageScroll = changedPage ? 0 : oldPage?.scrollTop || 0;
   const transcriptScroll = oldTranscript?.scrollTop || 0;
   const existing = new Set([...target.querySelectorAll<HTMLElement>('[data-motion-key]')].map(el => el.dataset.motionKey));
-  const oldSelection = target.querySelector('.evidence-card.selected')?.id;
   const active = document.activeElement;
   if (changedPage) focus = null;
   else if (active instanceof HTMLElement && target.contains(active) && active.id) {
@@ -57,7 +56,7 @@ export function renderNotebook(target: HTMLElement, markup: string, key: string,
     animate(target.querySelector('.page-turn-shade'), [{ opacity: .55, transform: 'translateX(-70%)' }, { opacity: 0, transform: 'translateX(100%)' }], 480);
     animate(document.querySelector('#notebook-section'), [{ opacity: 0, transform: 'translateY(5px)' }, { opacity: 1, transform: 'translateY(0)' }], 300);
     // Only stagger visible records; long transcripts remain immediately readable.
-    [...page.querySelectorAll('.briefing-note, .task-list li, .requirements button, .evidence-card')].slice(0, 5).forEach((el, i) => {
+    [...page.querySelectorAll('.briefing-note, .task-list li, .requirements button')].slice(0, 5).forEach((el, i) => {
       animate(el, [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'translateY(0)' }], 340, 70 + i * 35);
     });
   } else {
@@ -68,12 +67,6 @@ export function renderNotebook(target: HTMLElement, markup: string, key: string,
         { opacity: 1, transform: 'translateY(0) rotate(0deg) scale(1)' },
       ], speech ? 320 : 420, Math.min(i * 55, 180));
     });
-    const selected = target.querySelector<HTMLElement>('.evidence-card.selected');
-    if (selected && selected.id !== oldSelection) animate(selected, [
-      { transform: 'scale(1)' }, { transform: 'translateY(-3px) scale(1.015)', offset: .4 }, { transform: 'scale(1)' },
-    ], 360);
-    const newChapter = fresh.find(el => el.classList.contains('chapter-heading'));
-    if (newChapter) page.scrollTo({ top: page.scrollTop + newChapter.getBoundingClientRect().top - page.getBoundingClientRect().top - 20, behavior: reducedMotion.matches ? 'instant' : 'smooth' });
     if (transcript && fresh.some(el => el.classList.contains('speech'))) {
       transcript.scrollTo({ top: transcript.scrollHeight, behavior: reducedMotion.matches ? 'instant' : 'smooth' });
     }

@@ -17,7 +17,7 @@
   .station-frame { flex: 1; min-height: 0; }
   .station-topline, .station-bottomline { padding: 8px 15px; min-height: 0; }
   #station { flex: 1; min-height: 0; aspect-ratio: auto; overflow: hidden; }
-  .room-nav { grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: 10px; }
+  .room-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 10px; }
   .room-nav button { padding: 9px 8px; }
   .world-footer { margin-top: 8px; }
   .dossier { height: auto; min-height: 0; max-height: none; }

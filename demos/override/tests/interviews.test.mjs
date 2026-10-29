@@ -10,7 +10,7 @@ import { cases } from '../server/cases/index.mjs';
 
 const kase = cases[0];
 
-const session = (extra = {}) => ({ revealedPosition: 1, selectedEvidence: null, interviews: { momo: [], pip: [], nori: [] }, ...extra });
+const session = (extra = {}) => ({ interviews: { momo: [], pip: [], nori: [] }, ...extra });
 const ENDPOINTS = JSON.stringify([{ name: 'a', baseUrl: 'https://a.test/v1', model: 'ma', keyEnv: 'OVERRIDE_ENDPOINT_A_KEY' }]);
 const live = { OVERRIDE_LLM_API_KEY: 'test-key', OVERRIDE_LLM_MODEL: 'reasoning-model' };
 
@@ -31,7 +31,7 @@ const okJson = (body, status = 200) => ({ ok: true, status, json: async () => bo
 
 test('modelConfig defaults to rehearsal', () => {
   assert.deepEqual(modelConfig({}), {
-    mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'banana-interview-v2', maxCompletionTokens: 2048, timeoutMs: 60000,
+    mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'interview-v3', maxCompletionTokens: 2048, timeoutMs: 60000,
     maxInFlight: 200, failover: { failures: 5, windowMs: 30000 },
   });
 });
@@ -117,7 +117,7 @@ test('rehearsal answers carry no provenance and need no router', async () => {
 
 test('answer_passes_context: the router gets the built messages, ids and onAttempt', async () => {
   const config = modelConfig(live);
-  const s = session({ selectedEvidence: 'rule' });
+  const s = session();
   const router = routerFor(config, async () => okJson({ choices: [{ finish_reason: 'stop', message: { content: 'Momo told me the keeper said yes.' } }] }));
   const onAttempt = () => {};
   const seen = [];
@@ -131,7 +131,7 @@ test('answer_passes_context: the router gets the built messages, ids and onAttem
 
 test('custom OpenAI-compatible endpoint keeps credentials server-side and validates responses', async () => {
   const config = modelConfig({ ...live, OVERRIDE_LLM_API_KEY: 'test-key', OVERRIDE_LLM_MODEL: 'custom-model', OVERRIDE_LLM_BASE_URL: 'https://inference.example/v1/' });
-  const s = session({ selectedEvidence: 'rule' });
+  const s = session();
   let request;
   const good = realRouter(config, async (url, init) => { request = { url, ...init }; return okJson({ choices: [{ message: { content: 'Momo told me the keeper said yes.' } }] }); });
   const { answer, provenance } = await answerInterview(config, kase, s, 'pip', 'Who authorized this?', good);
@@ -157,7 +157,7 @@ test('reasoning-only token exhaustion retries once on the same endpoint without 
   };
   const router = new LlmRouter({ endpoints: config.endpoints, fetcher, onTrace: t => traces.push(t) });
   const attempts = [];
-  const out = await answerInterview(config, kase, session({ selectedEvidence: 'rule' }), 'momo', 'What did you know?', router, { sessionId: 's', questionEventId: 'q', onAttempt: a => attempts.push(a) });
+  const out = await answerInterview(config, kase, session(), 'momo', 'What did you know?', router, { sessionId: 's', questionEventId: 'q', onAttempt: a => attempts.push(a) });
   assert.deepEqual(requests.map(r => r.body.max_completion_tokens), [2048, 4096]);
   assert.deepEqual(requests[0].body.messages, requests[1].body.messages);
   assert.deepEqual(attempts.map(a => [a.finishReason, a.completionTokenLimit]), [['length', 2048], ['stop', 4096]]);
@@ -198,12 +198,14 @@ test('timeouts, connection failures, and malformed provider JSON receive distinc
   }
 });
 
-test('buildMessages keeps character knowledge, history and presented evidence separate', () => {
-  const s = session({ selectedEvidence: 'rule', interviews: { momo: [{ question: 'Q1', answer: 'A1', evidence: null }], pip: [], nori: [] } });
+test('buildMessages keeps character knowledge, and history separate', () => {
+  const s = session({ interviews: { momo: [{ question: 'Q1', answer: 'A1' }], pip: [], nori: [] } });
   const messages = buildMessages(kase, s, 'momo', 'Q2');
   assert.deepEqual(messages.map(m => m.role), ['system', 'user', 'assistant', 'user']);
   assert.match(messages[0].content, /You play Momo/);
   assert.equal(JSON.parse(messages[3].content).question, 'Q2');
-  assert.equal(JSON.parse(messages[3].content).presentedEvidence.id, 'rule');
+  assert.deepEqual(JSON.parse(messages[3].content), { question: 'Q2' });
+  assert.ok(messages[0].content.includes(kase.knowledge.momo[0]));
+  assert.doesNotMatch(messages[0].content, /PUBLIC RECORDS|presentedEvidence/);
   assert.ok(!buildMessages(kase, s, 'pip', 'Q2').some(m => m.content === 'A1'));
 });

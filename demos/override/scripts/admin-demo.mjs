@@ -94,8 +94,6 @@ export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw
       const start = await act(view?.session ? 'reset' : 'start', { caseId });
       if (start.status !== 200) { await sleep(2000); continue; }
       await think();
-      await act('reveal');
-      for (let k = 1; k < (view?.session ? cases.find((c) => c.id === caseId).chapters.length : 0); k++) { await think(); await act('reveal'); }
       for (const character of view?.characters ?? []) {
         await think();
         await act('visit', { location: character.id });

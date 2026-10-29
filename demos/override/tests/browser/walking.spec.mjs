@@ -70,16 +70,16 @@ test('WASD and arrows animate all four directions and return to a facing idle po
 test('destination and ground clicks keep a continuous walk cycle and stop on arrival', async ({ page }) => {
   await start(page);
   await page.locator('#skip-walking').uncheck();
-  await page.locator('nav [data-go="replay"]').click();
+  await page.locator('nav [data-go="momo"]').click();
   const moving = await samples(page, 1400);
   for (let pose = 0; pose < 4; pose++) expect(moving.some(value => value.frame === `up-${pose}`)).toBe(true);
-  await expect(page.locator('#panel h2')).toHaveText('Follow the banana trail.');
-  expect((await samples(page, 150)).at(-1).frame).toBe('up-0');
+  await expect(page.locator('#panel h2')).toHaveText('Momo');
+  expect((await samples(page, 150)).at(-1).frame).toBe('left-0');
 
   const canvas = page.locator('#station canvas');
   const bounds = await canvas.boundingBox();
   await canvas.click({ position: { x: bounds.width * 300 / 480, y: bounds.height * 204 / 340 } });
-  const groundWalk = await samples(page, 1800);
+  const groundWalk = await samples(page, 2800);
   expect(groundWalk.some(value => /-[13]$/.test(value.frame))).toBe(true);
   const arrival = groundWalk.at(-1);
   expect(arrival.x).toBeCloseTo(300, -1);
@@ -107,8 +107,6 @@ test('blocked movement, typing, dialogs and reset leave the detective standing',
   expect(reset).toEqual({ frame: 'down-0', x: 244, y: 276 });
 
   await page.locator('#skip-walking').check();
-  await page.locator('nav [data-go="replay"]').click();
-  await page.locator('#reveal-button').click();
   await page.locator('nav [data-go="pip"]').click();
   await page.locator('#question').focus();
   await page.keyboard.down('w');
@@ -179,8 +177,6 @@ test('all three monkeys blink and gesture independently without leaving their po
 test('monkeys react on approach and remain solid and clickable during their gestures', async ({ page }) => {
   await start(page);
   await page.locator('#skip-walking').check();
-  await page.locator('nav [data-go="replay"]').click();
-  await page.locator('#reveal-button').click();
   await page.locator('#skip-walking').uncheck();
   // Return focus to the game; keyboard movement pauses while an input is focused.
   await page.locator('#station canvas').click({ position: { x: 10, y: 10 } });

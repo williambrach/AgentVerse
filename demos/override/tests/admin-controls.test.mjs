@@ -33,7 +33,7 @@ const doc = { createElement: (t) => new El(t, doc) };
 const ep = (name, extra = {}) => ({ name, model: `m-${name}`, apiBaseHost: `${name}.test`, inFlight: 1, maxInFlight: 12, queued: 0, lastSuccessAt: 1, lastFailureAt: null, lastFailureReason: null, failures5m: 0, ...extra });
 const snap = (over = {}) => ({
   router: { active: 'a', pinned: false, inFlight: 2, queued: 0, maxInFlight: 20, endpoints: [ep('a'), ep('b')] },
-  sessions: { games: 5, waiting: 1, paused: false, byStage: { started: 1, clues: 1, interviewed: 1, verdict: 2 } },
+  sessions: { games: 5, waiting: 1, paused: false, byStage: { started: 1, asked: 1, interviewed: 1, verdict: 2 } },
   system: [{ type: 'round_started', timestamp: 1, label: 'first' }, { type: 'round_started', timestamp: 2, label: 'second' }],
   ...over,
 });
@@ -46,7 +46,7 @@ const mk = () => {
 test('session stats line says what it is', async () => {
   const { root, opts } = mk();
   renderControls(root, snap(), opts);
-  assert.match(root.textContent, /In memory \(last 30 min\): 5 games · 1 waiting for an answer · accepting new games · by stage: started 1, clues 1, interviewed 1, verdict 2/);
+  assert.match(root.textContent, /In memory \(last 30 min\): 5 games · 1 waiting for an answer · accepting new games · by stage: started 1, asked 1, interviewed 1, verdict 2/);
   renderControls(root, snap({ sessions: { games: 5, waiting: 1, paused: true, byStage: {} } }), opts);
   assert.match(root.textContent, /new games paused/);
   assert.equal(root.all(e => e.className.includes('ctl-paused')).length, 1);

@@ -1,7 +1,7 @@
 // Round control, answer funnel and verdict tallies. Text via textContent only.
 const STEPS = [
   ['started', 'Started'],
-  ['clues', 'First clue'],
+  ['asked', 'First question'],
   ['interviewed', 'Interviewed all'],
   ['verdict', 'Verdict'],
   ['debrief', 'Debrief'],

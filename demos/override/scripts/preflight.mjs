@@ -10,7 +10,6 @@ import { cases } from '../server/cases/index.mjs';
 const kase = cases[0];
 const { characters } = kase;
 
-const CLUES = [null, 'rule', 'message', 'bell'];
 const FOLLOW_UPS = ['What did you know at the time?', 'Who told you, and did you check?'];
 // Local copy of the load test helper: the OS accept-queue cap, or null when unknown.
 function readAcceptQueueLimit() {
@@ -37,19 +36,19 @@ export function flagsFor(characterId, question, answer) {
 // Nearest-rank percentile on an ascending list.
 export const percentile = (sorted, p) => (sorted.length ? sorted[Math.max(0, Math.ceil((p * sorted.length) / 100) - 1)] : null);
 
-async function fidelityFor(router, characterId, clue) {
+async function fidelityFor(router, characterId) {
   const character = characters.find(c => c.id === characterId);
-  const session = { revealedPosition: 1, selectedEvidence: clue, interviews: { momo: [], pip: [], nori: [] } };
+  const session = { interviews: Object.fromEntries(characters.map(c => [c.id, []])) };
   const rows = [];
   for (const question of [character.quickQuestion, ...FOLLOW_UPS]) {
     let row;
     try {
       const { content } = await router.complete({ messages: buildMessages(kase, session, characterId, question) });
-      row = { character: characterId, clue, question, ok: true, words: words(content), flags: flagsFor(characterId, question, content), answer: content };
-      session.interviews[characterId].push({ question, answer: content, evidence: clue });
+      row = { character: characterId, question, ok: true, words: words(content), flags: flagsFor(characterId, question, content), answer: content };
+      session.interviews[characterId].push({ question, answer: content });
     } catch (error) {
       const empty = error.code === 'empty_or_invalid_answer';
-      row = { character: characterId, clue, question, ok: false, words: 0, flags: [empty ? 'empty' : `error:${error.code ?? 'unknown'}`], answer: '' };
+      row = { character: characterId, question, ok: false, words: 0, flags: [empty ? 'empty' : `error:${error.code ?? 'unknown'}`], answer: '' };
       // A failed turn adds no history, so later questions still run with what was answered.
     }
     rows.push(row);
@@ -59,7 +58,7 @@ async function fidelityFor(router, characterId, clue) {
 
 async function capacityRun(router, steps) {
   const characterId = characters[0].id;
-  const session = { revealedPosition: 1, selectedEvidence: null, interviews: { momo: [], pip: [], nori: [] } };
+  const session = { interviews: Object.fromEntries(characters.map(c => [c.id, []])) };
   const messages = buildMessages(kase, session, characterId, characters[0].quickQuestion);
   const results = [];
   for (const concurrency of steps) {
@@ -82,7 +81,7 @@ export async function runPreflight({ endpoints, capacity = false, steps = [10, 2
     // failover threshold is unreachable: a single-endpoint router must record failures, not move.
     const make = ep => new LlmRouter({ endpoints: [ep], maxInFlight: top, deadlineMs, maxCompletionTokens, fetcher, failover: { failures: 1e9, windowMs: 1 } });
     const router = make(endpoint);
-    const groups = await Promise.all(characters.flatMap(c => CLUES.map(clue => fidelityFor(router, c.id, clue))));
+    const groups = await Promise.all(characters.map(c => fidelityFor(router, c.id)));
     const entry = { name: endpoint.name, fidelity: groups.flat(), capacity: [] };
     if (capacity) {
       entry.capacityMaxInFlight = Math.max(endpoint.maxInFlight ?? 50, top);
@@ -103,8 +102,8 @@ export function renderReport(report) {
     out.push('');
   }
   for (const e of report.endpoints) {
-    out.push(`## Endpoint ${e.name}`, '', '| character | clue | ok | words | flags | question |', '|---|---|---|---|---|---|');
-    for (const r of e.fidelity) out.push(`| ${r.character} | ${r.clue ?? '-'} | ${r.ok ? 'yes' : 'NO'} | ${r.words} | ${r.flags.join(', ') || '-'} | ${r.question} |`);
+    out.push(`## Endpoint ${e.name}`, '', '| character | ok | words | flags | question |', '|---|---|---|---|---|');
+    for (const r of e.fidelity) out.push(`| ${r.character} | ${r.ok ? 'yes' : 'NO'} | ${r.words} | ${r.flags.join(', ') || '-'} | ${r.question} |`);
     if (e.capacity.length) {
       out.push('', `Capacity (endpoint maxInFlight lifted to ${e.capacityMaxInFlight} for this run)`, '', '| concurrency | errors | p50 ms | p95 ms |', '|---|---|---|---|');
       for (const c of e.capacity) out.push(`| ${c.concurrency} | ${c.errors} | ${c.p50Ms === null ? '-' : Math.round(c.p50Ms)} | ${c.p95Ms === null ? '-' : Math.round(c.p95Ms)} |`);

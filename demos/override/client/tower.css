@@ -42,18 +42,6 @@
 :root[data-theme="tower"] .briefing-note p { color: #4c4580; }
 :root[data-theme="tower"] .task-list b { color: #4f4880; }
 :root[data-theme="tower"] .task-list span, :root[data-theme="tower"] .subtle-note { color: #7f799f; }
-:root[data-theme="tower"] .record-meta { color: #8a84a8; }
-:root[data-theme="tower"] .chapter-heading h3 { color: #4f4880; }
-:root[data-theme="tower"] .evidence-card h3 { color: #4f4880; }
-:root[data-theme="tower"] .evidence-card > p { color: #5f5985; }
-:root[data-theme="tower"] .record-source, :root[data-theme="tower"] .evidence-select { color: #8780a8; }
-:root[data-theme="tower"] .notebook-page .evidence-card { border-color: #d6d0e6; background: #fdfbff; box-shadow: inset 0 0 0 2px #fff, 1px 3px 0 #ddd8e8, 0 6px 12px -8px #3f386055; }
-:root[data-theme="tower"] .notebook-page .evidence-card::before { background: #e8dab0a6; border-color: #c6b98955; }
-:root[data-theme="tower"] .notebook-page .evidence-card:hover { border-color: #a99fcf; }
-:root[data-theme="tower"] .notebook-page .evidence-card.selected { border-color: #8a7fc0; background: #f0ecfa; box-shadow: inset 3px 0 #9d93cc, 1px 3px #d5cfe8, 0 7px 14px -8px #3f386055; }
-:root[data-theme="tower"] .notebook-page .evidence-card.selected::before { background: #c4bbe3bd; border-color: #8f84c480; }
-:root[data-theme="tower"] .selected-banner { color: #6a5f9e; background: #eeeaf8; border-color: #bdb4dc; box-shadow: 1px 3px 0 #dcd6ea; }
-:root[data-theme="tower"] .present-to button { color: #6a5f9e; }
 
 :root[data-theme="tower"] .interview-heading { background: #f6f3fb; border-color: #c9c2de; }
 :root[data-theme="tower"] .interview-heading h2 { color: #45407a; }
@@ -63,15 +51,11 @@
 :root[data-theme="tower"] .speech.character::after { border-color: #aea5cf; background: #fdfbff; }
 :root[data-theme="tower"] .speech.investigator { background: #ebe6f6; border-color: #c7bfe0; color: #534b84; box-shadow: 2px 3px 0 #dcd6ea; }
 :root[data-theme="tower"] .speech.waiting { background: #f5f2fa; }
-:root[data-theme="tower"] .speech > span, :root[data-theme="tower"] .speech.investigator i { color: #7d76a3; }
+:root[data-theme="tower"] .speech > span{ color: #7d76a3; }
 :root[data-theme="tower"] .thinking-dots i { background: #7466b0; }
 :root[data-theme="tower"] .interview-compose { background: #f1eef8; border-color: #bab2d6; box-shadow: inset 0 2px #fbf9ff; }
-:root[data-theme="tower"] .interview-compose > label { color: #7a739f; }
 :root[data-theme="tower"] .interview-compose textarea { border-color: #b0a8d0; background: #fdfcff; color: #48427a; }
 :root[data-theme="tower"] .interview-compose textarea:focus { border-color: #7466b0; box-shadow: 0 0 0 3px #8f84c429; }
-:root[data-theme="tower"] .interview-compose select { background: #fdfcff; border-color: #c3bcdc; color: #48427a; }
-:root[data-theme="tower"] .interview-compose .presented-record { background: #f5f1fa; color: #827b9f; border-left-color: #a99fcf; box-shadow: 1px 3px 0 #dcd6ea; }
-:root[data-theme="tower"] .interview-compose .presented-record b { color: #6a6396; }
 :root[data-theme="tower"] .compose-bottom small { color: #918aaf; }
 :root[data-theme="tower"] .quick-question { background: #e7e2f6; color: #4a3f86; border-color: #ada3d3; box-shadow: 0 2px #cdc6e4; }
 :root[data-theme="tower"] .quick-question small { color: #7a70ad; }
@@ -121,15 +105,11 @@
 :root[data-theme="tower"] #toast { background: #f3eefa; border-color: #a99fcf; color: #5a5091; }
 :root[data-theme="tower"] select, :root[data-theme="tower"] textarea { color: #48427a; }
 :root[data-theme="tower"] textarea::placeholder { color: #9a94b6; }
-:root[data-theme="tower"] .skip-walk input, :root[data-theme="tower"] .evidence-checkbox input { accent-color: #6f63b0; }
+:root[data-theme="tower"] .skip-walk input{ accent-color: #6f63b0; }
 :root[data-theme="tower"] .briefing-note small { color: #6e6890; }
-:root[data-theme="tower"] .completion-note { color: #6a5f9e; }
 :root[data-theme="tower"] .interview-status { color: #857fa6; }
-:root[data-theme="tower"] .interview-compose > label > span, :root[data-theme="tower"] .report-form > label > span { color: #a39dbf; }
+:root[data-theme="tower"] .report-form > label > span{ color: #a39dbf; }
 :root[data-theme="tower"] .verdict-summary small { color: #7d76a3; }
-:root[data-theme="tower"] .verdict-summary blockquote { border-color: #d3cce6; color: #857fa6; }
-:root[data-theme="tower"] .finding details { border-color: #ddd7ec; background: #f6f3fb; color: #6a6396; }
-:root[data-theme="tower"] .finding details small { color: #9a94b6; }
 :root[data-theme="tower"] .case-status:before { background: #8a7fc0; }
 :root[data-theme="tower"] .task-list li:before { color: #9a94b6; }
 :root[data-theme="tower"] #panel, :root[data-theme="tower"] .interview-transcript { scrollbar-color: #c3bcdb transparent; }

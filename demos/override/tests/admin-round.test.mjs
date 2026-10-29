@@ -19,17 +19,17 @@ const catalog = [
 ];
 
 test('funnelRows example', () => {
-  const snap = { funnel: { 'banana-mystery': { started: 40, clues: 36, interviewed: 30, verdict: 20, debrief: 18 } } };
+  const snap = { funnel: { 'banana-mystery': { started: 40, asked: 36, interviewed: 30, verdict: 20, debrief: 18 } } };
   const rows = round.funnelRows(snap, catalog);
   assert.deepEqual(rows[0], { caseId: 'banana-mystery', title: 'The Banana Mystery', steps: [
-    { label: 'Started', n: 40, pct: 100 }, { label: 'First clue', n: 36, pct: 90 }, { label: 'Interviewed all', n: 30, pct: 75 },
+    { label: 'Started', n: 40, pct: 100 }, { label: 'First question', n: 36, pct: 90 }, { label: 'Interviewed all', n: 30, pct: 75 },
     { label: 'Verdict', n: 20, pct: 50 }, { label: 'Debrief', n: 18, pct: 45 }] });
   assert.equal(rows.length, 2);
   assert.ok(rows[1].steps.every((s) => s.n === 0 && s.pct === 0));
 });
 
 test('funnel started 0 gives pct 0 everywhere, never NaN', () => {
-  const rows = round.funnelRows({ funnel: { 'banana-mystery': { started: 0, clues: 3, interviewed: 0, verdict: 0, debrief: 0 } } }, catalog);
+  const rows = round.funnelRows({ funnel: { 'banana-mystery': { started: 0, asked: 3, interviewed: 0, verdict: 0, debrief: 0 } } }, catalog);
   assert.ok(rows[0].steps.every((s) => s.pct === 0));
 });
 
@@ -54,7 +54,7 @@ test('tallyRows zero verdicts and uncertain', () => {
 
 test('renderFunnel sizes bars via CSSOM and writes text only', () => {
   const doc = makeDoc(); const root = new El('div', doc);
-  round.renderFunnel(root, { funnel: { 'banana-mystery': { started: 40, clues: 36, interviewed: 30, verdict: 20, debrief: 18 } } }, catalog);
+  round.renderFunnel(root, { funnel: { 'banana-mystery': { started: 40, asked: 36, interviewed: 30, verdict: 20, debrief: 18 } } }, catalog);
   const widths = byClass(root, 'bar-fill').map((e) => e.style.width);
   assert.deepEqual(widths.slice(0, 5), ['100%', '90%', '75%', '50%', '45%']);
   assert.ok(root.textContent.includes('The Banana Mystery'));

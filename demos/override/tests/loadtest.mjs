@@ -170,8 +170,6 @@ export async function runScenario(name, { players = 200, rampMs = 10_000, deadli
         if (access.status !== 200) throw new Error(`sign-in ${access.status}`);
         const start = await act('start');
         if (start.status !== 200) throw new Error(`start ${start.status}`);
-        const reveal = await act('reveal');
-        if (reveal.status !== 200) throw new Error(`reveal ${reveal.status}`);
         for (const character of r.state.characters) {
           const q = { character: character.id, ok: false, statuses: [], messages: [] };
           r.questions.push(q);

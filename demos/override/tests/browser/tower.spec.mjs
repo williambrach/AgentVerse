@@ -65,7 +65,7 @@ test('a tower case shows the tower and its cast', async ({ page }) => {
   await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   for (const name of ['Wren', 'Basil', 'Juniper']) await expect(page.locator(`nav [data-go] >> text=${name}`)).toBeVisible();
-  await expect(page.locator('#quick-progress')).toContainText('potion cabinet');
+  await expect(page.locator('#quick-progress')).toContainText('1. Ask the apprentices · 0 / 3 heard');
   expect((await sceneState(page)).label).toMatch(/^Wizard Tower with Wren, Basil, Juniper/);
 });
 
@@ -220,13 +220,13 @@ test('station labels are sharp HTML over the canvas that follow its size and wor
   await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   const labels = page.locator('#station .station-label');
-  await expect(labels).toHaveText(['WREN', 'BASIL', 'JUNIPER', 'START HERE', 'POTION CABINET', 'CLUES', 'YOUR GUESS']);
+  await expect(labels).toHaveText(['WREN', 'BASIL', 'JUNIPER', 'START HERE', 'YOUR GUESS']);
   await expect(page.locator('#station .station-prompt')).toHaveText('[E] Read the case');
   await expect.poll(fit).toBe('0,0,0,0 font 7');
   await page.setViewportSize({ width: 1100, height: 760 });
   await expect.poll(fit).toBe('0,0,0,0 font 7');
   await switchTo(page, 'banana-mystery');
-  await expect(labels).toHaveText(['MOMO', 'PIP', 'NORI', 'START HERE', 'BANANA BASKET', 'CLUES', 'YOUR GUESS']);
+  await expect(labels).toHaveText(['MOMO', 'PIP', 'NORI', 'START HERE', 'YOUR GUESS']);
 });
 
 test('a tower session resumes from its cookie', async ({ page }) => {
@@ -237,7 +237,7 @@ test('a tower session resumes from its cookie', async ({ page }) => {
   await expect(page.locator('#intro')).toHaveCount(0);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   for (const id of ['wren', 'basil', 'juniper']) await expect(page.locator(`nav [data-go="${id}"]`)).toHaveCount(1);
-  await expect(page.locator('#notebook-index')).toContainText('/ 07');
+  await expect(page.locator('#notebook-index')).toContainText('/ 05');
 });
 
 test('the real tower art keeps its proportions, uses the corrected walk atlas and sits on the grove chrome', async ({ page }) => {

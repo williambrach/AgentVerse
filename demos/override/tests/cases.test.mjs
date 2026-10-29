@@ -5,6 +5,7 @@ import { minimalCase } from './fixtures/minimal-case.mjs';
 import bananaMystery from '../server/cases/banana-mystery.mjs';
 
 const copy = (patch = {}) => ({ ...JSON.parse(JSON.stringify(minimalCase)), rehearsal: minimalCase.rehearsal, ...patch });
+const legacy = () => { const d = copy(); d.chapters = [{ title: 'C1', subtitle: 'S1' }]; d.records = [{ id: 'r1', chapter: 1, time: '1', source: 'src', title: 'R1', kind: 'K', text: 'public record text' }]; d.copy.basket = { title: 'KT', description: 'KD', emptyTitle: 'KE', emptyText: 'KX' }; d.debrief.findings[0].evidence = ['r1']; return d; };
 const edit = fn => { const data = copy(); fn(data); return data; };
 
 test('defineCase adds a stable 12-hex hash', () => {
@@ -12,7 +13,7 @@ test('defineCase adds a stable 12-hex hash', () => {
   assert.ok(Object.isFrozen(kase));
   assert.match(kase.contentHash, /^[0-9a-f]{12}$/);
   assert.equal(defineCase(copy()).contentHash, kase.contentHash);
-  assert.notEqual(defineCase(edit(d => { d.records[0].text = 'changed'; })).contentHash, kase.contentHash);
+  assert.notEqual(defineCase(edit(d => { d.copy.report.title = 'changed'; })).contentHash, kase.contentHash);
   const reordered = Object.fromEntries(Object.entries(copy()).reverse());
   assert.equal(defineCase(reordered).contentHash, kase.contentHash);
   assert.equal(contentHash({ b: 1, a: [2] }), contentHash({ a: [2], b: 1 }));
@@ -23,19 +24,46 @@ test('defineCase names the failing path', () => {
   bad(d => { d.id = 'Bad ID'; }, /^Error: case Bad ID: id: |^case Bad ID: id: /);
   bad(d => { delete d.copy.report.title; }, /copy\.report\.title/);
   bad(d => { delete d.characters[2].room; }, /characters\[2\]\.room/);
+  bad(d => { d.knowledge.pip = []; }, /knowledge\.pip/);
+  bad(d => { d.answer.culprits = ['maya']; }, /answer\.culprits/);
+  bad(d => { d.rehearsal = 'x'; }, /rehearsal/);
+});
+
+test('clue_fields_optional', () => {
+  const d = copy();
+  for (const k of ['chapters', 'records']) assert.equal(k in d, false);
+  assert.equal('basket' in d.copy, false);
+  assert.equal('evidence' in d.debrief.findings[0], false);
+  d.knowledge.momo = ['a', 'b', 'c'];
+  assert.ok(defineCase(d));
+  assert.throws(() => defineCase(edit(x => { x.knowledge.momo = []; })), /knowledge\.momo/);
+  assert.throws(() => defineCase(edit(x => { x.knowledge.momo = ['a', 7]; })), /knowledge\.momo/);
+});
+
+test('legacy_clue_fields_still_validated', () => {
+  assert.ok(defineCase(legacy()));
+  const bad = (fn, pattern) => { const d = legacy(); fn(d); assert.throws(() => defineCase(d), pattern); };
   bad(d => { d.records.push({ ...d.records[0] }); }, /records\[1\]\.id/);
   bad(d => { d.records[0].chapter = 2; }, /records\[0\]\.chapter/);
   bad(d => { d.knowledge.pip = ['a', 'b']; }, /knowledge\.pip/);
-  bad(d => { d.answer.culprits = ['maya']; }, /answer\.culprits/);
   bad(d => { d.debrief.findings[0].evidence = ['zzz']; }, /debrief\.findings\[0\]\.evidence/);
-  bad(d => { d.rehearsal = 'x'; }, /rehearsal/);
+  bad(d => { delete d.copy.basket.title; }, /copy\.basket\.title/);
+});
+
+test('public_view_has_no_clue_fields', () => {
+  for (const k of [defineCase(legacy()), defineCase(minimalCase)]) {
+    const view = publicView(k);
+    assert.equal('chapters' in view, false);
+    assert.equal('clueCount' in view, false);
+    assert.equal('basket' in view.copy, false);
+    assert.equal('clueSpot' in view.world, false);
+  }
 });
 
 test('publicView sends only the allowlist', () => {
   const view = publicView(defineCase(minimalCase));
-  assert.deepEqual(Object.keys(view), ['caseId', 'caseVersion', 'contentHash', 'title', 'order', 'copy', 'world', 'characters', 'chapters', 'clueCount']);
+  assert.deepEqual(Object.keys(view), ['caseId', 'caseVersion', 'contentHash', 'title', 'order', 'copy', 'world', 'characters']);
   assert.deepEqual(Object.keys(view.characters[0]), ['id', 'name', 'role', 'room', 'color', 'introduction', 'quickQuestion']);
-  assert.equal(view.clueCount, 1);
   assert.equal(view.caseId, 'mini-case');
   assert.ok(!JSON.stringify(view).includes('SECRET'));
 });
@@ -53,15 +81,17 @@ test('listCases and findCase hide drafts unless dev', () => {
 test('banana-mystery validates', () => {
   assert.match(bananaMystery.contentHash, /^[0-9a-f]{12}$/);
   assert.deepEqual(bananaMystery.answer.culprits, ['momo']);
-  assert.equal(bananaMystery.version, 'banana-authored-v1.0.0');
-  assert.ok(bananaMystery.rehearsal({ selectedEvidence: null }, 'nori', 'x').includes('assumed snack time'));
+  assert.equal(bananaMystery.version, 'banana-authored-v2.0.0');
+  assert.equal(bananaMystery.records, undefined);
+  assert.equal(bananaMystery.chapters, undefined);
+  assert.ok(bananaMystery.rehearsal({}, 'nori', 'x').includes('assumed snack time'));
 });
 
 import { worlds } from '../server/worlds.mjs';
 import { towerCase } from './fixtures/minimal-case.mjs';
 import bananaControl from '../server/cases/banana-control.mjs';
-const grove = { id: 'grove', place: 'Banana Grove', cast: { one: 'a monkey', many: 'monkeys' }, clueSpot: 'basket' };
-const tower = { id: 'tower', place: 'Wizard Tower', cast: { one: 'an apprentice', many: 'apprentices' }, clueSpot: 'potion cabinet' };
+const grove = { id: 'grove', place: 'Banana Grove', cast: { one: 'a monkey', many: 'monkeys' } };
+const tower = { id: 'tower', place: 'Wizard Tower', cast: { one: 'an apprentice', many: 'apprentices' } };
 test('worlds registry', () => {
   assert.deepEqual(worlds.grove, { ...grove, persona: 'monkey' });
   assert.deepEqual(worlds.tower, { ...tower, persona: 'wizard' });
@@ -88,7 +118,6 @@ test('knowledge, culprits and findings follow the cast', () => {
   assert.throws(() => defineCase(finding), /debrief\.findings\[0\]\.character/);
 });
 test('grove hashes are unchanged', () => {
-  assert.equal(bananaMystery.contentHash, '2da1093c9eb3');
   assert.equal(bananaControl.contentHash, 'd1f7d8558985');
 });
 test('publicView shows the world without the persona', () => {
@@ -102,4 +131,13 @@ test('a defined case can be defined again, its world object resolves by id', () 
   assert.equal(defineCase({ ...copy(), world: { id: 'grove' } }).world.persona, 'monkey');
   assert.throws(() => defineCase({ ...copy(), world: { id: 'moon' } }), /world: must be one of/);
   assert.equal('persona' in publicView(again).world, false);
+});
+test('banana_pip_keywords_word_bounded', async () => {
+  const { default: banana } = await import('../server/cases/banana-mystery.mjs');
+  const fooled = /Momo fooled me/;
+  assert.doesNotMatch(banana.rehearsal({}, 'pip', 'Did you believe Momo?'), fooled);
+  assert.doesNotMatch(banana.rehearsal({}, 'pip', 'Is Momo reliable?'), fooled);
+  assert.match(banana.rehearsal({}, 'pip', 'Did Momo lie to you?'), fooled);
+  assert.match(banana.rehearsal({}, 'pip', 'The keeper never said yes.'), fooled);
+  assert.match(banana.rehearsal({}, 'momo', 'Did you lie to Pip?'), /made up the permission/);
 });
