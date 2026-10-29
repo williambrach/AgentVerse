@@ -8,8 +8,9 @@ export default defineConfig({
   // A missing baseline fails instead of being written, so a test can never pass against its own fresh screenshot.
   updateSnapshots: 'none',
   projects: [
-    { name: 'default', testIgnore: 'tower.spec.mjs' },
+    { name: 'default', testIgnore: ['tower.spec.mjs', 'admin.spec.mjs'] },
     { name: 'tower', testMatch: 'tower.spec.mjs', use: { baseURL: 'http://127.0.0.1:4318' } },
+    { name: 'admin', testMatch: 'admin.spec.mjs', use: { baseURL: 'http://127.0.0.1:4320' } },
   ],
   fullyParallel: false,
   workers: 1,
@@ -34,6 +35,13 @@ export default defineConfig({
       url: 'http://127.0.0.1:4318/api/access',
       reuseExistingServer: false,
       env: { PORT: '4318', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DEV_TOOLS: '1', OVERRIDE_DATA_DIR: './test-results/sessions-tower' },
+    },
+    {
+      // The real server with the admin listener on. Only the admin project talks to it; players are driven over the game port.
+      command: 'node server/index.mjs',
+      url: 'http://127.0.0.1:4320/admin',
+      reuseExistingServer: false,
+      env: { PORT: '4319', HOST: '127.0.0.1', OVERRIDE_ADMIN_TOKEN: 'admin-e2e', OVERRIDE_ADMIN_PORT: '4320', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: './test-results/sessions-admin' },
     },
   ],
 });
