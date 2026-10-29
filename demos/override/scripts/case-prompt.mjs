@@ -21,6 +21,6 @@ if (!Number.isInteger(chapter) || chapter < 1 || chapter > kase.chapters.length)
 const evidence = values.evidence ?? null;
 if (evidence && !kase.records.some(r => r.id === evidence && r.chapter <= chapter)) die(`evidence not revealed at chapter ${chapter}: ${evidence}`);
 
-const session = { revealedPosition: chapter, selectedEvidence: evidence, interviews: { momo: [], pip: [], nori: [] } };
+const session = { revealedPosition: chapter, selectedEvidence: evidence, interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])) };
 const messages = buildMessages(kase, session, characterId, values.question ?? character.quickQuestion);
 console.log(messages.map(m => `--- ${m.role}\n${m.content}`).join('\n'));
