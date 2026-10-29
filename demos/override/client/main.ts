@@ -27,7 +27,6 @@ let panel: LocationId = 'briefing';
 let busy = false;
 let pendingCharacter: string | null = null;
 let introVisible = true;
-let skipWalking = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let errorMessage = '';
 /** The agents' thread shows in the notebook instead of the location panel; `panel` is left alone. */
 let threadOpen = false;
@@ -125,7 +124,7 @@ function shell() {
         <div class="world-heading"><div><span class="eyebrow" id="case-eyebrow"></span><h1 id="case-headline">${escape(state.copy.headline)}</h1></div><span class="case-status" id="case-status">AWAITING INVESTIGATOR</span></div>
         <div class="station-frame"><div class="station-topline"><span><i class="live-dot"></i> <span id="case-topline">${escape(state.title.toUpperCase())}</span> / <span id="case-day"></span></span><span id="elapsed">00:00</span></div><div id="station"></div><div class="station-bottomline"><span id="movement-hint">WASD / ARROWS to walk · E to interact</span><span id="tools-line"></span><span class="floor-label">2–3 MINUTE MYSTERY</span></div></div>
         <nav class="room-nav" id="room-nav"></nav>
-        <div class="world-footer"><span><span id="quick-progress"></span></span><label class="skip-walk"><input id="skip-walking" type="checkbox" ${skipWalking ? 'checked' : ''}> Skip walking</label></div>
+        <div class="world-footer"><span><span id="quick-progress"></span></span></div>
       </section>
       <aside class="dossier" aria-label="Investigation notebook"><div class="dossier-top"><div class="notebook-label"><span class="eyebrow">INVESTIGATOR’S NOTEBOOK</span><span id="notebook-section">Case briefing</span></div><span class="notebook-index" id="notebook-index" aria-hidden="true">01 / 0${2 + state.characters.length}</span><button class="icon-button" data-go="briefing" aria-label="View briefing">${icon('report')}</button></div><div id="panel"></div></aside>
     </main>
@@ -143,7 +142,6 @@ function shell() {
     renderPreview();
   });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard')) closeOverlay(); });
-  document.querySelector('#skip-walking')!.addEventListener('change', event => { skipWalking = (event.target as HTMLInputElement).checked; });
   setInterval(() => {
     const elapsed = document.querySelector('#elapsed');
     if (!elapsed || !state?.session) return;
@@ -183,8 +181,7 @@ function go(location: LocationId) {
   if (busy || !state.session) return;
   stopTalking();
   threadOpen = false;
-  if (skipWalking || state.session.status === 'closed') void visit(location);
-  else station.travel(location);
+  void visit(location);
 }
 
 async function onClick(event: MouseEvent) {
@@ -230,11 +227,16 @@ function savedPanel(): LocationId {
 /** Opens a fresh session on a case. The old session's records stay on the server. */
 async function startCase(caseId: string) {
   stopTalking();
-  if (!(await action('reset', { caseId }))) return;
+  // Reset the view inside action(): its closing render() already shows the new case, and a panel
+  // from the old cast (an open interview) would throw there and leave the case board hanging.
+  const fresh = () => {
+    drafts = blankDrafts();
+    reportDraft = { suspect: '', confidence: 70, explanation: '' };
+    panel = 'briefing'; threadOpen = false; introVisible = false;
+  };
+  if (!(await action('reset', { caseId }, fresh))) return;
   dropCaseParam();
-  drafts = blankDrafts();
-  reportDraft = { suspect: '', confidence: 70, explanation: '' };
-  panel = 'briefing'; threadOpen = false; station.clearBubbles(); station.resetPosition(); introVisible = false;
+  station.clearBubbles(); station.resetPosition();
   document.querySelector('#overlay-root')!.innerHTML = ''; render();
 }
 
@@ -346,7 +348,7 @@ function briefingPanel() {
     <div class="notebook-content"><div class="briefing-note"><span class="eyebrow">YOUR QUESTION</span><p>${escape(copy.briefing.question)}</p><small>${escape(copy.briefing.hint)}</small></div>
     <ol class="task-list"><li><b>Ask ${state.characters.length} ${escape(world().text.many)}</b><span>One quick question each.</span></li><li><b>Make your guess</b><span>Choose who knowingly broke the rule. Then see what happened.</span></li></ol>
     <button class="primary-button" data-go="${escape(state.characters[0]?.id)}">Ask ${escape(state.characters[0]?.name)} ${icon('arrow')}</button>
-    <div class="subtle-note">Click ${escape(world().text.clickOne)} or a destination to walk there. <b>Skip walking</b> jumps straight to the conversation.</div></div>`;
+    <div class="subtle-note">Walk with WASD or the arrow keys and press E next to ${escape(world().text.oneWithArticle)} to talk. The buttons under the map open a page straight away.</div></div>`;
 }
 
 function interviewPanel(characterId: string) {

@@ -11,14 +11,14 @@ const star = '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4l-5.3 3 1.2-6-4.5
 test("grove text is today's text", () => {
   const w = worldFor('grove');
   assert.equal(w.id, 'grove');
-  assert.deepEqual(w.text, { place: 'Banana Grove', eyebrow: 'GROVE', day: 'PICNIC DAY', one: 'monkey', many: 'monkeys', castLabel: 'MONKEY', hint: 'Click a monkey or use WASD / arrows to explore.', clickOne: 'a monkey', investigator: 'monkey investigator', icon: banana });
+  assert.deepEqual(w.text, { place: 'Banana Grove', eyebrow: 'GROVE', day: 'PICNIC DAY', one: 'monkey', many: 'monkeys', castLabel: 'MONKEY', hint: 'Walk with WASD / arrows. Press E next to a monkey.', oneWithArticle: 'a monkey', investigator: 'monkey investigator', icon: banana });
   assert.deepEqual(w.art, { cast: '/assets/banana/monkeys.png', idle: '/assets/banana/monkey-idle.png', walk: '/assets/banana/detective-walk.png', props: '/assets/banana/jungle-props.png' });
   assert.deepEqual(w.palette, { ground: '#82a75e', label: '#40533c', labelBg: '#fff6dd' });
 });
 
 test('tower text', () => {
   const w = worldFor('tower');
-  assert.deepEqual(w.text, { place: 'Wizard Tower', eyebrow: 'TOWER', day: 'POTION DAY', one: 'apprentice', many: 'apprentices', castLabel: 'APPRENTICE', hint: 'Click an apprentice or use WASD / arrows to explore.', clickOne: 'an apprentice', investigator: 'inspector', icon: star });
+  assert.deepEqual(w.text, { place: 'Wizard Tower', eyebrow: 'TOWER', day: 'POTION DAY', one: 'apprentice', many: 'apprentices', castLabel: 'APPRENTICE', hint: 'Walk with WASD / arrows. Press E next to an apprentice.', oneWithArticle: 'an apprentice', investigator: 'inspector', icon: star });
   assert.deepEqual(w.art, { cast: '/assets/tower/apprentices.png', idle: '/assets/tower/apprentice-idle.png', walk: '/assets/tower/inspector-walk.png', props: '/assets/tower/tower-props.png' });
   assert.deepEqual(w.palette, { ground: '#5d566e', label: '#3d3550', labelBg: '#f3ecff' });
 });

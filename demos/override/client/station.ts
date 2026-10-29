@@ -32,7 +32,6 @@ function artKeys(world: WorldPack): Record<ArtKind, string> {
   if (world.id === 'grove') return { cast: 'grove-cast', idle: 'monkey-idle', walk: 'detective-walk', props: 'jungle' };
   return { cast: `${world.id}-cast`, idle: `${world.id}-idle`, walk: `${world.id}-walk`, props: `${world.id}-props` };
 }
-const grid = 8;
 const width = 480;
 const height = 340;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -50,10 +49,6 @@ export class Station extends Phaser.Scene {
   private walk!: DetectiveWalk;
   private shadow!: Phaser.GameObjects.Ellipse;
   private npcs = new Map<string, MonkeyIdle>();
-  private blocked = new Set<string>();
-  private route: Point[] = [];
-  private destination: string | null = null;
-  private marker!: Phaser.GameObjects.Arc;
   // Labels and the [E] prompt are HTML over the canvas, so they stay sharp however far the pixel-art canvas is scaled.
   private overlay?: HTMLDivElement;
   private prompt?: HTMLSpanElement;
@@ -104,9 +99,6 @@ export class Station extends Phaser.Scene {
     this.stops = buildStops(this.world, this.cast);
     this.created = false;
     this.npcs = new Map();
-    this.blocked = new Set();
-    this.route = [];
-    this.destination = null;
     this.player = undefined as unknown as Phaser.Physics.Arcade.Image;
     this.currentHint = '';
   }
@@ -199,10 +191,6 @@ export class Station extends Phaser.Scene {
       foot.destroy();
     }
     this.physics.world.setBounds(32, 76, width - 64, height - 104);
-    // Trees form the perimeter; the center stays open for a two-minute visit.
-    for (let y = 0; y < height / grid; y++) for (let x = 0; x < width / grid; x++) {
-      if (x < 4 || x > 55 || y < 10 || y > 38) this.blocked.add(`${x},${y}`);
-    }
     this.cast.forEach((member, slot) => {
       const id = member.id;
       const p = this.stops[id];
@@ -222,10 +210,6 @@ export class Station extends Phaser.Scene {
       const npc = new MonkeyIdle(this, id, p.x, p.y - 12, spec);
       this.npcs.set(id, npc);
       this.label(p.x, p.y - 66, p.label);
-      // Leave room for both the NPC's feet and the investigator's collision body.
-      for (let y = 0; y < height / grid; y++) for (let x = 0; x < width / grid; x++) {
-        if (Math.abs(x * grid + 4 - p.x) < 14 && Math.abs(y * grid + 4 - (p.y - 12)) < 10) this.blocked.add(`${x},${y}`);
-      }
     });
     this.player = this.physics.add.image(this.stops.briefing.x, this.stops.briefing.y, 'feet').setVisible(false).setCollideWorldBounds(true);
     this.cast.forEach(({ id }) => { const p = this.stops[id]; const feet = this.physics.add.staticImage(p.x, p.y - 12, 'feet').setVisible(false); this.physics.add.collider(this.player, feet); });
@@ -241,23 +225,16 @@ export class Station extends Phaser.Scene {
       this.label(p.x, p.y - size - 25, p.label);
     });
     this.prop(keys.props, 'bell', 282, 111, 39).setDepth(95);
-    this.marker = this.add.circle(0, 0, 10).setStrokeStyle(2, 0xffeb9b).setVisible(false).setDepth(2);
+    if (grove) this.prop(keys.props, 'basket', 244, 221, 45).setDepth(216);
     this.prompt = this.label(0, 0, '', 'station-prompt');
     this.prompt.hidden = true;
     this.promptKey = '';
-    this.game.canvas.setAttribute('aria-label', `${this.world.text.place} with ${this.cast.map(c => c.name).join(', ')} and your ${this.world.text.investigator}. Click ${this.world.text.clickOne}, use the destination buttons, or walk with WASD and arrows.`);
+    this.game.canvas.setAttribute('aria-label', `${this.world.text.place} with ${this.cast.map(c => c.name).join(', ')} and your ${this.world.text.investigator}. Walk with WASD or the arrow keys, press E to talk, or use the destination buttons.`);
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,SPACE', false) as typeof this.keys;
     this.input.keyboard!.removeCapture(['W', 'A', 'S', 'D', 'E', 'SPACE', 'UP', 'DOWN', 'LEFT', 'RIGHT']);
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+    this.input.on('pointerdown', () => {
       if (!this.enabled) return;
-      const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-      const hit = Object.entries(this.stops).find(([id, point]) => {
-        const sprite = this.npcs.get(id)?.sprite;
-        return (sprite && sprite.getBounds().contains(world.x, world.y)) || Phaser.Math.Distance.Between(world.x, world.y, point.x, point.y - 25) < 28;
-      });
-      if (hit) this.travel(hit[0]);
-      else { this.destination = null; this.route = this.findRoute(world); this.marker.setVisible(false); }
       (document.activeElement as HTMLElement | null)?.blur();
     });
     this.input.keyboard!.on('keydown', (event: KeyboardEvent) => {
@@ -413,48 +390,12 @@ export class Station extends Phaser.Scene {
   private typing() { return Boolean(document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')); }
   setEnabled(enabled: boolean) { this.enabled = enabled; }
   resetPosition() {
-    this.route = []; this.destination = null;
     this.npcs.forEach(npc => npc.reset());
     if (this.player) {
       (this.player.body as Phaser.Physics.Arcade.Body).reset(this.stops.briefing.x, this.stops.briefing.y);
       this.direction = 'down';
       this.walk.reset(this.player.x, this.player.y);
-      this.marker.setVisible(false);
     }
-  }
-  travel(location: LocationId) {
-    const stop = this.stops[location];
-    if (!this.player || !this.enabled || !stop) return;
-    this.destination = location;
-    this.route = this.findRoute(stop);
-    this.marker.setPosition(stop.x, stop.y).setVisible(Boolean(this.route.length));
-    if (!this.route.length) this.arrive();
-  }
-  private arrive() {
-    const destination = this.destination;
-    this.destination = null; this.marker.setVisible(false);
-    if (destination && Phaser.Math.Distance.Between(this.player.x, this.player.y, this.stops[destination].x, this.stops[destination].y) < 18) this.onArrival(destination);
-  }
-  private findRoute(target: Point): Point[] {
-    const key = (p: Point) => `${p.x},${p.y}`;
-    const start = { x: Math.floor(this.player.x / grid), y: Math.floor(this.player.y / grid) };
-    const end = { x: Math.floor(target.x / grid), y: Math.floor(target.y / grid) };
-    const queue = [start], previous = new Map<string, Point | null>([[key(start), null]]);
-    for (let head = 0; head < queue.length; head++) {
-      const p = queue[head];
-      if (key(p) === key(end)) {
-        const path: Point[] = [];
-        let cursor: Point | null = p;
-        while (cursor && previous.get(key(cursor))) { path.unshift({ x: cursor.x * grid + 4, y: cursor.y * grid + 4 }); cursor = previous.get(key(cursor))!; }
-        return path;
-      }
-      for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
-        const next = { x: p.x + dx, y: p.y + dy };
-        if (next.x < 0 || next.x >= width / grid || next.y < 0 || next.y >= height / grid || previous.has(key(next)) || this.blocked.has(key(next))) continue;
-        previous.set(key(next), p); queue.push(next);
-      }
-    }
-    return [];
   }
   update(time: number, delta: number) {
     if (!this.player) return;
@@ -464,23 +405,14 @@ export class Station extends Phaser.Scene {
     if (this.enabled && !this.typing()) {
       dx = Number(this.cursors.right.isDown || this.keys.D.isDown) - Number(this.cursors.left.isDown || this.keys.A.isDown);
       dy = Number(this.cursors.down.isDown || this.keys.S.isDown) - Number(this.cursors.up.isDown || this.keys.W.isDown);
-      if (dx || dy) { this.route = []; this.destination = null; this.marker.setVisible(false); }
-      if (this.route.length && !dx && !dy) {
-        // Consume reached waypoints in the same update so the stride does not
-        // restart at every grid cell along a click-to-walk route.
-        while (this.route.length && Phaser.Math.Distance.Between(this.player.x, this.player.y, this.route[0].x, this.route[0].y) < 2) this.route.shift();
-        if (!this.route.length) this.arrive();
-        else { dx = this.route[0].x - this.player.x; dy = this.route[0].y - this.player.y; }
-      }
       if (dx || dy) { body.setVelocity(dx, dy).velocity.normalize().scale(120); this.direction = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? 'right' : 'left' : dy > 0 ? 'down' : 'up'; }
     }
     this.walk.update(this.player.x, this.player.y, this.direction, Boolean(dx || dy), reducedMotion.matches, delta);
     this.npcs.forEach(npc => npc.update(delta, this.enabled, reducedMotion.matches,
       Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 54));
     this.shadow.setPosition(this.player.x, this.player.y + 1).setDepth(this.player.y - 1);
-    this.marker.setAlpha(reducedMotion.matches ? 1 : .65 + Math.sin(time / 220) * .25);
     const near = Object.entries(this.stops).find(([, p]) => Phaser.Math.Distance.Between(this.player.x, this.player.y, p.x, p.y) < 18);
-    const hint = near ? `E / SPACE · ${near[1].title}` : this.destination ? `Walking to ${this.stops[this.destination].label.toLowerCase()}…` : this.world.text.hint;
+    const hint = near ? `E / SPACE · ${near[1].title}` : this.world.text.hint;
     if (hint !== this.currentHint) { this.currentHint = hint; this.onHint(hint); }
     const shown = Boolean(near && this.enabled && !this.typing());
     const promptKey = shown ? `${Math.round(this.player.x)},${Math.round(this.player.y)},${near![1].title}` : '';
@@ -500,7 +432,7 @@ export function createStation(onArrival: (location: LocationId) => void, onHint:
   const scene = new Station(onArrival, onHint);
   const game = new Phaser.Game({ type: Phaser.AUTO, parent: 'station', width, height, backgroundColor: '#82a75e', pixelArt: true,
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }, physics: { default: 'arcade', arcade: { debug: false } }, audio: { noAudio: true }, scene: [scene], input: { keyboard: true }, autoFocus: false });
-  game.canvas.setAttribute('aria-label', 'Banana Grove with Momo, Pip, Nori and your monkey investigator. Click a monkey, use the destination buttons, or walk with WASD and arrows.');
+  game.canvas.setAttribute('aria-label', 'Banana Grove with Momo, Pip, Nori and your monkey investigator. Walk with WASD or the arrow keys, press E to talk, or use the destination buttons.');
   game.canvas.setAttribute('role', 'img');
   return scene;
 }

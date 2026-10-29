@@ -105,7 +105,6 @@
 :root[data-theme="tower"] #toast { background: #f3eefa; border-color: #a99fcf; color: #5a5091; }
 :root[data-theme="tower"] select, :root[data-theme="tower"] textarea { color: #48427a; }
 :root[data-theme="tower"] textarea::placeholder { color: #9a94b6; }
-:root[data-theme="tower"] .skip-walk input{ accent-color: #6f63b0; }
 :root[data-theme="tower"] .briefing-note small { color: #6e6890; }
 :root[data-theme="tower"] .interview-status { color: #857fa6; }
 :root[data-theme="tower"] .report-form > label > span{ color: #a39dbf; }
