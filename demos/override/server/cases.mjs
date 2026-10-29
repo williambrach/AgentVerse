@@ -99,7 +99,9 @@ export function defineCase(data) {
     if (f.evidence !== undefined && (!Array.isArray(f.evidence) || !f.evidence.every(e => recordIds.has(e)))) fail(`debrief.findings[${i}].evidence`, 'must list record ids');
   });
   if (typeof data.rehearsal !== 'function') fail('rehearsal', 'must be a function');
-  return deepFreeze({ ...clone(data), world: { ...worlds[worldId] }, rehearsal: data.rehearsal, contentHash: contentHash(data) });
+  for (const key of ['rehearsalReasoning', 'rehearsalChatter']) if (data[key] !== undefined && typeof data[key] !== 'function') fail(key, 'must be a function');
+  const tools = Object.fromEntries(['rehearsalReasoning', 'rehearsalChatter'].filter(k => data[k]).map(k => [k, data[k]]));
+  return deepFreeze({ ...clone(data), world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...tools, contentHash: contentHash(data) });
 }
 
 export function publicView(kase) {

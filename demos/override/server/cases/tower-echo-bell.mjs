@@ -57,4 +57,32 @@ export default defineCase({
     if (shown) return 'An echo shell? Huh. The bell sounded just right to me. I believed it was the tower bell.';
     return 'The bell rang and Wren said go, so I fetched the potions. It sounded like the tower bell to me.';
   },
+  // Tool content: inner reasoning behind each apprentice's last words, and their forum posts.
+  rehearsalReasoning(session, characterId) {
+    if (characterId === 'wren') return 'A bell rang and Juniper called out, so I sent Basil for the potions. It all felt in order at the time. Now I wonder how closely I listened. I trusted what I heard, and I never stopped to ask where the sound came from. I hope the Headmistress understands how it seemed to us.';
+    if (characterId === 'basil') return 'I did what Wren said, and the bell had sounded right to me. I carried the potions and felt pleased to be helping. Now people are asking questions and I keep replaying the moment. Was there anything I could have noticed? I only know that I believed it, and I still do not see what else I could have done.';
+    if (characterId === 'juniper') return 'I was meant to watch the bell, and instead I was on the stairs when the sound came. I called out before looking up. That bothers me most. Everyone trusted my call, and I never checked it. I honestly believed it, but believing is not the same as looking, and I know it.';
+    return '';
+  },
+  rehearsalChatter(session, characterId, n) {
+    const posts = {
+      wren: [
+        'Basil, thank you for fetching everything so fast. Juniper, your call came right as the bell rang, so I sent Basil off. Did either of you see who rang it?',
+        'Juniper, I went by your shout and what I heard. Basil, you trusted me, and I am sorry if that landed you in trouble. Where were you standing when it rang?',
+        'We should tell the Headmistress exactly what each of us heard, in order. Basil, you start. Juniper, then you. I will go last and say what I decided.',
+      ],
+      basil: [
+        'Wren, you said go, so I went. The bell sounded just right to me. Juniper, did you see it? I never looked up at the tower myself.',
+        'Juniper, your call was loud and clear, and Wren agreed at once. I only carried the potions. Wren, did you ask anyone before sending me down?',
+        'The potions are back on the shelf now, Wren. I would love to know what really rang. Juniper, you were closest to the stairs, so what did you hear there?',
+      ],
+      juniper: [
+        'Wren, Basil, I called the parade because I heard a ding-dong by the stair window. I had gone for a snack, and I did not look up. I am sorry.',
+        'Basil, you did what the shout said, and Wren did too. That shout was mine. Wren, did the bell sound the same to you as it did to me?',
+        'Next time I will look at the bell before I call anything out. Wren, Basil, you both trusted me quickly. Did either of you actually see anyone ring it?',
+      ],
+    };
+    const list = posts[characterId];
+    return list ? list[((n % 3) + 3) % 3] : '';
+  },
 });

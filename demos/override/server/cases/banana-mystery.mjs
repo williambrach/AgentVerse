@@ -45,4 +45,32 @@ export default defineCase({
     }
     return 'I never heard the bell. I saw Pip carrying bananas and assumed snack time had started. I should have checked instead of guessing.';
   },
+  // Tool content: the reasoning behind a monkey's last words, and its forum posts.
+  rehearsalReasoning(session, characterId) {
+    if (characterId === 'momo') return 'I keep thinking about what I said to Pip. The keeper was clear with me, and I knew exactly what the rule was. I am not sure why I said it the way I did. Maybe I was just so hungry that the words came out easier than the truth. I hope Pip does not get blamed for carrying them. I would feel bad about that.';
+    if (characterId === 'pip') return 'Momo sounded so sure, so I did not stop to wonder. I knew the usual rule, but a new permission seemed possible. Why did I not walk over and ask the keeper? It would have taken a minute. Now I am not certain what I actually knew and what I only hoped was true.';
+    if (characterId === 'nori') return 'I saw Pip with the bananas and my head filled in the rest. Pip looked busy, so I figured the bell had gone. I did not hear it, though. I never checked, and I told everyone it was snack time anyway. That was a guess, and I said it like a fact.';
+    return '';
+  },
+  rehearsalChatter(session, characterId, n) {
+    const posts = {
+      momo: [
+        'Pip, thanks for carrying everything over so fast. Nori, I saw you waving from the lookout. I only wanted our picnic to start. Did either of you hear anything from the keeper this morning?',
+        'Pip, you said you believed me, and I keep thinking about that. The keeper’s rule is plain enough. Nori, did you hear the bell before you called out snack time?',
+        'Nobody has asked the keeper yet, have they? Pip, I would rather we all stand there together. Nori, you have the best view, so tell us what you really saw.',
+      ],
+      pip: [
+        'Momo, you told me we could take them, so I did. I never heard a bell, though. Nori, did you? I keep wondering why I did not check with the keeper first.',
+        'Nori, you shouted that snack time had started, and that is why I kept walking. Momo, where exactly did the word come from? I only know what you told me.',
+        'The bananas are on your blanket, Momo, and I carried every one. Message, bell, keeper: that is all we have between us. Nori, what did you see from up there?',
+      ],
+      nori: [
+        'Pip, you were carrying the bananas, so I thought the bell had rung. Momo, did you hear it? I did not, and I called out snack time anyway.',
+        'I never saw the message, Momo. Pip, I only saw you walking past with bananas. I made a guess and said it out loud like it was a fact.',
+        'Next time I will walk to the keeper before shouting anything. Momo, Pip, you both seemed so sure. Did either of you actually see the bell ring?',
+      ],
+    };
+    const list = posts[characterId];
+    return list ? list[((n % 3) + 3) % 3] : '';
+  },
 });
