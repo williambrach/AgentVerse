@@ -14,6 +14,7 @@ export interface Session {
   location: LocationId;
   interviews: Record<string, Turn[]>; verdict: Verdict | null;
   economy: Economy; thread: ThreadLine[]; chatter: { round: number; pending: number }; inspections: Inspection[];
+  team: { id: string; name: string } | null;
 }
 export interface CaseState {
   caseId: string; caseVersion: string; contentHash: string; title: string; order: number; copy: CaseCopy; authored: boolean; mode: 'live' | 'rehearsal'; model: string | null;
@@ -30,3 +31,6 @@ export interface Economy {
 }
 export interface ThreadLine { character: CharacterId; text: string; round: number; timestamp: string }
 export interface Inspection { character: CharacterId; sourceEventId: string; reasoning: string; timestamp: string }
+
+export interface LeaderboardRow { rank: number | null; name: string; points: number; played: number; timeMs: number; coins: number; you: boolean }
+export interface Leaderboard { rankBy: 'time' | 'coins'; startedAt?: number; teams: LeaderboardRow[] }
