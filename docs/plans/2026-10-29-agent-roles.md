@@ -20,7 +20,7 @@
   - Cast `{[characterId]: partId}`; persona order everywhere; `session.cast` server-side only. A view with no session uses `identityCast`.
   - View `{...publicView(kase, cast), roles: ROLES, authored, mode, model, session, debrief}`. Verdict body `{sessionId, revision, roles, confidence, explanation?}`; logged verdict `{roles, truth, results, score, total, confidence, explanation, evidenceIds: [], submittedAt}`; bad roles → 400 `Pick a role for each monkey.` (world singular). Debrief per spec.
   - Log `schemaVersion` 3, `session_started.cast`; replay needs v3 + bijective cast. `GET /api/events` → `cast: null` while active. `interview-v4`; `banana-authored-v3.0.0`, `tower-echo-bell-v3.0.0`. Admin shapes: spec "Admin".
-- Spec coverage: Intent and Goals (T1–T13), Constraints (contract above), Done looks like 1–11 (T11/T12, T3/T6, T13), Decided (T2, T9, T10), Left to the builder / plan (T10 slots, T7 labels), Diagrams (main diagram).
+- Spec coverage: Intent and Goals, Constraints, Done looks like (T11/T12, T3/T6, T13), Decided (T2, T9, T10), Left to the builder / plan (T10, T7), Diagrams.
 - Ruling: edge T1 → T3 - T3's tests run T1's fixture - cost if wrong: ~2 min.
 
 ```mermaid
@@ -144,13 +144,13 @@ e.g. partOf(fixture, {momo:'helper', pip:'boss', nori:'bystander'}, 'pip').role 
 **Test code (contracts):** retarget to the T1 fixture with the `shuffle` option; add `cast_logged_and_hidden`, `reset_and_case_switch_reshuffle`, `replay_keeps_cast`, `replay_rejects_v2_and_bad_cast`, `verdict_scoring` (all right, one wrong; truth/results logged), `verdict_errors` (missing/extra/unknown role; `suspect` alone → 400), `export_redacts_until_verdict`, `legacy_case_throws`, `prompt_resolved` (part label + resolved knowledge, no `{`), `rehearsal_resolved`, `shuffle_uniform` (4000 draws ≥ 800 per id per index); extend the leak test to part/role ids.
 
 ### T4 API and http · Complexity 3 · Est. context 30k
-**Owns:** demos/override/server/index.mjs, demos/override/tests/http.test.mjs
+**Owns:** demos/override/server/index.mjs, demos/override/tests/http.test.mjs, demos/override/server/economy.mjs, demos/override/tests/economy.test.mjs
 **Components:** 1
 **LOC owned:** 70
 **Tests:** slow
 **Model:** sonnet
 **Review Focus:** protocol
-**Test code (contracts):** `verdict_roles_http` (200, debrief score), `suspect_rejected_http` (400), `export_cast_null_then_present`, `probe_messages_resolved` (probe uses `castCharacters(kase, identityCast(kase))[0].quickQuestion`; no `{`); existing assertions stay.
+**Test code (contracts):** `verdict_roles_http` (200, debrief score), `suspect_rejected_http` (400), `export_cast_null_then_present`, `probe_messages_resolved` (probe uses `castCharacters(kase, identityCast(kase))[0].quickQuestion`; no `{`); `budget_floor_fits_cast` (min budget = ask cost × max `agents`); existing assertions stay.
 
 ### T5 prompt tools · Complexity 4 · Est. context 36k
 **Owns:** demos/override/scripts/case-prompt.mjs, demos/override/scripts/preflight.mjs, demos/override/tests/interviews.test.mjs, demos/override/tests/case-prompt.test.mjs, demos/override/tests/preflight.test.mjs
@@ -226,7 +226,7 @@ e.g. partOf(fixture, {momo:'helper', pip:'boss', nori:'bystander'}, 'pip').role 
 **Tests:** slow
 **Model:** sonnet
 **Review Focus:** protocol
-**Test code (contracts):** tower ids/labels/aria in persona order; walking adds Kiki's stop; admin posts roles and reads "roles" in the log row; coins spec (port 4321) plays through the role picker; grove baseline regenerated on purpose (`--update-snapshots` for that spec only), then a clean rerun passes.
+**Test code (contracts):** tower ids/labels/aria in persona order; walking adds Kiki; admin posts roles and reads "roles" in the log row; coins spec (port 4321) plays through the role picker; grove baseline regenerated on purpose (that spec only), then a clean rerun passes.
 
 ### T13 docs · Complexity 2 · Est. context 26k
 **Owns:** demos/override/README.md, demos/override/docs/CASES_PLAN.md
@@ -235,4 +235,4 @@ e.g. partOf(fixture, {momo:'helper', pip:'boss', nori:'bystander'}, 'pip').role 
 **Tests:** fast
 **Model:** sonnet
 **Review Focus:** encoding
-**Test code (contracts):** README Play / Writing a case / Research records cover roles, parts, `{partId}`, `agents`, the shuffle, export redaction, schema v3, `--part`; CASES_PLAN lists story variants as deferred; `node --test demos/override/tests/docs.test.mjs` passes.
+**Test code (contracts):** README covers roles, parts, `{partId}`, `agents`, the shuffle, export redaction, schema v3, `--part`; CASES_PLAN defers story variants; `node --test demos/override/tests/docs.test.mjs` passes.
