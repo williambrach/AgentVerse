@@ -1,0 +1,21 @@
+{"file": "", "line": 0, "context": "verified: seam T1↔T7", "agent": "pt_review", "kind": "verified", "time": "17:44:53"}
+{"file": "", "line": 0, "context": "verified: seam T1↔T2", "agent": "pt_review", "kind": "verified", "time": "17:45:28"}
+{"file": "", "line": 0, "context": "verified: seam T1↔T2", "agent": "pt_review", "kind": "verified", "time": "17:46:00"}
+{"file": "", "line": 0, "context": "verified: seam T1↔T7", "agent": "pt_review", "kind": "verified", "time": "17:46:00"}
+{"file": "", "line": 0, "context": "verified: seam T7↔T8", "agent": "pt_review", "kind": "verified", "time": "17:46:42"}
+{"file": "", "line": 0, "context": "verified: seam T2↔T3", "agent": "pt_review", "kind": "verified", "time": "17:47:27"}
+{"file": "demos/override/server/session.mjs", "line": 1, "context": "T3 reviewed: replay, rollback, verdict gate, prompt v3 correct; added prompt knowledge test", "agent": "reviewer", "kind": "verified", "resolution": "fixed", "confidence": "high", "time": "17:48:36"}
+{"file": "", "line": 0, "context": "verified: seam T2↔T3", "agent": "pt_review", "kind": "verified", "time": "17:48:47"}
+{"file": "", "line": 0, "context": "verified: seam T3↔T6", "agent": "pt_review", "kind": "verified", "time": "17:49:25"}
+{"file": "", "line": 0, "context": "verified: seam T3↔T4", "agent": "pt_review", "kind": "verified", "time": "17:49:48"}
+{"file": "", "line": 0, "context": "verified: seam T4↔T11", "agent": "pt_review", "kind": "verified", "time": "17:50:43"}
+{"file": "", "line": 0, "context": "verified: seam T6↔T11", "agent": "pt_review", "kind": "verified", "time": "17:50:43"}
+{"file": "", "line": 0, "context": "verified: seam T4↔T9", "agent": "pt_review", "kind": "verified", "time": "17:52:21"}
+{"file": "", "line": 0, "context": "verified: seam T5↔T9", "agent": "pt_review", "kind": "verified", "time": "17:52:21"}
+{"file": "", "line": 0, "context": "verified: seam T8↔T9", "agent": "pt_review", "kind": "verified", "time": "17:52:21"}
+{"file": "", "line": 0, "context": "verified: seam T9↔T10", "agent": "pt_review", "kind": "verified", "time": "18:02:18"}
+{"file": "", "line": 0, "context": "verified: seam T1↔T7", "agent": "pt_review", "kind": "verified", "time": "18:05:09"}
+{"file": "", "line": 0, "context": "verified: seam T1↔T2", "agent": "pt_review", "kind": "verified", "time": "18:05:09"}
+{"file": "", "line": 0, "context": "verified: seam T1↔T2", "agent": "pt_review", "kind": "verified", "time": "18:05:09"}
+{"file": "", "line": 0, "context": "verified: seam T2↔T3", "agent": "pt_review", "kind": "verified", "time": "18:05:09"}
+{"file": "", "line": 0, "context": "verified: seam T5↔T9", "agent": "pt_review", "kind": "verified", "time": "18:05:35"}
