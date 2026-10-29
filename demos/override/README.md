@@ -96,7 +96,33 @@ Without `OVERRIDE_ENDPOINTS`, the legacy `OVERRIDE_LLM_BASE_URL`, `_API_KEY`, an
 
 ## Operating an event
 
-Set `OVERRIDE_ADMIN_TOKEN` to start the admin listener on `127.0.0.1:$OVERRIDE_ADMIN_PORT` (default 3002). It never binds a public address; reach it over an SSH port forward. Open `/admin` for the page (it asks for the token), or use curl:
+Set `OVERRIDE_ADMIN_TOKEN` to start the admin listener on `127.0.0.1:$OVERRIDE_ADMIN_PORT` (default 3002). It never binds a public address; reach it over an SSH port forward. Open `/admin` for the command centre (it asks for the token). Without the token there is no monitor.
+
+### The command centre
+
+- **Players.** *Online now* counts open, visible tabs. Each tab sends `POST /api/heartbeat` every 30 s, and a tab counts for 75 s after its last beat. It is split into *in a game* and *on the case board*. *Playing* is the number of games in memory. *Players this round* is starts minus resets since the round began. *Games finished* counts debriefs.
+- **Tiles.** Each tile turns amber, then red, past these limits. When any tile is red, the tab title gets a marker. The LLM error tile counts failed provider attempts (including ones hidden by retry or failover) out of all attempts over 5 minutes.
+
+| Tile | Amber | Red |
+|---|---|---|
+| LLM error rate, 5 min | > 5 % | > 20 % |
+| Queue depth | > 10 | > 50 |
+| Answer p95, 5 min | > 8 s | > 20 s |
+| Event-loop delay p99 | > 100 ms | > 500 ms |
+| Disk free | < 5 GB | < 1 GB |
+| Log-write failures, 5 min | none | > 0 |
+| Automatic failover | within 5 min | none |
+| Credentials rejected, 5 min | none | > 0 |
+
+- **Sparklines.** The last 60 minutes of players online, questions, failures, answer p95 and requests, one point a minute.
+- **Message log.** Live game events with filters. Click a player to see that player's whole session, read from disk, so evicted games work too. Player text shows only here, behind the token.
+- **Funnel and tallies.** Per case: started, clues, interviewed, verdict, debrief; then verdicts, share correct, who was accused, and median time and questions to a verdict.
+- **Rounds.** *Start round* names a new session (for example a new class). It is stored as a `round_started` record in `system.jsonl`, resets the funnel, tallies and *players this round*, and survives a restart. Without one, the round is everything in the data directory.
+- **Controls.** The router table, pin, probe, caps and pause are still on the page, and the curl calls below still work.
+
+Grafana and Prometheus stay optional; the command centre does not need them.
+
+You can also use curl:
 
 ```sh
 export OVERRIDE_ADMIN_TOKEN=...   # the same value the server uses
@@ -109,9 +135,25 @@ curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"paused":true}' http://
 curl -H "$AUTH" http://127.0.0.1:3002/metrics
 ```
 
-`cap` takes `"endpoint": null` for the global cap. `pause` stops new games and lets running ones finish. `GET /api/health` on the game port is a public liveness check.
+```sh
+curl -N -H "$AUTH" http://127.0.0.1:3002/admin/stream
+curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"label":"Session B","reason":"second class"}' http://127.0.0.1:3002/admin/round
+curl -H "$AUTH" http://127.0.0.1:3002/admin/sessions/<session-id>
+```
+
+`/admin/stream` is NDJSON: a `hello` line (catalog, snapshot, recent rows), then an `event` line per game event and a `tick` line with a fresh snapshot every second. At most 5 streams are open at once. `/admin/round` takes a label of 1 to 60 characters. `/admin/sessions/<id>` returns `{sessionId, rows}`, or 404.
+
+`cap` takes `"endpoint": null` for the global cap. `pause` stops new games and lets running ones finish. `GET /api/health` on the game port is a public liveness check. `POST /api/heartbeat {"tab": "<uuid>"}` on the game port needs the access cookie, answers 204 with no body, and only feeds the online count.
 
 `/metrics` is Prometheus text: players (`override_sessions_*`), LLM per endpoint (`override_llm_*`: in flight, queue, failures by reason, failovers, durations), HTTP, log writes (`override_log_write_*`), and process and disk gauges. Labels never hold session IDs or text. [ops/prometheus.yml](ops/prometheus.yml) scrapes it every 5 s and includes example alert rules.
+
+## Rehearse the command centre
+
+```sh
+node scripts/admin-demo.mjs --players 60 --ramp 60000 --think 4000-20000 --burst-every 120 --port 3001 --admin-port 3002
+```
+
+This starts the real server in live mode over two mock endpoints, plus simulated players who play whole games and send heartbeats. Every `--burst-every` seconds (0 turns it off), endpoint `a` fails for 30 s, so you can watch failover. Defaults are shown above; `--think` is a range in ms. The token is `OVERRIDE_ADMIN_TOKEN` or `demo`. Ctrl-C stops everything.
 
 ## Load test and preflight
 
@@ -184,12 +226,13 @@ If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:e
 - `server/cases/` and `server/cases.mjs`: one module per case (clues, character-specific knowledge, debrief, scripted rehearsal replies), the registry, and the `defineCase` helpers; never imported into the client.
 - `scripts/case-prompt.mjs`: prints the exact interview prompt for a case and character.
 - `server/session.mjs`: per-game state for one registered case, replay from logs, quick verdict validation, and research logs. Verdicts record `suspect`, `suspects`, confidence, and optional explanation/citations; they do not infer classifications for unselected monkeys.
-- `server/llm.mjs`: the endpoint router (queues, caps, failover, traces). `server/admin.mjs`, `metrics.mjs`, `identity.mjs`, `dataset.mjs`, `static.mjs`: admin listener, Prometheus metrics, sign-in tokens and limits, JSONL storage, in-memory static files.
+- `server/llm.mjs`: the endpoint router (queues, caps, failover, traces). `server/admin.mjs` (with the page in `server/admin/`), `server/monitor*.mjs` (event ring, round stats, windows, traffic sampling), `metrics.mjs`, `identity.mjs`, `dataset.mjs`, `static.mjs`: admin listener, Prometheus metrics, sign-in tokens and limits, JSONL storage, in-memory static files.
 - `server/interviews.mjs`: endpoint configuration, the shared short-answer prompt template, and the hand-off to each case’s scripted rehearsal replies.
 - `server/index.mjs`: API, optional shared access code, and production static serving.
 - `client/station.ts`: a compact original jungle clearing, collision-aware click navigation, and nearby interactions.
 - `client/detective-walk.ts`: distance-driven walking with four facing directions and support for high-refresh displays.
 - `client/monkey-idle.ts`: independent NPC blinks, idle gestures, and approach reactions with fixed collision positions.
+- `client/heartbeat.ts`: the visible-tab heartbeat behind the online count.
 - `client/main.ts`: briefing, clues, live interviews, quick verdict, and debrief.
 - `client/notebook.ts` / `notebook.css`: page transitions, evidence feedback, and preserved drafts/reading position.
 - `public/assets/banana/`: original generated transparent character and prop atlases. `ARTWORK.md` contains provenance and the full image-generation prompts. Phaser uses atlas frames without changing the source PNGs. No Pokémon art is loaded by this demo.

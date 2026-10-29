@@ -245,13 +245,15 @@ From a machine outside, `curl --fail https://<your-host>/api/health` must return
 
 ### 6. Run the event
 
-The admin page is `http://127.0.0.1:3002/admin`; paste the admin token into it. From another machine, open an SSH tunnel first with `ssh -L 3002:127.0.0.1:3002 user@mac`. Never expose the admin port through the Cloudflare Tunnel. Prometheus scrapes `/metrics` on the same port with the token ([ops/prometheus.yml](ops/prometheus.yml)).
+The admin page is `http://127.0.0.1:3002/admin`; paste the admin token into it. From another machine, open an SSH tunnel first with `ssh -L 3002:127.0.0.1:3002 user@mac`. Never expose the admin port through the Cloudflare Tunnel. The page is the command centre: players, tiles, message log, funnel and rounds (see [README](README.md#the-command-centre)). Prometheus scrapes `/metrics` on the same port with the token ([ops/prometheus.yml](ops/prometheus.yml)).
 
 One hour before:
 - Start the server and confirm `/admin/health` is green.
+- Open the command centre over the SSH forward and check the tiles are green.
+- Press *Start round* for each session, with a clear label.
 
 During:
-- Watch the admin page and `/metrics`. When pinning or moving endpoints, type the reason.
+- Watch the command centre, above all the LLM error-rate tile, and `/metrics`. When pinning or moving endpoints, type the reason.
 - If a player sees an error, they reload the page; the game resumes from its log.
 - Never delete `data/`.
 
