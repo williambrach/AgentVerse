@@ -1,5 +1,7 @@
 # Plan: multiple cases for The Override
 
+> 2026-10-29: clues removed. A case is the briefing, three interviews, a verdict, and a debrief; the live cases are `banana-authored-v2.0.0` and `tower-echo-bell-v2.0.0` (`interview-v3`). Everything below that mentions clues, chapters, records, `revealedPosition`, the basket or `--chapter`/`--evidence` is the original 2026-10-26 design, kept as history. Archived cases still use it.
+
 Status: Steps 0–4 implemented on `superlite/override-cases` (2026-10-26).
 
 Revised 2026-10-26. This replaces [LEVELS_PLAN.md](LEVELS_PLAN.md), which stays for reference. The review that produced this version is summarised in [What changed](#what-changed-and-why).

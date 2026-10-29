@@ -109,7 +109,7 @@ This endpoint checks that the API responds. It does not test model credentials o
 
 1. Sign in with the shared access code and start a case.
 2. Confirm the grove, detective walk cycle, and monkey idle animations load.
-3. Reveal the three clues and ask each monkey a question.
+3. Ask each monkey a question.
 4. Confirm the interview badge matches the intended mode: live or scripted rehearsal.
 5. Submit a guess, read the debrief, and export the session's JSONL file.
 6. Start a new case for the next investigator. Confirm the earlier JSONL file remains in `/app/data`.
@@ -122,7 +122,7 @@ Deploy updates between players. Push the new source and assets to the configured
 
 Record the Git commit associated with a working release. To roll back, redeploy that known-good commit using the hosting platform. Recheck the environment settings and disk attachment, then repeat the smoke test. Rolling back the application does not restore an unfinished session or revert its log files.
 
-Logs are stored as `/app/data/live/sessions/<session-id>.jsonl` (see the README's research records for the rest of the layout). **Export session** downloads the current session only; older sessions remain on disk after reset. Copy older logs through the host's supported file-access or backup tools. Keep backups before deleting a service or disk. Logs contain submitted questions, answers, evidence selections, and verdicts.
+Logs are stored as `/app/data/live/sessions/<session-id>.jsonl` (see the README's research records for the rest of the layout). **Export session** downloads the current session only; older sessions remain on disk after reset. Copy older logs through the host's supported file-access or backup tools. Keep backups before deleting a service or disk. Logs contain submitted questions, answers, and verdicts.
 
 Restarting the service preserves files on the mounted disk. Games resume from their logs; players must sign in again unless `OVERRIDE_SECRET` is set.
 
