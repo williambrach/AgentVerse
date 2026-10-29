@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './team.mjs';
 import { castOf, truthOf, sessionIdOf, pickRole } from './cast.mjs';
 
 const COUNTER = '#coin-counter';

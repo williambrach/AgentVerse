@@ -13,6 +13,8 @@ import { appendJsonl, dataPaths, lastRecord, readJsonl, setWriteObserver } from 
 import { WindowCounter, clientAddress, signToken, verifyToken } from './identity.mjs';
 import { loadStatic, serveStatic } from './static.mjs';
 import { Registry, bindCollectors, createGameMetrics, observeGameEvent, observeLlmEvent, observeWrite } from './metrics.mjs';
+import { createTeams } from './teams.mjs';
+import { createLeaderboard } from './leaderboard.mjs';
 import { createAdmin } from './admin.mjs';
 import { createMonitor } from './monitor.mjs';
 import { createRoundStats } from './monitor-round.mjs';
@@ -25,7 +27,7 @@ const actions = ['start', 'reset', 'visit', 'interview', 'inspect', 'continue', 
 const tabPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export function createApp({ investigations, accessCode = '', secret = randomBytes(32).toString('hex'), trustProxy = false, staticFiles = null, metrics = null, publicDir = resolve(root, 'dist'), onHeartbeat = null }) {
+export function createApp({ investigations, accessCode = '', secret = randomBytes(32).toString('hex'), trustProxy = false, staticFiles = null, metrics = null, publicDir = resolve(root, 'dist'), onHeartbeat = null, teams = createTeams({ file: null }), leaderboard = null }) {
   const files = staticFiles || loadStatic(publicDir);
   // Only wrong codes count. Behind a proxy or a shared network, every player
   // arrives from one address, and correct sign-ins must not lock them out.
@@ -35,6 +37,8 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
     const secure = req.socket.encrypted || (trustProxy && req.headers['x-forwarded-proto'] === 'https');
     res.setHeader('Set-Cookie', `${name}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${secure ? '; Secure' : ''}`);
   };
+  // Creating teams is the costly act; joining one is free. Only creations count.
+  const newTeams = new WindowCounter({ limit: 120, windowMs: 60_000 });
   const validToken = req => !accessCode || verifyToken(secret, cookie(req, 'override_access'), Date.now());
   const json = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
 
@@ -51,7 +55,7 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname.startsWith('/api/')) {
         const name = url.pathname.slice('/api/'.length);
-        route = ['health', 'access', 'cases', 'state', 'events', 'heartbeat', ...actions].includes(name) ? `/api/${name}` : '/api/other';
+        route = ['health', 'access', 'cases', 'state', 'events', 'heartbeat', 'team', 'leaderboard', ...actions].includes(name) ? `/api/${name}` : '/api/other';
         if (url.pathname === '/api/health' && req.method === 'GET') return json(res, 200, { ok: true });
         if (req.method === 'POST') {
           if (req.headers['sec-fetch-site'] === 'cross-site') throw new RequestError(403, 'Cross-site requests are not allowed.');
@@ -83,7 +87,24 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
         }
         if (!validToken(req)) throw new RequestError(401, 'Enter the demo access code to continue.');
         // Each browser owns one investigation through its session cookie.
-        const sessionId = cookie(req, 'override_session');
+        // A known team cookie wins: the team owns the session. A stale one means no team.
+        const team = teams.find(cookie(req, 'override_team'));
+        const sessionId = team ? team.sessionId : cookie(req, 'override_session');
+        if (url.pathname === '/api/team' && req.method === 'GET') return json(res, 200, { team: team ? { name: team.name } : null });
+        if (url.pathname === '/api/team' && req.method === 'POST') {
+          const ip = clientAddress(req, trustProxy);
+          const now = Date.now();
+          if (typeof input.name === 'string' && !teams.exists(input.name) && !newTeams.allowed(ip, now)) throw new RequestError(429, 'Too many new teams. Try again in a minute.');
+          const joined = teams.join(input.name, { join: input.join === true });
+          if (joined.taken) return json(res, 409, { error: `A team called ${joined.taken} is already playing. Join it, or pick another name.`, taken: joined.taken });
+          if (joined.created) newTeams.add(ip, now);
+          setCookie(req, res, 'override_team', joined.team.id);
+          return json(res, 200, { team: { name: joined.team.name }, created: joined.created });
+        }
+        if (url.pathname === '/api/leaderboard' && req.method === 'GET') {
+          const board = leaderboard ? leaderboard.standings({ includeHidden: false, you: team?.id ?? null }) : { rankBy: 'time', teams: [] };
+          return json(res, 200, { rankBy: board.rankBy, teams: board.teams.map(r => ({ rank: r.rank, name: r.name, points: r.points, played: r.played, timeMs: r.timeMs, coins: r.coins, you: r.you })) });
+        }
         if (url.pathname === '/api/heartbeat' && req.method === 'POST') {
           if (typeof input.tab !== 'string' || !tabPattern.test(input.tab)) throw new RequestError(400, 'Send a tab id.');
           try { onHeartbeat?.(input.tab, sessionIdPattern.test(sessionId || '') ? sessionId : null); } catch { /* never fails a player */ }
@@ -99,8 +120,9 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
         }
         if (req.method === 'POST') {
           if (!actions.includes(name)) throw new RequestError(404, 'Unknown endpoint.');
-          const view = await investigations.mutate(sessionId, name, input);
-          if (view.session.id !== sessionId) setCookie(req, res, 'override_session', view.session.id);
+          const view = await investigations.mutate(sessionId, name, input, { team: team ? { id: team.id, name: team.name } : null });
+          if (team) { if (view.session.id !== team.sessionId) teams.attach(team.id, view.session.id); }
+          else if (view.session.id !== sessionId) setCookie(req, res, 'override_session', view.session.id);
           return json(res, 200, view);
         }
         throw new RequestError(404, 'Unknown endpoint.');
@@ -147,7 +169,12 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
   // The monitor exists only with an admin token; closures are late-bound and never let it break a game.
   let monitor = null;
   const feed = (method, arg) => { try { monitor?.[method](arg); } catch { /* monitor must not affect games */ } };
-  const onSystem = record => { appendJsonl(paths.system, record, 'system'); feed('observeSystem', record); };
+  const board = createLeaderboard(cases);
+  const onSystem = record => {
+    appendJsonl(paths.system, record, 'system');
+    feed('observeSystem', record);
+    if (record?.type === 'round_started') { try { board.reset(Number(record.startedAt) || 0); } catch { /* the board must not break a round */ } }
+  };
   // Traces are admin-only. Probes and anything without a valid session go to one shared file.
   const onTrace = record => appendJsonl(join(paths.traces, !record.probe && sessionIdPattern.test(record.sessionId || '') ? `${record.sessionId}.jsonl` : 'probes.jsonl'), record, 'trace');
   const router = config.mode === 'live' ? new LlmRouter({
@@ -156,9 +183,16 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
   }) : null;
   const investigations = new Investigations({
     dataDir, config, router, dev: devTools(env), meta: { env: envName, ...appVersion(env), endpointsHash: config.endpointsHash },
-    onEvent: e => { observeGameEvent(metrics, e); feed('observeGame', e); },
+    onEvent: e => { observeGameEvent(metrics, e); feed('observeGame', e); try { board.observe(e); } catch { /* the board must not affect games */ } },
   });
   bindCollectors(registry, { router, investigations, dataDir });
+
+  const round = loadRound(paths.system);
+  const events = loadEvents(paths.sessions, round.startedAt);
+  board.restore(readJsonl(paths.system));
+  board.reset(round.startedAt);
+  for (const e of events) board.observe(e);
+  const teams = createTeams({ file: join(paths.root, 'teams.jsonl') });
 
   let sampler = null;
   let tickTimer = null;
@@ -175,7 +209,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     const extras = () => {
       const at = Date.now();
       if (!cached || at - cachedAt >= 1000 || at < cachedAt) {
-        cached = { router: router?.snapshot() ?? null, sessions: investigations.stats(), system: readJsonl(paths.system).slice(-20) };
+        cached = { router: router?.snapshot() ?? null, sessions: investigations.stats(), system: readJsonl(paths.system).slice(-20), leaderboard: board.standings({ includeHidden: true, you: null }) };
         cachedAt = at;
       }
       return cached;
@@ -186,8 +220,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
       sample: () => sampler.sample(), extras, readSession: id => readSessionEvents(paths.sessions, id),
       now: Date.now, mode: config.mode === 'live' ? 'live' : 'rehearsal', ringSize: 1000,
     });
-    const round = loadRound(paths.system);
-    monitor.load(loadEvents(paths.sessions, round.startedAt), round);
+    monitor.load(events, round);
     tickTimer = setInterval(() => { try { monitor.tick(); } catch { /* ignore */ } }, 5000);
     tickTimer.unref();
   }
@@ -198,7 +231,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     console.warn('OVERRIDE_SECRET is not set: sign-ins will not survive a restart.');
   }
   const trustProxy = ['1', 'true'].includes(String(env.OVERRIDE_TRUST_PROXY).toLowerCase());
-  server = createApp({ investigations, accessCode: env.OVERRIDE_ACCESS_CODE || '', secret, trustProxy, staticFiles: loadStatic(publicDir), metrics, onHeartbeat: (tab, sid) => monitor?.heartbeat(tab, sid) });
+  server = createApp({ investigations, accessCode: env.OVERRIDE_ACCESS_CODE || '', secret, trustProxy, staticFiles: loadStatic(publicDir), metrics, onHeartbeat: (tab, sid) => monitor?.heartbeat(tab, sid), teams, leaderboard: board });
   // Headers and bodies arrive fast; answers take up to 60 s. Keep-alive outlives a proxy's idle timeout.
   server.headersTimeout = 20_000;
   server.requestTimeout = 40_000;
@@ -216,6 +249,11 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
         token: env.OVERRIDE_ADMIN_TOKEN, monitor, router, investigations, registry, dataDir,
         probeMessages: buildMessages(probeCase, { cast, interviews: Object.fromEntries(probeCase.characters.map(c => [c.id, []])) }, probeCharacter.id, probeQuestion),
         readSystem: () => readJsonl(paths.system).slice(-20), onSystem,
+        leaderboard: {
+          standings: () => board.standings({ includeHidden: true, you: null }),
+          setRankBy: mode => { board.setRankBy(mode); onSystem({ type: 'leaderboard_settings', timestamp: Date.now(), rankBy: mode }); },
+          setHidden: (teamId, hidden) => { board.setHidden(teamId, hidden); onSystem({ type: 'team_hidden', timestamp: Date.now(), teamId, hidden }); },
+        },
       });
       await new Promise((resolve, reject) => { admin.once('error', reject); admin.listen(portOf(env.OVERRIDE_ADMIN_PORT, 3002), '127.0.0.1', resolve); });
     }

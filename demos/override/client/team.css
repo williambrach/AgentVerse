@@ -1,0 +1,17 @@
+.team-gate{display:flex;flex-direction:column;gap:6px}.team-gate h2{margin:6px 0 4px}.team-hint{font-size:12px;line-height:1.7;color:var(--muted)}
+.team-form{display:flex;flex-direction:column;gap:8px;margin-top:10px}.team-form label{font-size:11px;color:var(--ink)}
+.team-form input{font:inherit;font-size:14px;padding:11px 12px;border:1px solid var(--line);border-radius:3px;background:var(--paper);color:var(--ink)}
+.team-error{min-height:16px;font-size:11px;color:#a35b4c;margin:0}.team-taken{display:flex;flex-direction:column;gap:8px}.team-taken p{font-size:12px;color:var(--ink)}
+.team-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+.team-chip{font:9px var(--mono);letter-spacing:.5px;padding:6px 10px;border:1px solid var(--line);border-radius:3px;background:var(--paper);color:var(--green);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.team-chip:hover{border-color:var(--green)}
+.board-table{width:100%;border-collapse:collapse;font-size:12px;color:var(--ink)}.board-table caption{caption-side:top;text-align:left;font:9px var(--mono);letter-spacing:1px;color:var(--muted);padding-bottom:8px;text-transform:uppercase}
+.board-table th{text-align:left;font:8px var(--mono);letter-spacing:1px;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line);text-transform:uppercase}
+.board-table td{padding:9px 8px;border-bottom:1px solid var(--line)}.board-name{font-weight:600;word-break:break-word}.board-rank{font-family:var(--mono)}
+.board-row.you{background:color-mix(in srgb,var(--green) 14%,var(--paper));box-shadow:inset 3px 0 var(--green)}
+.board-empty{font-size:12px;color:var(--muted);padding:14px 0}
+:root[data-theme="tower"] .team-chip{background:#fbf9ff;border-color:#b3abcf;color:#4d4677}
+:root[data-theme="tower"] .board-row.you{background:#e6e0f5}
+.topbar{gap:16px}.topbar .quiet-button{padding-left:16px}.team-chip{flex:0 1 auto;min-width:0}
+@media(max-width:1180px){.topbar .authored-label{display:none}}
+@media(max-width:720px){.topbar{flex-wrap:wrap;height:auto;min-height:58px;padding-top:8px;padding-bottom:8px;row-gap:8px}.top-meta{order:3;flex-basis:100%;margin-left:0;gap:10px;flex-wrap:wrap}.topbar .quiet-button{padding-left:10px}.topbar .quiet-button span,.topbar .team-chip span{display:inline}.team-chip{max-width:120px}}

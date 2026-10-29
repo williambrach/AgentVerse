@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './team.mjs';
 import { castOf, truthOf, sessionIdOf as sessionId, pickRole as pick, PART_LABEL as LABEL } from './cast.mjs';
 
 const NAMES = ['Momo', 'Pip', 'Nori', 'Kiki'];

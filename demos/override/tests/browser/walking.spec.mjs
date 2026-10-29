@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './team.mjs';
 
 // Capture Phaser from the test environment without adding a debug global to
 // the shipped game. Assertions inspect the actual rendered sprite and body.

@@ -1,0 +1,9 @@
+.board-head { display: flex; align-items: center; gap: 6px; }
+.board-title { margin: 0; flex: 1; }
+.board-ties { font-size: 12px; opacity: 0.7; }
+.board-mode[aria-pressed="true"] { font-weight: bold; text-decoration: underline; }
+.board-row { display: grid; grid-template-columns: 2em 1fr auto auto auto auto auto; gap: 6px; align-items: center; padding: 2px 0; }
+.board-row.hidden-team { opacity: 0.5; }
+.board-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-empty, .board-note { font-size: 12px; opacity: 0.7; }
+.board-error { color: #c33; font-size: 12px; }

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './team.mjs';
 import { castOf, truthOf, sessionIdOf, pickRole, rehearsalReply, quickQuestionFor } from './cast.mjs';
 
 async function fresh(page) {

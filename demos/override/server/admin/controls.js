@@ -15,6 +15,8 @@ export function systemLine(rec, fmt) {
     if (rec.action === 'probe') return `${at} probe ${rec.endpoint} ${rec.ok ? 'ok' : 'failed'}`;
     return `${at} ${rec.action}`;
   }
+  if (rec.type === 'leaderboard_settings') return `${at} leaderboard ties by ${rec.rankBy}`;
+  if (rec.type === 'team_hidden') return `${at} team ${String(rec.teamId).slice(0, 8)} ${rec.hidden ? 'hidden' : 'shown'}`;
   if (rec.type === 'round_started') return `${at} round "${rec.label}" started`;
   return `${at} ${rec.type}`;
 }

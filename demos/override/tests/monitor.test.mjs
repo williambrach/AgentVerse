@@ -29,7 +29,7 @@ function fakes(over = {}) {
 
 test('toRow maps question, answer, rehearsal, ignored and verdict', () => {
   const ctx = { cases: CASES, mode: 'live', questions: new Map([['e1', T0]]) };
-  assert.deepEqual(toRow(q, ctx), { id: 'e1', at: T0, sessionId: SID, player: '7f3a', caseId: 'banana-mystery', kind: 'question', character: 'pip', text: 'Where were you?', ms: null, endpoint: null, failedOver: false, reason: null, verdict: null, elapsedMs: 5000, cost: null });
+  assert.deepEqual(toRow(q, ctx), { id: 'e1', at: T0, sessionId: SID, player: '7f3a', caseId: 'banana-mystery', kind: 'question', character: 'pip', text: 'Where were you?', ms: null, endpoint: null, failedOver: false, reason: null, verdict: null, elapsedMs: 5000, cost: null, team: null });
   const r = toRow(a, ctx);
   assert.equal(r.kind, 'answer'); assert.equal(r.text, 'In the library.'); assert.equal(r.ms, 2140); assert.equal(r.endpoint, 'a'); assert.equal(r.failedOver, true);
   assert.equal(toRow({ ...a, provenance: null }, { ...ctx, mode: 'rehearsal' }).endpoint, 'rehearsal');
@@ -78,7 +78,7 @@ test('snapshot keys; tick samples once, snapshot never', () => {
   const { m, calls } = fakes();
   const s = m.snapshot();
   assert.equal(calls.sample, 0);
-  assert.deepEqual(Object.keys(s), ['at', 'mode', 'round', 'players', 'traffic', 'history', 'funnel', 'tallies', 'router', 'sessions', 'system']);
+  assert.deepEqual(Object.keys(s), ['at', 'mode', 'round', 'players', 'traffic', 'history', 'funnel', 'tallies', 'router', 'sessions', 'leaderboard', 'system']);
   assert.deepEqual(Object.keys(s.players), ['online', 'onlineInGame', 'onlineBoard', 'playing', 'round', 'finished']);
   assert.deepEqual(Object.keys(s.traffic), ['reqPerSec', 'share4xx', 'share5xx', 'share429', 'questionsPerMin', 'answerP95Ms', 'llmErrorRate', 'queue', 'inFlight', 'cap', 'active', 'pinned', 'loopP99Ms', 'rssBytes', 'diskFreeBytes', 'writeFailures5m', 'failoverAt', 'credentialsRejected5m']);
   assert.equal(s.players.playing, 7);

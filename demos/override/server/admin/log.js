@@ -60,6 +60,8 @@ function describeBase(row, catalog) {
   return { who, arrow, text: row.text ?? '', meta: parts.join(' · ') };
 }
 
+const teamOr = (team, fallback) => (typeof team === 'string' && team ? team : fallback || '');
+
 function mmss(ms) {
   const s = Math.max(0, Math.floor((ms || 0) / 1000));
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -80,6 +82,7 @@ export function createLog(root, { api, panel }) {
     if (text !== undefined) e.textContent = text;
     return e;
   };
+  const teamOf = new Map();
   let catalog = [];
   let all = [];
   let frozen = false;
@@ -128,7 +131,7 @@ export function createLog(root, { api, panel }) {
     const d = describe(row, catalog);
     const e = el('div', `log-row log-${row.kind}`);
     e.dataset.kind = row.kind;
-    const player = el('span', 'log-player', row.player || ''); player.dataset.player = row.sessionId;
+    const player = el('span', 'log-player', teamOr(row.team, row.player)); player.dataset.player = row.sessionId;
     player.addEventListener('click', () => openPanel(row.sessionId));
     e.append(el('span', 'log-time', clock(row.at)), player, el('span', 'log-who', d.who),
       el('span', 'log-arrow', d.arrow), el('span', 'log-text-cell', d.text), el('span', 'log-meta', d.meta));
@@ -157,7 +160,7 @@ export function createLog(root, { api, panel }) {
   async function openPanel(id) {
     const seq = ++openSeq;
     f.sessionId = id;
-    playerName.textContent = id.slice(0, 4);
+    playerName.textContent = teamOr(teamOf.get(id), id.slice(0, 4));
     playerChip.hidden = false;
     rerender();
     panel.hidden = false;
@@ -213,6 +216,10 @@ export function createLog(root, { api, panel }) {
       const fl = filter();
       for (const r of rows) {
         all.push(r);
+        if (typeof r.team === 'string' && r.team) {
+          teamOf.delete(r.sessionId); teamOf.set(r.sessionId, r.team);
+          if (teamOf.size > 5000) teamOf.delete(teamOf.keys().next().value);
+        }
         if (!matches(r, fl)) continue;
         if (frozen) { pending++; continue; }
         list.prepend(rowEl(r));

@@ -3,8 +3,8 @@
 .log-chip.on { font-weight: 600; text-decoration: underline; }
 .log-player-chip { padding: 2px 6px; border: 1px solid currentColor; border-radius: 10px; }
 .log-list { max-height: 60vh; overflow-y: auto; font-size: 13px; }
-.log-row { display: grid; grid-template-columns: 52px 44px 90px 20px 1fr auto; gap: 6px; padding: 2px 0; border-bottom: 1px solid rgba(128, 128, 128, 0.2); }
-.log-player { cursor: pointer; text-decoration: underline; font-family: ui-monospace, monospace; }
+.log-row { display: grid; grid-template-columns: 52px minmax(44px, 12ch) 90px 20px 1fr auto; gap: 6px; padding: 2px 0; border-bottom: 1px solid rgba(128, 128, 128, 0.2); }
+.log-player { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; cursor: pointer; text-decoration: underline; font-family: ui-monospace, monospace; }
 .log-time, .log-meta { opacity: 0.65; }
 .log-failure { color: #c0392b; }
 .log-text-cell { overflow-wrap: anywhere; }
