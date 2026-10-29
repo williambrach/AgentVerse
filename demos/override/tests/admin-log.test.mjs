@@ -162,3 +162,20 @@ test('describe appends coins', () => {
   assert.equal(log.describe({ ...base, kind: 'answer', ms: 2100, endpoint: 'a', cost: 2 }, []).meta, '2.1 s · a · 2 coins');
   assert.equal(log.describe({ ...base }, []).meta, '');
 });
+
+test('team name replaces the short id in rows and the player chip; long names are clipped by css', async () => {
+  const root = mk(); const panel = mk();
+  const l = log.createLog(root, { api: async () => ({ sessionId: 's1', rows: [q] }), panel });
+  l.setCatalog(catalog);
+  const long = 'The Extremely Long Team <b>Name</b> '.repeat(3);
+  l.add([row(1, { team: long }), row(2, { sessionId: 's2', player: 's2x', team: null })]);
+  const p1 = root.find((e) => e.dataset.player === 's1')[0];
+  const p2 = root.find((e) => e.dataset.player === 's2')[0];
+  assert.equal(p1.textContent, long);
+  assert.equal(p2.textContent, 's2x');
+  await p1.fire('click');
+  const chip = root.find((e) => e.className === 'log-player-name' || e.dataset.player === undefined && e.textContent === long);
+  assert.ok(chip.length >= 1);
+  const css = (await import('node:fs')).readFileSync(new URL('../server/admin/log.css', import.meta.url), 'utf8');
+  assert.match(css, /\.log-player \{[^}]*text-overflow: ellipsis/);
+});

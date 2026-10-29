@@ -3,6 +3,7 @@ import * as tiles from './tiles.js';
 import * as logMod from './log.js';
 import * as round from './round.js';
 import * as controls from './controls.js';
+import { renderBoard } from './board.js';
 
 const DELAYS = [1000, 2000, 5000, 10000];
 const STALE_MS = 5000;
@@ -51,6 +52,7 @@ function start() {
     const worst = tiles.renderTiles($('tiles'), snap);
     document.title = (worst === 'bad' ? '⚠ ' : '') + baseTitle;
     tiles.renderHistory($('history'), snap);
+    renderBoard($('board'), snap, { api });
     round.renderFunnel($('funnel'), snap, catalog);
     round.renderTallies($('tallies'), snap, catalog);
     controls.renderControls($('controls'), snap, { api });
