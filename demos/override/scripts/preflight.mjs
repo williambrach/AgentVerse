@@ -4,11 +4,15 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { LlmRouter } from '../server/llm.mjs';
 import { buildMessages, modelConfig } from '../server/interviews.mjs';
+import { identityCast, partOf, resolve as resolveText } from '../server/cases.mjs';
 import { cases } from '../server/cases/index.mjs';
 
 // Preflight exercises the first registered case.
 const kase = cases[0];
 const { characters } = kase;
+// Rows use the identity cast: character i plays part i, so flags key off the part.
+const cast = identityCast(kase);
+const quickOf = characterId => resolveText(kase, cast, partOf(kase, cast, characterId).quickQuestion);
 
 const FOLLOW_UPS = ['What did you know at the time?', 'Who told you, and did you check?'];
 // Local copy of the load test helper: the OS accept-queue cap, or null when unknown.
@@ -26,10 +30,12 @@ export function flagsFor(characterId, question, answer) {
   const n = words(answer);
   if (!answer.trim()) return ['empty'];
   if (n < 10 || n > 60) flags.push('length');
-  const quick = characters.find(c => c.id === characterId).quickQuestion;
-  if (characterId === 'momo' && question === quick && !/made (it )?up|lied|invent|not true/i.test(answer)) flags.push('momo_no_admission');
-  if (characterId === 'pip' && /hungry/i.test(answer)) flags.push('pip_knows_motive');
-  if (characterId === 'nori' && question === quick && !/(never|didn'?t|did not) hear/i.test(answer)) flags.push('nori_heard_bell');
+  const quick = quickOf(characterId);
+  const part = cast[characterId];
+  if (part === 'planner' && question === quick && !/made (it )?up|lied|invent|not true/i.test(answer)) flags.push('planner_no_admission');
+  if (part === 'carrier' && /hungry/i.test(answer)) flags.push('carrier_knows_motive');
+  if (part === 'lookout' && question === quick && !/keeper|rule|caught|wrong|against/i.test(answer)) flags.push('lookout_no_admission');
+  if (part === 'minder' && question === quick && !/(never|didn'?t|did not) hear/i.test(answer)) flags.push('minder_heard_bell');
   return flags;
 }
 
@@ -38,9 +44,9 @@ export const percentile = (sorted, p) => (sorted.length ? sorted[Math.max(0, Mat
 
 async function fidelityFor(router, characterId) {
   const character = characters.find(c => c.id === characterId);
-  const session = { interviews: Object.fromEntries(characters.map(c => [c.id, []])) };
+  const session = { cast, interviews: Object.fromEntries(characters.map(c => [c.id, []])) };
   const rows = [];
-  for (const question of [character.quickQuestion, ...FOLLOW_UPS]) {
+  for (const question of [quickOf(characterId), ...FOLLOW_UPS]) {
     let row;
     try {
       const { content } = await router.complete({ messages: buildMessages(kase, session, characterId, question) });
@@ -58,8 +64,8 @@ async function fidelityFor(router, characterId) {
 
 async function capacityRun(router, steps) {
   const characterId = characters[0].id;
-  const session = { interviews: Object.fromEntries(characters.map(c => [c.id, []])) };
-  const messages = buildMessages(kase, session, characterId, characters[0].quickQuestion);
+  const session = { cast, interviews: Object.fromEntries(characters.map(c => [c.id, []])) };
+  const messages = buildMessages(kase, session, characterId, quickOf(characterId));
   const results = [];
   for (const concurrency of steps) {
     const latencies = []; let errors = 0;

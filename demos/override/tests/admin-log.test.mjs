@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import * as log from '../server/admin/log.js';
 
 const catalog = [
-  { id: 'banana-mystery', title: 'Banana', world: 'w', answer: ['pip'], characters: [{ id: 'pip', name: 'Pip' }, { id: 'momo', name: 'Momo' }] },
-  { id: 'tower-echo-bell', title: 'Tower', world: 'w', answer: [], characters: [{ id: 'bell', name: 'Bell' }] },
+  { id: 'banana-mystery', title: 'Banana', world: 'w', characters: [{ id: 'pip', name: 'Pip' }, { id: 'momo', name: 'Momo' }] },
+  { id: 'tower-echo-bell', title: 'Tower', world: 'w', characters: [{ id: 'bell', name: 'Bell' }] },
 ];
 const q = { id: 1, at: 1, sessionId: 's1', player: 's1', caseId: 'banana-mystery', kind: 'question', character: 'pip', text: 'Where were you?', ms: null, endpoint: null, failedOver: false, reason: null, verdict: null, elapsedMs: 65000 };
 
@@ -25,8 +25,9 @@ test('describe', () => {
   assert.deepEqual(log.describe({ ...q, kind: 'failure', text: 'Where were you?', reason: 'timeout' }, catalog), { who: 'Pip', arrow: '✕', text: 'Where were you?', meta: 'timeout' });
   assert.equal(log.describe({ ...q, caseId: 'nope', character: 'zed' }, catalog).who, 'zed');
   assert.equal(log.describe(q, catalog).arrow, '→');
-  const v = { ...q, kind: 'verdict', character: null, text: null, verdict: { suspect: 'none', confidence: 70, correct: true } };
-  assert.equal(log.describe(v, catalog).text, 'Nobody · 70 % · correct');
+  const v = { ...q, kind: 'verdict', character: null, text: null, verdict: { score: 3, total: 4, confidence: 70 } };
+  assert.equal(log.describe(v, catalog).text, '3/4 roles · 70 %');
+  assert.equal(log.describe({ ...v, verdict: { suspect: 'pip', confidence: 70, correct: true } }, catalog).text, 'Verdict (old format)');
   assert.ok(log.describe({ ...a, failedOver: true }, catalog).meta.endsWith(' · failover'));
 });
 
@@ -98,14 +99,14 @@ test('player click opens panel with timeline and verdict; errors shown', async (
   const root = mk(); const panel = mk();
   const calls = [];
   let fail = false;
-  const api = async (p) => { calls.push(p); if (fail) throw new Error('boom'); return { sessionId: 's1', rows: [q, { ...q, id: 2, kind: 'verdict', verdict: { suspect: 'pip', confidence: 80, correct: false }, elapsedMs: 90000 }] }; };
+  const api = async (p) => { calls.push(p); if (fail) throw new Error('boom'); return { sessionId: 's1', rows: [q, { ...q, id: 2, kind: 'verdict', verdict: { score: 3, total: 4, confidence: 70 }, elapsedMs: 90000 }] }; };
   const l = log.createLog(root, { api, panel });
   l.setCatalog(catalog);
   l.add([row(1)]);
   const p = root.find((e) => e.dataset.player === 's1')[0];
   await p.fire('click');
   assert.deepEqual(calls, ['/admin/sessions/s1']);
-  assert.ok(panel.textContent.includes('Verdict'));
+  assert.ok(panel.textContent.includes('Verdict: 3 of 4 roles right · 70 %'));
   assert.ok(panel.textContent.includes('01:05'));
   fail = true;
   await p.fire('click');
@@ -154,6 +155,15 @@ test('stale panel response does not overwrite a newer player or a closed panel',
   assert.ok(!panel.textContent.includes('OLDER'));
 });
 
+test('panel shows old-format verdict for a v2 row', async () => {
+  const root = mk(); const panel = mk();
+  const api = async () => ({ rows: [{ ...q, kind: 'verdict', verdict: { suspect: 'pip', confidence: 80, correct: false } }] });
+  const l = log.createLog(root, { api, panel });
+  l.add([row(1)]);
+  await root.find((e) => e.dataset.player === 's1')[0].fire('click');
+  assert.ok(panel.textContent.includes('Verdict (old format)'));
+});
+
 test('describe appends coins', () => {
   const base = { sessionId: 's', caseId: 'banana-mystery', character: 'pip', kind: 'chatter', text: 'hi', endpoint: null };
   assert.equal(log.describe({ ...base, cost: 1 }, []).meta, '1 coin');
@@ -161,6 +171,8 @@ test('describe appends coins', () => {
   assert.equal(log.describe({ ...base, cost: 0 }, []).meta, '');
   assert.equal(log.describe({ ...base, kind: 'answer', ms: 2100, endpoint: 'a', cost: 2 }, []).meta, '2.1 s · a · 2 coins');
   assert.equal(log.describe({ ...base }, []).meta, '');
+  const verdict = log.describe({ ...base, character: null, kind: 'verdict', text: null, verdict: { score: 3, total: 4, confidence: 70 }, cost: 0 }, []);
+  assert.equal(verdict.text, '3/4 roles · 70 %');
 });
 
 test('team name replaces the short id in rows and the player chip; long names are clipped by css', async () => {

@@ -64,12 +64,6 @@
 :root[data-theme="tower"] .report-form > label, :root[data-theme="tower"] .report-form legend { color: #6f68a0; }
 :root[data-theme="tower"] .report-form textarea, :root[data-theme="tower"] .report-form select { background: #fdfcff; border-color: #c3bcdc; color: #48427a; }
 :root[data-theme="tower"] .report-form input[type=range] { accent-color: #6f63b0; }
-:root[data-theme="tower"] .suspect-option { border-color: #d6d0e8; background: #fdfcff; }
-:root[data-theme="tower"] .suspect-option:has(input:checked) { background: #ebe6f7; border-color: #8a7fc0; box-shadow: inset 0 0 0 2px #fdfbff; }
-:root[data-theme="tower"] .suspect-option input, :root[data-theme="tower"] .other-guesses input { accent-color: #6f63b0; }
-:root[data-theme="tower"] .suspect-option b { color: #4d4682; }
-:root[data-theme="tower"] .suspect-option small { color: #8a84ab; }
-:root[data-theme="tower"] .other-guesses { color: #7d77a1; }
 :root[data-theme="tower"] .finding h3 { color: #554d8a; }
 :root[data-theme="tower"] .finding > p { color: #7f799f; }
 :root[data-theme="tower"] .verdict-summary { background: #eeeaf8; border-color: #cdc5e5; }

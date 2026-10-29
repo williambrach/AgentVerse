@@ -1,4 +1,5 @@
 import { test, expect } from './team.mjs';
+import { castOf, truthOf, sessionIdOf, pickRole } from './cast.mjs';
 
 const COUNTER = '#coin-counter';
 
@@ -66,10 +67,11 @@ test('talk_round', async ({ page }) => {
   await ask(page, 'momo', 'Momo', 2);
   await ask(page, 'pip', 'Pip', 4);
   await ask(page, 'nori', 'Nori', 6);
+  await ask(page, 'kiki', 'Kiki', 8);
   await page.locator('#continue-button').click();
   await threeBubbles(page);
   await expect(page.locator('#thread-log .thread-post')).toHaveCount(3);
-  await expect(page.locator(COUNTER)).toHaveText('7 / 15 coins');
+  await expect(page.locator(COUNTER)).toHaveText('9 / 15 coins');
 });
 
 test('talk_from_start', async ({ page }) => {
@@ -88,9 +90,10 @@ test('budget_409', async ({ page }) => {
   await ok('interview', { character: 'momo', question: 'What happened with the bananas?' });
   await ok('interview', { character: 'pip', question: 'What did you see?' });
   await ok('interview', { character: 'nori', question: 'Where were you?' });
+  await ok('interview', { character: 'kiki', question: 'Who did you talk to?' });
   await ok('inspect', { character: 'momo' });
+  // Two rounds of three lines each: one coin each.
   for (let i = 0; i < 4; i++) await ok('continue');
-  await ok('interview', { character: 'momo', question: 'Is that really all of it?' });
   const state = await (await page.request.get('/api/state')).json();
   expect(state.session.economy.spent).toBe(15);
   const res = await api(page, 'interview', { character: 'pip', question: 'One more thing?' });
@@ -122,4 +125,21 @@ test('tower_tools', async ({ page }) => {
   await page.locator('#continue-button').click();
   await threeBubbles(page);
   await expect(page.locator('#thread-log .thread-post')).toHaveCount(3);
+});
+
+test('verdict_through_roles', async ({ page }) => {
+  await fresh(page);
+  await ask(page, 'momo', 'Momo', 2);
+  await ask(page, 'pip', 'Pip', 4);
+  await ask(page, 'nori', 'Nori', 6);
+  await ask(page, 'kiki', 'Kiki', 8);
+  const cast = castOf(await sessionIdOf(page), 'test-results/sessions-coins');
+  const truth = truthOf(cast);
+  await page.locator('nav [data-go="report"]').click();
+  await expect(page.locator('fieldset.role-row')).toHaveCount(4);
+  for (const id of ['momo', 'pip', 'nori', 'kiki']) await pickRole(page, id, truth[id]);
+  await page.locator('#lock-in').click();
+  await expect(page.locator('.verdict-summary')).toContainText('4 / 4');
+  await expect(page.locator('.spend-summary')).toContainText('You spent 8 of 15 coins');
+  await expect(page.locator('.spend-summary')).toContainText('4 questions');
 });

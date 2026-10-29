@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startMockLlm } from './mock-llm.mjs';
 import { runPreflight } from '../scripts/preflight.mjs';
+import { flagsFor } from '../scripts/preflight.mjs';
+import { cases } from '../server/cases/index.mjs';
+import { identityCast, partOf, resolve as resolveText } from '../server/cases.mjs';
 
 const endpointFor = (mock, name = 'a') => ({ name, baseUrl: mock.url, model: 'm', key: 'k', maxInFlight: 5, tokenParam: 'max_completion_tokens', timeoutMs: 5000, temperature: null });
 async function withMock(opts, fn) {
@@ -18,7 +21,7 @@ test('capacity_steps', async () => {
       assert.equal(c.errors, 0);
       assert.ok(c.p50Ms >= 0 && c.p95Ms >= c.p50Ms);
     }
-    assert.equal(report.endpoints[0].fidelity.length, 9);
+    assert.equal(report.endpoints[0].fidelity.length, 12);
     assert.equal(mock.stats.maxInFlight >= 4, true);
   });
 });
@@ -46,11 +49,22 @@ test('fidelity_row_and_flags', async () => {
   await withMock({ content: 'I never heard the bell, so I guessed it was snack time.' }, async mock => {
     const report = await runPreflight({ endpoints: [endpointFor(mock)], steps: [1] });
     const rows = report.endpoints[0].fidelity;
-    const nori = rows.find(r => r.character === 'nori');
-    assert.deepEqual([nori.ok, nori.words, nori.flags], [true, 12, []]);
+    // Identity cast on banana: momo planner, pip carrier, nori lookout, kiki minder.
+    const kiki = rows.find(r => r.character === 'kiki');
+    assert.deepEqual([kiki.ok, kiki.words, kiki.flags], [true, 12, []]);
     const momo = rows.find(r => r.character === 'momo');
-    assert.deepEqual(momo.flags, ['momo_no_admission']);
+    assert.deepEqual(momo.flags, ['planner_no_admission']);
     assert.equal(momo.question, 'Did the keeper really say you could take the bananas?');
+    assert.deepEqual(rows.find(r => r.character === 'nori').flags, ['lookout_no_admission']);
+    assert.deepEqual(rows.find(r => r.character === 'pip').flags, []);
+  });
+});
+
+test('flags: carrier_knows_motive and minder_heard_bell', async () => {
+  await withMock({ content: 'I heard the bell and I was so hungry that day, honestly.' }, async mock => {
+    const rows = (await runPreflight({ endpoints: [endpointFor(mock)], steps: [1] })).endpoints[0].fidelity;
+    assert.ok(rows.filter(r => r.character === 'pip').every(r => r.flags.includes('carrier_knows_motive')));
+    assert.ok(rows.find(r => r.character === 'kiki').flags.includes('minder_heard_bell'));
   });
 });
 
@@ -118,4 +132,12 @@ test('exit_code_for_host', async () => {
   const { exitCodeFor } = await import('../scripts/preflight.mjs');
   assert.equal(exitCodeFor({ host: { ok: false }, endpoints: [] }), 2);
   assert.equal(exitCodeFor({ host: { ok: true }, endpoints: [] }), 0);
+});
+
+test('flags: lookout_no_admission fires on a lookout who only says they watched', () => {
+  const cast = identityCast(cases[0]);
+  const lookout = Object.keys(cast).find(id => cast[id] === 'lookout');
+  const quick = resolveText(cases[0], cast, partOf(cases[0], cast, lookout).quickQuestion);
+  assert.deepEqual(flagsFor(lookout, quick, 'I sat by the path and watched all morning, nobody came by at all today.'), ['lookout_no_admission']);
+  assert.deepEqual(flagsFor(lookout, quick, 'For the keeper. I knew it was against the rule, but I wanted a banana anyway.'), []);
 });

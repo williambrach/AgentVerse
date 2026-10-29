@@ -7,6 +7,27 @@ function lowerMiddle(values) {
   return sorted[Math.ceil(sorted.length / 2) - 1];
 }
 
+const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/** Per-role counts of one verdict, or null for a verdict without role results (schema v2): it counts in the funnel only. */
+function roleTally(v) {
+  if (!isMap(v.roles) || !isMap(v.truth) || !isMap(v.results)) return null;
+  const byRole = {};
+  let right = 0;
+  let total = 0;
+  for (const [id, role] of Object.entries(v.truth)) {
+    if (typeof role !== 'string') continue;
+    const ok = v.results[id] === true;
+    const r = (byRole[role] ??= { right: 0, total: 0 });
+    r.total += 1;
+    total += 1;
+    if (ok) { r.right += 1; right += 1; }
+  }
+  const score = Number.isFinite(v.score) ? v.score : right;
+  const all = Number.isFinite(v.total) ? v.total : total;
+  return { byRole, right, total, perfect: all > 0 && score === all };
+}
+
 export function createRoundStats(cases) {
   const byId = new Map(cases.map((c) => [c.id, c]));
   let sessions = new Map();
@@ -47,7 +68,7 @@ export function createRoundStats(cases) {
       case 'interview_question': s.questions += 1; s.asked = true; break;
       case 'interview_answer': if ((byId.get(s.caseId).characters ?? []).some((c) => c.id === e.character)) s.answered.add(e.character); break;
       case 'verdict_submitted':
-        if (!s.verdict && e.verdict && Number.isFinite(e.elapsedMs)) s.verdict = { suspect: e.verdict.suspect, ms: e.elapsedMs, questions: s.questions, coins: Number.isFinite(e.coins?.spent) ? e.coins.spent : null };
+        if (!s.verdict && e.verdict && Number.isFinite(e.elapsedMs)) s.verdict = { roles: roleTally(e.verdict), ms: e.elapsedMs, questions: s.questions, coins: Number.isFinite(e.coins?.spent) ? e.coins.spent : null };
         break;
       case 'debrief_viewed': s.debrief = true; break;
       default: break;
@@ -78,31 +99,31 @@ export function createRoundStats(cases) {
 
   function tallies() {
     const out = {};
-    for (const c of cases) out[c.id] = { verdicts: 0, correct: null, accused: {}, medianMsToVerdict: null, medianQuestions: null, medianCoins: null };
+    for (const c of cases) out[c.id] = { verdicts: 0, perfect: 0, rolesRight: 0, rolesTotal: 0, byRole: {}, medianMsToVerdict: null, medianQuestions: null, medianCoins: null };
     const ms = {};
     const qs = {};
     const cs = {};
-    const right = {};
     for (const s of sessions.values()) {
-      if (!s.verdict) continue;
-      const c = byId.get(s.caseId);
+      const roles = s.verdict?.roles;
+      if (!roles) continue;
       const t = out[s.caseId];
       t.verdicts += 1;
-      t.accused[s.verdict.suspect] = (t.accused[s.verdict.suspect] ?? 0) + 1;
-      const culprits = c.answer?.culprits ?? [];
-      const ok = culprits.length === 0 ? s.verdict.suspect === 'none' : culprits.includes(s.verdict.suspect);
-      right[s.caseId] = (right[s.caseId] ?? 0) + (ok ? 1 : 0);
+      if (roles.perfect) t.perfect += 1;
+      t.rolesRight += roles.right;
+      t.rolesTotal += roles.total;
+      for (const [role, n] of Object.entries(roles.byRole)) {
+        const b = (t.byRole[role] ??= { right: 0, total: 0 });
+        b.right += n.right;
+        b.total += n.total;
+      }
       (ms[s.caseId] ??= []).push(s.verdict.ms);
       (qs[s.caseId] ??= []).push(s.verdict.questions);
       if (s.verdict.coins !== null) (cs[s.caseId] ??= []).push(s.verdict.coins);
     }
-    for (const id of Object.keys(out)) {
-      const t = out[id];
-      if (t.verdicts === 0) continue;
-      t.correct = right[id] ?? 0;
-      t.medianMsToVerdict = lowerMiddle(ms[id]);
-      t.medianQuestions = lowerMiddle(qs[id]);
-      t.medianCoins = lowerMiddle(cs[id] ?? []);
+    for (const id of Object.keys(ms)) {
+      out[id].medianMsToVerdict = lowerMiddle(ms[id]);
+      out[id].medianQuestions = lowerMiddle(qs[id]);
+      out[id].medianCoins = lowerMiddle(cs[id] ?? []);
     }
     return out;
   }

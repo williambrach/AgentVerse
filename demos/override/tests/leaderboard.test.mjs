@@ -10,19 +10,26 @@ const C = { id: 'C', name: 'Lynx' };
 const board = (at = 0) => createLeaderboard(cases, { startedAt: at * 1000 });
 const start = (sid, team, caseId, s, extra = {}) => ({ type: 'session_started', sessionId: sid, caseId, timestamp: iso(s), team, ...extra });
 const verdict = (sid, suspect, s, extra = {}) => ({ type: 'verdict_submitted', sessionId: sid, timestamp: iso(s), verdict: { suspect }, ...extra });
+// A role verdict as the game logs it: one role per character, scored against the drawn cast.
+const roleVerdict = (sid, caseId, right, s, extra = {}) => {
+  const kase = cases.find((c) => c.id === caseId);
+  const ids = kase.characters.map((c) => c.id);
+  const results = Object.fromEntries(ids.map((id, i) => [id, i < right]));
+  return { type: 'verdict_submitted', sessionId: sid, timestamp: iso(s), verdict: { roles: {}, truth: {}, results, score: right, total: ids.length, confidence: 'sure' }, ...extra };
+};
 const feed = (lb, evs) => evs.forEach((e) => lb.observe(e));
 const names = (lb, o = { includeHidden: false, you: null }) => lb.standings(o).teams.map((t) => t.name);
 
 test('example standings', () => {
   const lb = board();
   feed(lb, [
-    start('a', A, 'banana-mystery', 0), { type: 'x', sessionId: 'a', timestamp: iso(10), spend: { total: 8 } }, verdict('a', 'momo', 120, { coins: { spent: 8, budget: 20 } }),
-    start('b', B, 'banana-mystery', 0), verdict('b', 'wren', 60, { coins: { spent: 4, budget: 20 } }),
+    start('a', A, 'banana-mystery', 0), { type: 'x', sessionId: 'a', timestamp: iso(10), spend: { total: 8 } }, roleVerdict('a', 'banana-mystery', 4, 120, { coins: { spent: 8, budget: 20 } }),
+    start('b', B, 'banana-mystery', 0), roleVerdict('b', 'banana-mystery', 0, 60, { coins: { spent: 4, budget: 20 } }),
     start('c', C, 'banana-mystery', 0),
   ]);
   assert.deepEqual(lb.standings({ includeHidden: false, you: 'A' }), {
     rankBy: 'time', startedAt: 0, teams: [
-      { rank: 1, teamId: 'A', name: 'Banana Squad', points: 1, played: 1, timeMs: 120000, coins: 8, hidden: false, you: true },
+      { rank: 1, teamId: 'A', name: 'Banana Squad', points: 4, played: 1, timeMs: 120000, coins: 8, hidden: false, you: true },
       { rank: 2, teamId: 'B', name: 'Owls', points: 0, played: 1, timeMs: 60000, coins: 4, hidden: false, you: false },
       { rank: null, teamId: 'C', name: 'Lynx', points: 0, played: 0, timeMs: 0, coins: 0, hidden: false, you: false },
     ],
@@ -35,7 +42,7 @@ test('example standings', () => {
 
 test('first_verdict_counts', () => {
   const lb = board();
-  feed(lb, [start('a', A, 'banana-mystery', 0), verdict('a', 'momo', 10), verdict('a', 'wren', 20)]);
+  feed(lb, [start('a', A, 'banana-mystery', 0), roleVerdict('a', 'banana-mystery', 1, 10), roleVerdict('a', 'banana-mystery', 4, 20)]);
   const [t] = lb.standings({}).teams;
   assert.equal(t.points, 1); assert.equal(t.played, 1);
 });
@@ -118,6 +125,17 @@ test('score_field_points', () => {
   const lb = board();
   feed(lb, [start('a', A, 'banana-mystery', 0), { ...verdict('a', 'x', 5), verdict: { suspect: 'x', score: 3 } }]);
   assert.equal(lb.standings({}).teams[0].points, 3);
+});
+
+test('role_verdict_points_are_roles_right', () => {
+  const lb = board();
+  feed(lb, [
+    start('a', A, 'banana-mystery', 0), roleVerdict('a', 'banana-mystery', 4, 10),
+    start('b', B, 'tower-echo-bell', 0), roleVerdict('b', 'tower-echo-bell', 3, 10),
+    start('c', C, 'banana-mystery', 0), roleVerdict('c', 'banana-mystery', 2, 10),
+  ]);
+  const t = Object.fromEntries(lb.standings({}).teams.map((x) => [x.name, x.points]));
+  assert.deepEqual(t, { 'Banana Squad': 4, Owls: 3, Lynx: 2 });
 });
 
 test('setRankBy_rejects', () => {

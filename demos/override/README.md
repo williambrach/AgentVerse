@@ -1,8 +1,8 @@
 # The Override
 
-A short, 2–3 minute detective game for AgentVerse: **The Banana Mystery**. The keeper said to wait for the bell, but the picnic bananas went missing. Meet Momo the planner, Pip the carrier, and Nori the lookout in a small jungle clearing. Ask each monkey a quick question, then choose who knowingly broke the rule. Clues were removed on 2026-10-29: a game is the briefing, three interviews, a verdict, and a debrief. The live cases are `banana-authored-v2.0.0` and `tower-echo-bell-v2.0.0`, prompted as `interview-v3`.
+A short, 2–3 minute detective game for AgentVerse: **The Banana Mystery**. The keeper said to wait for the bell, but the picnic bananas went missing. Four monkeys (Momo, Pip, Nori and Kiki) wait in a small jungle clearing; a second case puts three apprentices in a wizard tower. Each game deals the characters into the case's parts at random, so a job label such as “The planner” moves between characters from game to game. Ask each character a quick question, then pick a role for each of them. Clues were removed on 2026-10-29: a game is the briefing, the interviews, a verdict, and a debrief. The live cases are `banana-authored-v3.0.0` and `tower-echo-bell-v3.0.0`, prompted as `interview-v5`. Kiki is a recoloured monkey until real art exists.
 
-The fast path needs three one-click interview questions and one suspect choice. Answers are prompted to stay around 15–40 words. Confidence has three choices; a written explanation is optional. Free-text follow-ups remain available. The intended 2–3 minute duration includes reading; live model latency and extra questions can make a run longer.
+The fast path needs one one-click interview question per character and one role pick for each. Answers are prompted to stay around 15–40 words. Confidence has three choices; a written explanation is optional. Free-text follow-ups remain available. The intended 2–3 minute duration includes reading; live model latency and extra questions can make a run longer.
 
 **This is an authored demonstration, not a validated research case or a recorded agent run.** Every browser gets its own independent game (an HttpOnly `override_session` cookie), so about 200 people can play at once on one server, and a game resumes after a page reload or a server restart. Choose a case on the intro screen, or open `?case=<id>` to go straight to one.
 
@@ -41,23 +41,24 @@ OVERRIDE_LLM_REASONING_EFFORT=low
 
 `OVERRIDE_LLM_REASONING_EFFORT` (`low`, `medium` or `high`) is sent as `reasoning_effort`; leave it empty for a model that does not accept it. With GLM 5.3 Flash, `low` keeps the reasoning players can inspect to a few lines. In an endpoints file the field is `reasoningEffort`.
 
-Restart the server after changing configuration. Coins are set the same way: `OVERRIDE_COIN_BUDGET` is empty for no budget, or an integer from 6 to 999, and `OVERRIDE_REASONING_CHARGES` is 1 or 2 (default 1). Credentials remain on the server and are excluded from the browser bundle, exports, Git, and Docker build context. The server uses native `fetch`; no OpenAI SDK or AgentVerse Python dependencies are required.
+Restart the server after changing configuration. Coins are set the same way: `OVERRIDE_COIN_BUDGET` is empty for no budget, or an integer from the minimum to 999 (the minimum is 2 coins for each agent in the largest world, 8 today), and `OVERRIDE_REASONING_CHARGES` is 1 or 2 (default 1). Credentials remain on the server and are excluded from the browser bundle, exports, Git, and Docker build context. The server uses native `fetch`; no OpenAI SDK or AgentVerse Python dependencies are required.
 
 `OVERRIDE_LLM_MAX_COMPLETION_TOKENS` defaults to 2,048. This includes internal reasoning tokens, not just the visible answer. A response cut off by that limit is retried once with twice the budget (up to 8,192); partial answers and reasoning-only responses are never shown as testimony. `OVERRIDE_LLM_TIMEOUT_MS` defaults to 60,000 and bounds both attempts together. Authentication, rate-limit, timeout, and response-limit failures have distinct player-facing messages and log reasons.
 
 With both key and model empty, interviews use a visibly labeled **scripted rehearsal** mode. This is useful for testing the full flow without a model. In live mode, provider failures are shown to the player and logged; the server never silently substitutes a scripted answer. Questions can be retried without losing the draft.
 
-The game is English only: the UI is written in English, and both prompts tell characters to answer in English whatever language the question is in (`interview-v4`, `thread-v2`).
+The game is English only: the UI is written in English, and both prompts tell characters to answer in English whatever language the question is in (`interview-v5`, `thread-v3`).
 
 Each live request includes that character’s knowledge and that character’s previous questions and answers. Characters do not receive each other’s interview histories. The incident, knowledge, and hidden explanation are authored on the server; model outputs are fallible testimony, not changes to the ground truth. Prompt instructions limit invented facts and prompt injection, but cannot guarantee that a model will follow them. Validate live behavior before collecting research data.
 
-Provider reasoning (`reasoning_content` or `reasoning`) is kept only in server memory, for each character’s last line. It is shown only when a team pays to inspect it, and it is never written to traces. After a restart it is gone; inspecting it then is refused with a message and nothing is spent. Thread lines use their own prompt (`thread-v1`), which gives the speaker only their own knowledge.
+Provider reasoning (`reasoning_content` or `reasoning`) is kept only in server memory, for each character’s last line. It is shown only when a team pays to inspect it, and it is never written to traces. After a restart it is gone; inspecting it then is refused with a message and nothing is spent. Thread lines use their own prompt (`thread-v2`), which gives the speaker only their own knowledge.
 
 ## Play
 
-1. Pick a case on the intro screen (or use `?case=<id>`), and read the briefing.
-2. Ask Momo, Pip, and Nori. **Quick question** submits immediately; **Next: ask…** takes you to the next monkey. You can also type a question.
-3. Choose a suspect (or Nobody / Not sure), set confidence, and see the short debrief. Written reasoning is optional.
+1. Check in with a team name (see *Teams and the leaderboard* below).
+2. Pick a case on the intro screen (or use `?case=<id>`), and read the briefing.
+3. Ask each character in turn (Momo, Pip, Nori and Kiki in the grove; three apprentices in the tower). **Quick question** submits immediately; **Next: ask…** takes you to the next one. You can also type a question.
+4. Pick a role for each character: Villain, Collaborator, Honest but fooled, or Honest (there is no Nobody or Not sure). Set confidence and see the debrief, which shows the true role next to each pick. Every correct role scores; the debrief gives the score out of the number of characters. Written reasoning is optional.
 5. Use **Play again** for the next colleague. The reset dialog has a case select, so the next game can be a different case. Previous research logs remain on disk.
 
 **Coins and tools.** A game can have a coin budget (see `OVERRIDE_COIN_BUDGET` below). Three tools cost coins:
@@ -68,26 +69,26 @@ Provider reasoning (`reasoning_content` or `reasoning`) is kept only in server m
 | Inspect reasoning | 5 coins | 1 per game (2 with `OVERRIDE_REASONING_CHARGES=2`) |
 | Let them talk | 1 coin per round of 3 lines | 3 rounds |
 
-Inspect reasoning shows how that character reasoned about their last line. Let them talk is available from the start; it makes the three characters post in a forum-style thread. They see each other's earlier lines but never your questions. Their lines appear as speech bubbles over the speaker and in the thread panel. Walking, the verdict and reset are free. Failed answers cost nothing. With a budget, the game keeps enough coins to ask each character you have not asked once. The coin counter is in the top bar; the debrief shows the total.
+Inspect reasoning shows how that character reasoned about their last line. Let them talk is available from the start; it makes the characters post in a forum-style thread. They see each other's earlier lines but never your questions. Their lines appear as speech bubbles over the speaker and in the thread panel. Walking, the verdict and reset are free. Failed answers cost nothing. With a budget, the game keeps enough coins to ask each character you have not asked once. The coin counter is in the top bar; the debrief shows the total.
 
 ### Teams and the leaderboard
 
 - **Check-in.** A new browser first asks for a team name (2 to 24 letters, numbers and spaces). Use one screen per team. If another screen already uses the name, the game asks whether to join that team; joining is the only way to share a name. The game follows the team: the same team on a second screen shows the same game, and **Cases** and **Reset** keep the team. **Change team** in the top bar switches to another name.
-- **Scoring.** A correct guess scores 1 point. Only a team's first guess per case in the current round counts. Time runs from the team's first start of that case to the counted guess; coins are everything the team spent on that case until then. Ties are broken by time or by coins, as the operator chooses in the command centre. Teams that are still playing are listed without a rank.
+- **Scoring.** A verdict scores one point for each character whose role is right, the same score the debrief shows (up to 4 in the grove, 3 in the tower). Verdicts from older logs that named a single suspect score 1 point when the suspect was right. Only a team's first verdict per case in the current round counts. Time runs from the team's first start of that case to the counted verdict; coins are everything the team spent on that case until then. Ties are broken by time or by coins, as the operator chooses in the command centre. Teams that are still playing are listed without a rank.
 - **Where it shows.** The **Leaderboard** button in the top bar and a button on the debrief open the board; your team's row is highlighted.
 - **Without a check-in.** Old browsers and scripts that never join a team play as before but are not on the board.
 - **One data directory per event.** Team names persist in `teams.jsonl` and stay taken. Use a fresh `OVERRIDE_ENV` (data directory) for each event.
 
-Walk with WASD or the arrow keys, and press E or Space next to a monkey, the signpost or the start marker. Clicking the map does not move the investigator; the destination buttons open a conversation or your guess straight away. A basket of bananas sits on the picnic blanket. Momo, Pip, and Nori blink and make small gestures on separate idle cycles, and react when you approach. Reduced-motion preferences disable these animations. The notebook retains its page turns; reduced-motion preferences disable those effects.
+Walk with WASD or the arrow keys, and press E or Space next to a monkey, the signpost or the start marker. Clicking the map does not move the investigator; the destination buttons open a conversation or your guess straight away. A basket of bananas sits on the picnic blanket. The characters blink and make small gestures on separate idle cycles, and react when you approach. Reduced-motion preferences disable these animations. The notebook retains its page turns; reduced-motion preferences disable those effects.
 
 ## Writing a case
 
-A case is one module in `server/cases/`, registered in `server/cases/index.mjs`. `banana-mystery.mjs` (grove) and `tower-echo-bell.mjs` (tower) are the examples to copy. The required fields and the allowlist of what reaches the browser are in the "Decided" section of [the cases spec](../../docs/plans/2026-10-26-override-cases.spec.md); they are not repeated here. A live case has no `chapters`, `records`, `copy.basket` or finding `evidence`; each character's `knowledge` is a list of strings and all of it goes into the prompt. Archived cases may still carry the old fields.
+A case is one module in `server/cases/`, registered in `server/cases/index.mjs`. `banana-mystery.mjs` (grove) and `tower-echo-bell.mjs` (tower) are the examples to copy. The required fields and the allowlist of what reaches the browser are in the "Decided" section of [the cases spec](../../docs/plans/2026-10-26-override-cases.spec.md); they are not repeated here. A live case is a **part case**: `characters` is `[{id, name, color}]`, and `parts` is `[{id, role, label, introduction, quickQuestion, knowledge[], finding}]` with one part for each character and `role` one of `villain`, `collaborator`, `fooled`, `honest`. Each game deals the characters into the parts at random. Text refers to other characters by part, as `{partId}` placeholders (for example `{planner}`), resolved to the name of whoever holds that part. A case also has `debrief {title, summary, lesson}`, `answer.feedback {correct, other}`, and three functions that return templates (the caller resolves the placeholders): `rehearsal(partId, question)`, `rehearsalReasoning(partId)` and `rehearsalChatter(partId, n)`. All of a part's `knowledge` goes into the prompt. A job label, introduction and quick question always belong to the same part, so the story stays consistent.
 
 - Set `status: 'draft'` while writing. Draft cases are hidden unless the server runs with `OVERRIDE_DEV_TOOLS=1` (forced off when `NODE_ENV=production`).
-- Run `npm run cases:prompt -- <case> <character> [--question "..."]` to print the exact prompt a character receives.
-- A case has exactly three characters with unique ids matching `/^[a-z][a-z0-9]{1,15}$/`. Set `world: 'grove' | 'tower'` (default `grove`; see `server/worlds.mjs`) to choose the scene, sprites, cast art and wording. The tower art is described in `public/assets/tower/ARTWORK.md`; missing PNGs fall back to code-drawn placeholders.
-- The live cases are `banana-mystery` (grove; Momo made up the permission) and `tower-echo-bell` (tower; an honest mistake, the answer is Nobody). Archived and unregistered: `override-v1`, `banana-control`, `tower-bell-charm`, `tower-missing-yes`; register one in `server/cases/index.mjs` to bring it back.
+- Run `npm run cases:prompt -- <case> <character> [--part <partId>] [--question "..."]` to print the exact prompt a character receives. It uses the identity cast (the first character plays the first part, and so on); `--part` puts the character in that part by swapping with whoever holds it, and an unknown part exits 1.
+- A case has `agents` characters, where `agents` is set per world in `server/worlds.mjs` (an integer from 3 to 5; today `grove` 4 and `tower` 3). Every case in a world must match its world's number. Character ids match `/^[a-z][a-z0-9]{1,15}$/`. Set `world: 'grove' | 'tower'` (default `grove`) to choose the scene, sprites, cast art and wording. The tower art is described in `public/assets/tower/ARTWORK.md`; missing PNGs fall back to code-drawn placeholders.
+- The live cases are `banana-mystery` (grove; the planner made up the permission) and `tower-echo-bell` (tower). Archived and unregistered: `override-v1`, `banana-control`, `tower-bell-charm`, `tower-missing-yes`. Archived cases are legacy (no `parts`): the game refuses them until they are ported to parts; they are only used by their own tests.
 
 ## Research records
 
@@ -98,7 +99,7 @@ The server writes append-only JSONL files under `data/<env>/`, or under `OVERRID
 - `system.jsonl`: operator and system events, such as endpoint changes (`llm_active`), `leaderboard_settings` and `team_hidden`.
 - `teams.jsonl`: `team_created {teamId, name}` and `team_session {teamId, sessionId}` records; the team list is rebuilt from it on restart.
 
-Every event includes `schemaVersion` (2), `eventId`, `sequence`, `timestamp`, `elapsedMs`, `sessionId`, `caseId`, `caseVersion`, `contentHash`, `promptVersion`, `revealedPosition`, `selectedEvidence`, `character`, `question`, `answer`, interview `mode`, and `model`. Fields that do not apply are `null`. Question and answer events are linked by `questionEventId`; failures are recorded separately. `session_started` adds `assignment` (`fixed` when the request named a case, else `default`), `env`, `appCommit`, `appDirty`, and `endpointsHash`, and `team {id, name}` (`null` without a check-in). `revealedPosition` and `selectedEvidence` are kept for old readers and are always `null` since 2026-10-29. Additional payloads record locations and the complete submitted verdict, whose `evidenceIds` is always `[]`.
+Every event includes `schemaVersion` (3), `eventId`, `sequence`, `timestamp`, `elapsedMs`, `sessionId`, `caseId`, `caseVersion`, `contentHash`, `promptVersion`, `revealedPosition`, `selectedEvidence`, `character`, `question`, `answer`, interview `mode`, and `model`. Fields that do not apply are `null`. Question and answer events are linked by `questionEventId`; failures are recorded separately. `session_started` adds `cast` (character id → part id, for example `{momo: 'planner'}`), `assignment` (`fixed` when the request named a case, else `default`), `env`, `appCommit`, `appDirty`, `endpointsHash`, and `team {id, name}` (`null` without a check-in). `revealedPosition` and `selectedEvidence` are kept for old readers and are always `null` since 2026-10-29. Additional payloads record locations and the complete submitted verdict: `{roles, truth, results, score, total, confidence, explanation, evidenceIds: [], submittedAt}`, where `roles` is the pick for each character, `truth` the real roles, `results` right or wrong for each, and `score` of `total` the number right. There is no `suspect` field. Replay of a log needs schema 3 and a cast that maps each character to a different part; it restores the cast and the team.
 
 `interview_answer` and `interview_failed` carry `provenance` (`null` in rehearsal mode): the endpoint, host, model, attempts, whether it failed over, queue and call time, token counts, sampling parameters, and the IDs of the matching trace records.
 
@@ -106,7 +107,7 @@ Recorded events: session start/reset, briefing viewed, location visited, intervi
 
 Live responses also emit `interview_provider_response`, linked by `questionEventId`, with the endpoint, attempt number, completion token limit, HTTP status, finish reason, completion token usage, and duration. Provider bodies never appear in these session events or in responses; provider reasoning is handled as described under Live interviews.
 
-Coin events carry their cost. `session_started` gains `economy`, costed events carry `spend {tools, cost, total}`, and `verdict_submitted` gains `coins {spent, budget}`. New events are `reasoning_inspected`, `chatter_line`, `chatter_failed` (a thread line that failed; it spends nothing), and `chatter_provider_response`. `schemaVersion` stays 2.
+Coin events carry their cost. `session_started` gains `economy`, costed events carry `spend {tools, cost, total}`, and `verdict_submitted` gains `coins {spent, budget}`. New events are `reasoning_inspected`, `chatter_line`, `chatter_failed` (a thread line that failed; it spends nothing), and `chatter_provider_response`. `schemaVersion` is 3 for every event. `GET /api/events` returns `cast: null` while the game is active and the real cast only after the verdict, so the export cannot leak who played which part.
 
 One server process serves every player. Each browser’s game lives in memory while active and is rebuilt from its JSONL log when its player returns, also after a restart or about 30 idle minutes, so progress survives both. Requests carry a session ID and revision to reject stale writes from another tab. A game’s mutations are locked while its live answer is pending; other players are never blocked. The demo has a technical limit of 40 questions per character and 1,200 characters per question; study budgets are not implemented.
 
@@ -143,7 +144,7 @@ Set `OVERRIDE_ADMIN_TOKEN` to start the admin listener on `127.0.0.1:$OVERRIDE_A
 
 - **Sparklines.** The last 60 minutes of players online, questions, failures, answer p95 and requests, one point a minute.
 - **Message log.** Live game events with filters. The log shows `chatter` and `inspect` rows, each with its cost. Click a player to see that player's whole session, read from disk, so evicted games work too; the drill-down shows the team's coins. Player text shows only here, behind the token.
-- **Funnel and tallies.** Per case: started, first question, interviewed all, verdict, debrief; then verdicts, share correct, who was accused, and median time and questions to a verdict, and median coins at verdict.
+- **Funnel and tallies.** Per case: started, first question, interviewed all, verdict; then verdicts, percent of roles right, how many players got every role right (perfect), per-role bars (right of total for Villain, Collaborator, Honest but fooled and Honest), and median time and questions to a verdict, and median coins at verdict. Log rows show a verdict as, for example, `3/4 roles · 70 %` (score and confidence).
 - **Rounds.** *Start round* names a new session (for example a new class). It is stored as a `round_started` record in `system.jsonl`, resets the funnel, tallies and *players this round*, and survives a restart. Without one, the round is everything in the data directory.
 - **Leaderboard.** The same standings as players see, plus hidden teams. The *Ties by* Time / Coins toggle is saved in `system.jsonl` and restored on restart. **Hide** and **Show** moderate a team: a hidden team leaves the public board (and stays visible here). Starting a new round empties the board. Log rows show team names.
 - **Controls.** The router table, pin, probe, caps and pause are still on the page, and the curl calls below still work.
@@ -234,7 +235,7 @@ It prints a table per endpoint with review flags (empty, length, a character out
 | `OVERRIDE_ENV` | `live` | Data subdirectory, e.g. `rehearsal`. |
 | `OVERRIDE_APP_COMMIT` | empty | Recorded in `session_started`. |
 | `OVERRIDE_DEV_TOOLS` | off | `1` shows draft cases in the catalog and lets them start; ignored when `NODE_ENV=production`. |
-| `OVERRIDE_COIN_BUDGET` | empty | Coin budget per game: empty means no budget; otherwise an integer from 6 to 999. |
+| `OVERRIDE_COIN_BUDGET` | empty | Coin budget per game: empty means no budget; otherwise an integer from the minimum (2 coins × the largest world's agents, 8 today) to 999. |
 | `OVERRIDE_REASONING_CHARGES` | 1 | Reasoning inspections per game: 1 or 2. |
 | `HOST` / `PORT` | 127.0.0.1 / 3001 | Game listener. |
 
@@ -257,11 +258,12 @@ If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:e
 
 ## Structure and artwork
 
-- `server/cases/` and `server/cases.mjs`: one module per case (character-specific knowledge, debrief, scripted rehearsal replies), the registry, and the `defineCase` helpers; never imported into the client.
+- `server/cases/` and `server/cases.mjs`: one module per case (characters, parts with their knowledge, debrief, scripted rehearsal replies), the registry, and the `defineCase` and cast helpers (`resolve`, `partOf`, `identityCast`, `publicView`); never imported into the client.
 - `scripts/case-prompt.mjs`: prints the exact interview prompt for a case and character.
-- `server/session.mjs`: per-game state for one registered case, replay from logs, quick verdict validation, and research logs. Verdicts record `suspect`, `suspects`, confidence, and optional explanation; they do not infer classifications for unselected monkeys.
+- `server/session.mjs`: per-game state for one registered case, including the random cast (server side only until the verdict), replay from logs, role verdict validation and scoring, and research logs. A verdict records `roles`, `truth`, `results`, `score`, `total`, confidence, and the optional explanation.
 - `server/llm.mjs`: the endpoint router (queues, caps, failover, traces). `server/admin.mjs` (with the page in `server/admin/`), `server/monitor*.mjs` (event ring, round stats, windows, traffic sampling), `metrics.mjs`, `identity.mjs`, `dataset.mjs`, `static.mjs`: admin listener, Prometheus metrics, sign-in tokens and limits, JSONL storage, in-memory static files.
-- `server/interviews.mjs`: endpoint configuration, the shared short-answer prompt template, and the hand-off to each case’s scripted rehearsal replies.
+- `server/roles.mjs` and `server/worlds.mjs`: the four roles, and the worlds with their agent counts.
+- `server/interviews.mjs`: endpoint configuration, the shared short-answer prompt template (`interview-v5`, `thread-v3`), and the hand-off to each case’s scripted rehearsal replies.
 - `server/index.mjs`: API, optional shared access code, and production static serving.
 - `client/station.ts`: a compact original jungle clearing, collision-aware click navigation, and nearby interactions.
 - `client/detective-walk.ts`: distance-driven walking with four facing directions and support for high-refresh displays.

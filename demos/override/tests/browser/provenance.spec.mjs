@@ -1,4 +1,5 @@
 import { test, expect, joinTeam } from './team.mjs';
+import { castOf, truthOf, sessionIdOf, pickRole } from './cast.mjs';
 
 const LEAKS = [
   'you wanted the bananas now',
@@ -9,8 +10,12 @@ const LEAKS = [
   'Right. Nobody broke the rule.',
   'Nobody knowingly broke the rule this time.',
   'Nobody knew it was too soon.',
-  'Right. The rule was broken, but nobody knew it. The echo shell fooled everyone.',
+  'Right. Everyone was honest but fooled: the echo shell tricked them all.',
   'The potions came out too soon, but by mistake. The echo shell sounds just like the tower bell.',
+  'Every role right! You saw who lied, who helped, who was fooled, and who stayed honest.',
+  'The key was who knew the keeper had said wait.',
+  'Knew the rule. Made up the permission.',
+  'Called out too fast.',
 ];
 
 test('export carries case provenance', async ({ page }) => {
@@ -21,18 +26,28 @@ test('export carries case provenance', async ({ page }) => {
     await page.locator('[data-quick-question]').click();
     await expect(page.locator('.speech.character')).not.toHaveCount(0);
   }
+  const sessionId = await sessionIdOf(page);
+  const before = (await (await page.request.get('/api/events')).text()).split('\n').filter(Boolean).map(l => JSON.parse(l));
+  expect(before.find(e => e.type === 'session_started').cast).toBeNull();
+  const cast = castOf(sessionId);
+  const truth = truthOf(cast);
   await page.locator('nav [data-go="report"]').click();
-  await page.locator('[name="suspect"][value="none"]').check();
-  await page.getByRole('button', { name: 'See what happened' }).click();
+  for (const id of ['wren', 'basil', 'juniper']) await pickRole(page, id, truth[id]);
+  await page.locator('#lock-in').click();
   await expect(page.locator('#panel h2')).toHaveText('Nobody knew it was too soon.');
 
   const res = await page.request.get('/api/events');
   expect(res.ok()).toBe(true);
   const events = (await res.text()).split('\n').filter(Boolean).map(l => JSON.parse(l));
   expect(events.length).toBeGreaterThan(0);
+  const started = events.find(e => e.type === 'session_started');
+  expect(started.cast).toEqual(cast);
+  expect(Object.keys(cast)).toEqual(['wren', 'basil', 'juniper']);
+  expect(events.every(e => e.schemaVersion === 3)).toBe(true);
+  expect(events.find(e => e.type === 'verdict_submitted').verdict).toMatchObject({ roles: truth, score: 3, total: 3, evidenceIds: [] });
   for (const e of events) {
     expect(e.caseId).toBe('tower-echo-bell');
-    expect(e.caseVersion).toBe('tower-echo-bell-v2.0.0');
+    expect(e.caseVersion).toBe('tower-echo-bell-v3.0.0');
     expect(e.contentHash).toMatch(/^[0-9a-f]{12}$/);
   }
   expect(events.find(e => e.type === 'session_started').assignment).toBe('fixed');

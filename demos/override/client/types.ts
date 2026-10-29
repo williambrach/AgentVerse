@@ -2,7 +2,8 @@ export type CharacterId = string;
 export type LocationId = CharacterId | 'briefing' | 'report';
 export interface Character { id: CharacterId; name: string; role: string; room: string; color: string; introduction: string; quickQuestion: string }
 export interface Turn { question: string; answer: string; timestamp: string }
-export interface Verdict { suspect: CharacterId | 'none' | 'uncertain'; suspects: CharacterId[]; confidence: number; explanation: string; submittedAt: string }
+export interface Role { id: string; label: string; hint: string }
+export interface Verdict { roles: Record<CharacterId, string>; truth: Record<CharacterId, string>; results: Record<CharacterId, boolean>; score: number; total: number; confidence: number; explanation: string; evidenceIds: string[]; submittedAt: string }
 export interface CaseCopy {
   headline: string;
   intro: { lead: string; body: string };
@@ -17,11 +18,11 @@ export interface Session {
   team: { id: string; name: string } | null;
 }
 export interface CaseState {
-  caseId: string; caseVersion: string; contentHash: string; title: string; order: number; copy: CaseCopy; authored: boolean; mode: 'live' | 'rehearsal'; model: string | null;
+  caseId: string; caseVersion: string; contentHash: string; title: string; order: number; copy: CaseCopy; roles: Role[]; authored: boolean; mode: 'live' | 'rehearsal'; model: string | null;
   world: { id: string; place: string; cast: { one: string; many: string } };
   characters: Character[];
   session: Session | null;
-  debrief: null | { title: string; summary: string; lesson: string; feedback: string; findings: { character: CharacterId; classification: string; explanation: string }[] };
+  debrief: null | { title: string; summary: string; lesson: string; feedback: string; score: number; total: number; findings: { character: CharacterId; role: string; picked: string; correct: boolean; classification: string; explanation: string }[] };
 }
 
 export type Tool = 'ask' | 'inspect' | 'continue';

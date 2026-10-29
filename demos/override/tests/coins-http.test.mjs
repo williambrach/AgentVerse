@@ -53,12 +53,13 @@ test('live_continue_seam: a live thread line carries provenance and prompt versi
   assert.equal(r.body.session.thread[0].text, 'I never heard the bell, so I guessed it was snack time.');
   const line = readFileSync(g.file('sessions'), 'utf8').trim().split('\n').map(JSON.parse).find(e => e.type === 'chatter_line');
   assert.equal(line.provenance.endpoint, 'a');
-  assert.equal(line.threadPromptVersion, 'thread-v2');
+  assert.equal(line.threadPromptVersion, 'thread-v3');
 });
 
 test('budget_env_seam: OVERRIDE_COIN_BUDGET reaches the wallet', async t => {
-  const g = await liveGame(t, { OVERRIDE_COIN_BUDGET: '6' });
+  // The default case has four monkeys: a budget of exactly 8 keeps every coin for one question each.
+  const g = await liveGame(t, { OVERRIDE_COIN_BUDGET: '8' });
   const r = await g.post('continue');
   assert.equal(r.status, 409);
-  assert.equal(r.body.error ?? r.body.message, 'Save coins: you need 6 to ask everyone once.');
+  assert.equal(r.body.error ?? r.body.message, 'Save coins: you need 8 to ask everyone once.');
 });

@@ -5,8 +5,8 @@ export type IdleSpec = { textureKey: string; poses: Frame[]; scale: number; peri
 
 const textureKey = 'monkey-idle';
 const cellSize = 362;
-const periods = [4800, 4300, 5600];
-const offsets = [0, 1200, 2600];
+const periods = [4800, 4300, 5600, 5000, 4500];
+const offsets = [0, 1200, 2600, 1800, 3400];
 const characters = {
   momo: { row: 0, height: 47, sourceHeight: 317, period: 4800, offset: 0,
     anchors: [[169, 354], [169.5, 354], [169.5, 354], [171, 354]] },
@@ -15,6 +15,11 @@ const characters = {
   nori: { row: 2, height: 44, sourceHeight: 310, period: 5600, offset: 2600,
     anchors: [[169.5, 313], [169.5, 314], [169.5, 314], [171, 314]] },
 };
+
+/** The same poses on another texture (a recoloured copy), with the timing of its own cast slot. */
+export function reskinIdle(spec: IdleSpec, textureKey: string, slot: number): IdleSpec {
+  return { ...spec, textureKey, period: periods[slot] ?? spec.period, offset: offsets[slot] ?? spec.offset };
+}
 
 /** Idle spec for a cast slot: scale fits the tallest pose to `height`. */
 export function idleSpec(poses: Frame[], textureKey: string, height: number, slot: number): IdleSpec {

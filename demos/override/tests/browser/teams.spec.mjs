@@ -4,16 +4,21 @@ import { joinTeam } from './team.mjs';
 
 const unique = () => `Team ${randomUUID().slice(0, 8)}`;
 
-/** Drives one banana case to a verdict over the API, with the page's cookie (and so its team). */
-async function play(request, guess = 'momo', prior = null) {
+// Every grove character marked honest: whatever the cast, exactly one (the bell-minder) is right, so one point.
+const ALL_HONEST = { momo: 'honest', nori: 'honest', pip: 'honest', kiki: 'honest' };
+// The tower's three apprentices are all honest but fooled: a perfect 3/3.
+const TOWER_PERFECT = { wren: 'fooled', basil: 'fooled', juniper: 'fooled' };
+
+/** Drives one case (banana by default) to a role verdict over the API, with the page's cookie (and so its team). */
+async function play(request, roles = ALL_HONEST, prior = null, caseId = 'banana-mystery') {
   const post = async (name, body, view) => {
     const res = await request.post(`/api/${name}`, { data: { sessionId: view?.session?.id, revision: view?.session?.revision, ...body } });
     expect(res.status(), name).toBe(200);
     return res.json();
   };
-  let view = prior ? await post('reset', { caseId: 'banana-mystery' }, prior) : await post('start', { caseId: 'banana-mystery' });
-  for (const character of ['momo', 'nori', 'pip']) view = await post('interview', { character, question: 'Did you hear the bell?' }, view);
-  return post('verdict', { suspect: guess, confidence: 70 }, view);
+  let view = prior ? await post('reset', { caseId }, prior) : await post('start', { caseId });
+  for (const character of Object.keys(roles)) view = await post('interview', { character, question: 'Did you hear the bell?' }, view);
+  return post('verdict', { roles, confidence: 70 }, view);
 }
 
 async function checkIn(page, name) {
@@ -94,14 +99,15 @@ test('leaderboard_after_correct', async ({ page }) => {
 test('replay_keeps_points', async ({ page }) => {
   const name = unique();
   await joinTeam(page, name);
-  const first = await play(page.request);
-  await play(page.request, 'momo', first);
+  // Two tower games (3 questions each) stay inside the 6-questions-a-minute limit.
+  const first = await play(page.request, TOWER_PERFECT, null, 'tower-echo-bell');
+  await play(page.request, TOWER_PERFECT, first, 'tower-echo-bell');
   await page.goto('/');
   await page.locator('#begin-button').click();
   await page.locator('#leaderboard-button').click();
   const own = page.locator('.board-row.you');
-  await expect(own).toContainText('1 pt');
-  await expect(own).not.toContainText('2 pts');
+  await expect(own).toContainText('3 pts');
+  await expect(own).not.toContainText('6 pts');
 });
 
 test('topbar_fits_after_check_in', async ({ page }, testInfo) => {

@@ -1,15 +1,21 @@
+import { worlds } from './worlds.mjs';
+
 // Coin and charge rules. Pure: no I/O. quote() never mutates; spend() changes only spent and charges.
 
 const COSTS = { ask: 2, inspect: 5, continue: 1 };
 const LABELS = { inspect: 'reasoning inspections', continue: 'conversations' };
+
+// A game must be able to ask every agent once, in the largest registered world.
+export const minimumBudget = () => COSTS.ask * Math.max(...Object.values(worlds).map(w => w.agents));
 
 export function economyRules(env = {}) {
   const rawBudget = String(env.OVERRIDE_COIN_BUDGET ?? '').trim();
   let budget = null;
   if (rawBudget !== '') {
     const n = Number(rawBudget);
-    if (!/^\d+$/.test(rawBudget) || n < 6 || n > 999) {
-      throw new Error('OVERRIDE_COIN_BUDGET must be an integer between 6 and 999.');
+    const min = minimumBudget();
+    if (!/^\d+$/.test(rawBudget) || n < min || n > 999) {
+      throw new Error(`OVERRIDE_COIN_BUDGET must be an integer between ${min} and 999.`);
     }
     budget = n;
   }

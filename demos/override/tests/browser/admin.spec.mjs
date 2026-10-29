@@ -20,8 +20,9 @@ async function player(request) {
     id: sessionId,
     ask: (question, character = 'pip') => act('interview', { character, question }),
     verdict: async () => {
-      for (const character of ['momo', 'nori']) await act('interview', { character, question: 'Did you hear the bell?' });
-      return act('verdict', { suspect: 'momo', confidence: 70 });
+      const characters = ['momo', 'pip', 'nori', 'kiki'];
+      for (const character of characters) await act('interview', { character, question: 'Did you hear the bell?' });
+      return act('verdict', { roles: Object.fromEntries(characters.map(id => [id, 'honest'])), confidence: 70 });
     },
   };
 }
@@ -96,6 +97,8 @@ test('drilldown', async ({ page, request }) => {
   const panel = page.locator('#player-panel');
   await expect(panel).toBeVisible();
   await expect(panel).toContainText('Verdict:');
+  await expect(panel).toContainText(/Coins: [1-9]\d*/);
+  await expect(page.locator(`#log [data-kind="verdict"]:has([data-player="${p.id}"])`).first()).toContainText(/\d\/\d roles/);
 });
 
 test('round', async ({ page }) => {

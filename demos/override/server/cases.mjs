@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
-import { worlds } from './worlds.mjs';
+import { worlds as liveWorlds } from './worlds.mjs';
+import { ROLE_IDS } from './roles.mjs';
 
+const PART_ID = /^[a-z][a-z0-9]{1,15}$/;
 const CHAR_KEYS = ['id', 'name', 'role', 'room', 'color', 'introduction', 'quickQuestion'];
 const LEGACY_BASKET = ['title', 'description', 'emptyTitle', 'emptyText'];
 const COPY_SHAPE = { headline: null, intro: ['lead', 'body'], briefing: ['title', 'description', 'question', 'hint'], report: ['title', 'description'] };
@@ -27,7 +29,13 @@ const deepFreeze = value => {
   return value;
 };
 
-export function defineCase(data) {
+const TOOL_KEYS = ['rehearsalReasoning', 'rehearsalChatter'];
+const toolsOf = (data, fail) => {
+  for (const key of TOOL_KEYS) if (data[key] !== undefined && typeof data[key] !== 'function') fail(key, 'must be a function');
+  return Object.fromEntries(TOOL_KEYS.filter(k => data[k]).map(k => [k, data[k]]));
+};
+
+export function defineCase(data, { worlds = liveWorlds } = {}) {
   const id = data?.id;
   const fail = (path, message) => { throw new Error(`case ${id}: ${path}: ${message}`); };
   const str = (value, path) => { if (typeof value !== 'string' || !value) fail(path, 'must be a non-empty string'); };
@@ -35,7 +43,13 @@ export function defineCase(data) {
   if (typeof id !== 'string' || !/^[a-z0-9-]{3,40}$/.test(id)) fail('id', 'must match /^[a-z0-9-]{3,40}$/');
   const worldId = (data.world && typeof data.world === 'object' ? data.world.id : data.world) ?? 'grove';
   if (!Object.hasOwn(worlds, worldId)) fail('world', `must be one of ${Object.keys(worlds).join(', ')}`);
-  if (!Array.isArray(data.characters) || data.characters.length !== 3) fail('characters', 'must hold exactly 3 characters');
+  const isPart = data.parts !== undefined;
+  const agents = worlds[worldId].agents;
+  if (isPart) {
+    if (!Number.isInteger(agents) || agents < 3 || agents > 5) fail('world.agents', 'must be an integer from 3 to 5');
+    if (!Array.isArray(data.characters) || data.characters.length !== agents) fail('characters', `must hold ${agents} characters`);
+    if (!Array.isArray(data.parts) || data.parts.length !== agents) fail('parts', `must hold ${agents} parts`);
+  } else if (!Array.isArray(data.characters) || data.characters.length !== 3) fail('characters', 'must hold exactly 3 characters');
   const IDS = [];
   data.characters.forEach((c, i) => {
     if (typeof c?.id !== 'string' || !/^[a-z][a-z0-9]{1,15}$/.test(c.id)) fail(`characters[${i}].id`, 'must match /^[a-z][a-z0-9]{1,15}$/');
@@ -60,7 +74,34 @@ export function defineCase(data) {
   if (!prompt || typeof prompt !== 'object') fail('prompt', 'is required');
   str(prompt.setting, 'prompt.setting');
   for (const key of ['use', 'avoid']) if (!Array.isArray(prompt[key]) || !prompt[key].every(s => typeof s === 'string')) fail(`prompt.${key}`, 'must be an array of strings');
-  data.characters.forEach((c, i) => CHAR_KEYS.forEach(k => str(c[k], `characters[${i}].${k}`)));
+  data.characters.forEach((c, i) => (isPart ? ['id', 'name', 'color'] : CHAR_KEYS).forEach(k => str(c[k], `characters[${i}].${k}`)));
+  if (isPart) {
+    const partIds = [];
+    data.parts.forEach((p, i) => {
+      if (typeof p?.id !== 'string' || !PART_ID.test(p.id)) fail(`parts[${i}].id`, `must match ${PART_ID}`);
+      if (partIds.includes(p.id)) fail(`parts[${i}].id`, `duplicate part id ${p.id}`);
+      partIds.push(p.id);
+    });
+    const placeholders = (text, path) => {
+      for (const m of text.matchAll(/\{([^{}]*)\}/g)) if (!partIds.includes(m[1])) fail(path, `unknown placeholder {${m[1]}}`);
+    };
+    const text = (value, path) => { str(value, path); placeholders(value, path); };
+    data.parts.forEach((p, i) => {
+      const at = `parts[${i}]`;
+      if (!ROLE_IDS.includes(p.role)) fail(`${at}.role`, `must be one of ${ROLE_IDS.join(', ')}`);
+      for (const k of ['label', 'introduction', 'quickQuestion']) text(p[k], `${at}.${k}`);
+      if (!Array.isArray(p.knowledge) || !p.knowledge.length) fail(`${at}.knowledge`, 'must be a non-empty array of non-empty strings');
+      p.knowledge.forEach((k, n) => text(k, `${at}.knowledge[${n}]`));
+      text(p.finding?.classification, `${at}.finding.classification`);
+      text(p.finding?.explanation, `${at}.finding.explanation`);
+    });
+    for (const [group, keys] of Object.entries(COPY_SHAPE)) for (const key of keys ?? [null]) placeholders(key ? data.copy[group][key] : data.copy[group], `copy.${group}${key ? `.${key}` : ''}`);
+    for (const k of ['title', 'summary', 'lesson']) text(data.debrief?.[k], `debrief.${k}`);
+    text(data.answer?.feedback?.correct, 'answer.feedback.correct');
+    text(data.answer?.feedback?.other, 'answer.feedback.other');
+    if (typeof data.rehearsal !== 'function') fail('rehearsal', 'must be a function');
+    return deepFreeze({ ...clone(data), world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...toolsOf(data, fail), contentHash: contentHash(data) });
+  }
   const legacyChapters = data.chapters !== undefined;
   if (legacyChapters) {
     list(data.chapters, 'chapters');
@@ -99,25 +140,63 @@ export function defineCase(data) {
     if (f.evidence !== undefined && (!Array.isArray(f.evidence) || !f.evidence.every(e => recordIds.has(e)))) fail(`debrief.findings[${i}].evidence`, 'must list record ids');
   });
   if (typeof data.rehearsal !== 'function') fail('rehearsal', 'must be a function');
-  for (const key of ['rehearsalReasoning', 'rehearsalChatter']) if (data[key] !== undefined && typeof data[key] !== 'function') fail(key, 'must be a function');
-  const tools = Object.fromEntries(['rehearsalReasoning', 'rehearsalChatter'].filter(k => data[k]).map(k => [k, data[k]]));
-  return deepFreeze({ ...clone(data), world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...tools, contentHash: contentHash(data) });
+  return deepFreeze({ ...clone(data), legacy: true, world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...toolsOf(data, fail), contentHash: contentHash(data) });
 }
 
-export function publicView(kase) {
+const nameMap = (kase, cast) => {
+  const ids = kase.characters.map(c => c.id);
+  const parts = kase.parts.map(p => p.id);
+  const used = ids.map(cid => (cast && Object.hasOwn(cast, cid) ? cast[cid] : undefined));
+  if (Object.keys(cast ?? {}).length !== ids.length || used.some(pid => !parts.includes(pid)) || new Set(used).size !== ids.length) throw new Error(`case ${kase.id}: cast must map each character to a distinct part`);
+  return Object.fromEntries(ids.map((cid, i) => [used[i], kase.characters[i].name]));
+};
+
+export function resolve(kase, cast, text) {
+  const names = nameMap(kase, cast);
+  return text.replace(/\{([^{}]*)\}/g, (whole, id) => (Object.hasOwn(names, id) ? names[id] : whole));
+}
+
+export function partOf(kase, cast, characterId) {
+  return kase.parts.find(p => p.id === cast[characterId]);
+}
+
+export function castCharacters(kase, cast) {
+  return kase.characters.map((c, i) => {
+    const p = partOf(kase, cast, c.id);
+    return {
+      id: c.id, name: c.name, role: resolve(kase, cast, p.label), room: String(i + 1).padStart(2, '0'), color: c.color,
+      introduction: resolve(kase, cast, p.introduction), quickQuestion: resolve(kase, cast, p.quickQuestion),
+    };
+  });
+}
+
+const resolveDeep = (kase, cast, value) => {
+  if (typeof value === 'string') return resolve(kase, cast, value);
+  if (Array.isArray(value)) return value.map(v => resolveDeep(kase, cast, v));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolveDeep(kase, cast, v)]));
+  return value;
+};
+
+export function publicView(kase, cast) {
+  const part = !kase.legacy;
   return {
     caseId: kase.id,
     caseVersion: kase.version,
     contentHash: kase.contentHash,
     title: kase.title,
     order: kase.order,
-    copy: (({ basket, ...rest }) => clone(rest))(kase.copy),
-    world: (({ persona, clueSpot, ...rest }) => ({ ...rest, cast: { ...rest.cast } }))(kase.world),
-    characters: kase.characters.map(c => Object.fromEntries(CHAR_KEYS.map(k => [k, c[k]]))),
+    copy: part ? resolveDeep(kase, cast, kase.copy) : (({ basket, ...rest }) => clone(rest))(kase.copy),
+    world: (({ persona, clueSpot, agents, ...rest }) => ({ ...rest, ...(part ? { agents } : {}), cast: { ...rest.cast } }))(kase.world),
+    characters: part ? castCharacters(kase, cast) : kase.characters.map(c => Object.fromEntries(CHAR_KEYS.map(k => [k, c[k]]))),
   };
 }
 
 const visible = (cases, dev) => cases.filter(c => dev || c.status === 'ready').sort((a, b) => a.order - b.order);
+
+export function identityCast(kase) {
+  if (kase.legacy) return Object.fromEntries(kase.characters.map(c => [c.id, c.id]));
+  return Object.fromEntries(kase.characters.map((c, i) => [c.id, kase.parts[i].id]));
+}
 
 export function listCases(cases, { dev = false } = {}) {
   return visible(cases, dev).map(c => ({ id: c.id, title: c.title, lead: c.copy.intro.lead, order: c.order, world: c.world.id }));

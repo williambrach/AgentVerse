@@ -166,12 +166,12 @@ async function npcSamples(page, duration) {
   }), duration);
 }
 
-test('all three monkeys blink and gesture independently without leaving their positions', async ({ page }) => {
+test('all four monkeys blink and gesture independently without leaving their positions', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await start(page);
   const frames = await npcSamples(page, 5900);
-  for (const [index, id] of ['momo', 'pip', 'nori'].entries()) {
+  for (const [index, id] of ['momo', 'pip', 'nori', 'kiki'].entries()) {
     const states = frames.map(value => value.npcs[index]);
     expect(new Set(states.map(value => value.frame))).toEqual(new Set([`${id}-0`, `${id}-1`, `${id}-2`, `${id}-3`]));
     expect(new Set(states.map(value => `${value.x},${value.y}`)).size).toBe(1);
@@ -217,4 +217,32 @@ test('NPC animations respect preference changes and pause for a modal', async ({
   const paused = await npcSamples(page, 350);
   expect(paused.every(value => value.npcs.every(npc => npc.frame === `${npc.id}-0`))).toBe(true);
   await page.locator('#cancel-reset').click();
+});
+
+test('Kiki has a stop that is reachable and walkable like the others', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await start(page);
+  await expect(page.locator('nav [data-go="kiki"]')).toHaveCount(1);
+  expect(await page.evaluate(() => [...window.walkingTestGame.scene.getScene('banana-grove').npcs.keys()])).toEqual(['momo', 'pip', 'nori', 'kiki']);
+  // Slots 0-2 keep their coordinates; Kiki's slot is (84, 212). Sprites are drawn 12 px above the slot.
+  expect(await page.evaluate(() => [...window.walkingTestGame.scene.getScene('banana-grove').npcs.values()].map(n => [Math.round(n.sprite.x), Math.round(n.sprite.y)])))
+    .toEqual([[116, 144], [364, 144], [364, 256], [84, 200]]);
+  // The nav button opens Kiki's page in place; the investigator does not move.
+  await page.locator('nav [data-go="kiki"]').click();
+  await expect(page.locator('#panel h2')).toHaveText('Kiki');
+  expect((await samples(page, 150)).at(-1)).toMatchObject({ x: 244, y: 276 });
+  // Walking there with the keyboard reaches the stop, and E opens the page.
+  await page.locator('.dossier [data-go="briefing"]').click();
+  await page.locator('#station canvas').click({ position: { x: 10, y: 10 } });
+  await center(page, 84, 240);
+  await page.keyboard.down('w');
+  const moving = await samples(page, 400);
+  await page.keyboard.up('w');
+  expect(moving.some(value => /-[13]$/.test(value.frame))).toBe(true);
+  const last = (await samples(page, 150)).at(-1);
+  expect(Math.hypot(last.x - 84, last.y - 212)).toBeLessThan(18);
+  await page.keyboard.press('e', { delay: 100 });
+  await expect(page.locator('#panel h2')).toHaveText('Kiki');
+  expect(errors).toEqual([]);
 });

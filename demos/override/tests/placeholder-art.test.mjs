@@ -67,3 +67,10 @@ test('deterministic', () => {
     assert.deepEqual(placeholderAtlas(kind, colors).data, placeholderAtlas(kind, colors).data);
   }
 });
+
+test('five cast colours: idle stays three rows, extra colours ignored', () => {
+  const five = [...colors, '#4a90d9', '#7bc96f'];
+  const a = placeholderAtlas('idle', five), b = placeholderAtlas('idle', colors);
+  assert.deepEqual([a.cols, a.rows], [4, 3]);
+  assert.deepEqual(a.data, b.data);
+});

@@ -9,7 +9,8 @@ import { cases } from '../server/cases/index.mjs';
 import { InterviewProviderError } from '../server/interviews.mjs';
 
 const banana = cases.find(c => c.id === 'banana-mystery');
-const rehearsal = { ...banana, rehearsalReasoning: (s, c) => `REH:${c}` };
+// Tool content is a part template; the session resolves {partId} through its cast.
+const rehearsal = { ...banana, rehearsalReasoning: partId => `REH:{${partId}}` };
 const prov = { attempts: [{ endpoint: 'a' }] };
 
 function setup(t, { answer, thread, kase = banana, mode = 'live' } = {}) {
@@ -84,7 +85,7 @@ test('chatter_line_provenance', async t => {
   const view = await x.act('continue');
   const line = x.log().find(e => e.type === 'chatter_line');
   assert.deepEqual(line.provenance, prov);
-  assert.equal(line.threadPromptVersion, 'thread-v2');
+  assert.equal(line.threadPromptVersion, 'thread-v3');
   assert.ok(!JSON.stringify(view).includes('TR'));
   const speaker = line.character;
   const v = await x.act('inspect', { character: speaker });
@@ -95,7 +96,7 @@ test('rehearsal_inspect_uses_rehearsal_reasoning', async t => {
   const x = await begun(t, { kase: rehearsal, mode: 'rehearsal', answer: async () => 'fine' });
   await ask(x.act);
   const v = await x.act('inspect', { character: 'momo' });
-  assert.equal(v.session.inspections[0].reasoning, 'REH:momo');
+  assert.equal(v.session.inspections[0].reasoning, 'REH:Momo');
 });
 
 test('reasoning_stale_after_thread_line_without_reasoning', async t => {

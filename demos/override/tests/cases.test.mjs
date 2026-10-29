@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { defineCase, publicView, listCases, findCase, contentHash } from '../server/cases.mjs';
-import { minimalCase } from './fixtures/minimal-case.mjs';
+import { defineCase, publicView, listCases, findCase, contentHash, resolve, castCharacters, partOf, identityCast } from '../server/cases.mjs';
+import { worlds } from '../server/worlds.mjs';
+import { minimalCase, partCase, towerPartCase, fiveCase, agentWorlds } from './fixtures/minimal-case.mjs';
+import { ROLES } from '../server/roles.mjs';
 import bananaMystery from '../server/cases/banana-mystery.mjs';
 
 const copy = (patch = {}) => ({ ...JSON.parse(JSON.stringify(minimalCase)), rehearsal: minimalCase.rehearsal, ...patch });
@@ -80,23 +82,24 @@ test('listCases and findCase hide drafts unless dev', () => {
 
 test('banana-mystery validates', () => {
   assert.match(bananaMystery.contentHash, /^[0-9a-f]{12}$/);
-  assert.deepEqual(bananaMystery.answer.culprits, ['momo']);
-  assert.equal(bananaMystery.version, 'banana-authored-v2.0.0');
+  assert.equal(bananaMystery.legacy, undefined);
+  assert.equal(bananaMystery.characters.length, 4);
+  assert.equal(bananaMystery.parts.length, bananaMystery.world.agents);
   assert.equal(bananaMystery.records, undefined);
   assert.equal(bananaMystery.chapters, undefined);
-  assert.ok(bananaMystery.rehearsal({}, 'nori', 'x').includes('assumed snack time'));
+  assert.equal(bananaMystery.answer.culprits, undefined);
+  assert.equal(typeof bananaMystery.rehearsal, 'function');
 });
 
-import { worlds } from '../server/worlds.mjs';
 import { towerCase } from './fixtures/minimal-case.mjs';
 import bananaControl from '../server/cases/banana-control.mjs';
 const grove = { id: 'grove', place: 'Banana Grove', cast: { one: 'a monkey', many: 'monkeys' } };
 const tower = { id: 'tower', place: 'Wizard Tower', cast: { one: 'an apprentice', many: 'apprentices' } };
 test('worlds registry', () => {
-  assert.deepEqual(worlds.grove, { ...grove, persona: 'monkey' });
-  assert.deepEqual(worlds.tower, { ...tower, persona: 'wizard' });
+  assert.deepEqual(worlds.grove, { ...grove, persona: 'monkey', agents: 4 });
+  assert.deepEqual(worlds.tower, { ...tower, persona: 'wizard', agents: 3 });
 });
-test('no world means the grove', () => assert.deepEqual(defineCase(copy()).world, { ...grove, persona: 'monkey' }));
+test('no world means the grove', () => assert.deepEqual(defineCase(copy()).world, { ...grove, persona: 'monkey', agents: 4 }));
 test('a tower case brings its own cast', () => {
   const k = defineCase(towerCase());
   assert.equal(k.world.id, 'tower');
@@ -122,7 +125,7 @@ test('grove hashes are unchanged', () => {
 });
 test('publicView shows the world without the persona', () => {
   assert.deepEqual(publicView(defineCase(towerCase())).world, tower);
-  assert.deepEqual(publicView(bananaMystery).world, grove);
+  assert.deepEqual(publicView(bananaMystery, identityCast(bananaMystery)).world, { ...grove, agents: 4 });
 });
 test('a defined case can be defined again, its world object resolves by id', () => {
   const k = defineCase(towerCase());
@@ -132,12 +135,111 @@ test('a defined case can be defined again, its world object resolves by id', () 
   assert.throws(() => defineCase({ ...copy(), world: { id: 'moon' } }), /world: must be one of/);
   assert.equal('persona' in publicView(again).world, false);
 });
-test('banana_pip_keywords_word_bounded', async () => {
-  const { default: banana } = await import('../server/cases/banana-mystery.mjs');
-  const fooled = /Momo fooled me/;
-  assert.doesNotMatch(banana.rehearsal({}, 'pip', 'Did you believe Momo?'), fooled);
-  assert.doesNotMatch(banana.rehearsal({}, 'pip', 'Is Momo reliable?'), fooled);
-  assert.match(banana.rehearsal({}, 'pip', 'Did Momo lie to you?'), fooled);
-  assert.match(banana.rehearsal({}, 'pip', 'The keeper never said yes.'), fooled);
-  assert.match(banana.rehearsal({}, 'momo', 'Did you lie to Pip?'), /made up the permission/);
+test('banana_carrier_keywords_word_bounded', () => {
+  const fooled = /fooled me/;
+  const r = q => bananaMystery.rehearsal('carrier', q);
+  assert.doesNotMatch(r('Did you believe them?'), fooled);
+  assert.doesNotMatch(r('Is the planner reliable?'), fooled);
+  assert.match(r('Did they lie to you?'), fooled);
+  assert.match(r('The keeper never said yes.'), fooled);
+});
+
+const W3 = agentWorlds(3), W5 = agentWorlds(5);
+const pcopy = () => ({ ...structuredClone({ ...partCase, rehearsal: undefined }), rehearsal: partCase.rehearsal });
+const flip = { momo: 'helper', pip: 'boss', nori: 'bystander' };
+
+test('roles are the four ids in order', () => {
+  assert.deepEqual(ROLES.map(r => r.id), ['villain', 'collaborator', 'fooled', 'honest']);
+  assert.equal(worlds.grove.agents, 4);
+  assert.equal(worlds.tower.agents, 3);
+});
+
+test('count_matches_world', () => {
+  const k = defineCase(partCase, { worlds: W3 });
+  assert.equal(k.legacy, undefined);
+  assert.equal(k.parts.length, 3);
+  const d = pcopy(); d.parts.pop();
+  assert.throws(() => defineCase(d, { worlds: W3 }), /parts: must hold 3 parts/);
+  const e = pcopy(); e.characters.pop();
+  assert.throws(() => defineCase(e, { worlds: W3 }), /characters: must hold 3 characters/);
+  assert.throws(() => defineCase(partCase), /characters: must hold 4 characters/);
+  assert.ok(defineCase(towerPartCase()));
+});
+
+test('unknown_placeholder_throws', () => {
+  const d = pcopy(); d.parts[0].introduction = 'Ask {nobody} about it.';
+  assert.throws(() => defineCase(d, { worlds: W3 }), /unknown placeholder \{nobody\}/);
+  const e = pcopy(); e.debrief.summary = '{nobody}';
+  assert.throws(() => defineCase(e, { worlds: W3 }), /debrief\.summary: unknown placeholder/);
+  const f = pcopy(); f.parts[1].role = 'wizard';
+  assert.throws(() => defineCase(f, { worlds: W3 }), /parts\[1\]\.role/);
+});
+
+test('agents_range', () => {
+  for (const n of [2, 6]) assert.throws(() => defineCase(partCase, { worlds: agentWorlds(n) }), /world\.agents: must be an integer from 3 to 5/);
+});
+
+test('legacy_still_validates', () => {
+  const k = defineCase(minimalCase);
+  assert.equal(k.legacy, true);
+  assert.equal(k.characters.length, 3);
+  assert.equal(bananaControl.legacy, true);
+  assert.equal(bananaControl.contentHash, 'd1f7d8558985');
+  assert.throws(() => defineCase(copy({ world: 'moon' })), /world: must be one of/);
+});
+
+test('five_agents_define', () => {
+  const k = defineCase(fiveCase(), { worlds: W5 });
+  assert.equal(k.parts.length, 5);
+  assert.equal(Object.keys(identityCast(k)).length, 5);
+  assert.throws(() => defineCase(fiveCase()), /must hold 4/);
+});
+
+test('identity_cast', () => {
+  assert.deepEqual(identityCast(defineCase(partCase, { worlds: W3 })), { momo: 'boss', pip: 'helper', nori: 'bystander' });
+});
+
+test('resolve_cast_and_part', () => {
+  const k = defineCase(partCase, { worlds: W3 });
+  assert.equal(resolve(k, flip, '{boss} asked {helper}'), 'Pip asked Momo');
+  assert.equal(resolve(k, flip, '{x} stays'), '{x} stays');
+  assert.equal(partOf(k, flip, 'pip').role, 'villain');
+  const [momo] = castCharacters(k, flip);
+  assert.deepEqual(momo, { id: 'momo', name: 'Momo', role: 'The helper', room: '01', color: '#cb7656', introduction: 'Hi, I am the The helper.', quickQuestion: 'Did Pip lie to you?' });
+});
+
+test('public_view_shape', () => {
+  const k = defineCase(partCase, { worlds: W3 });
+  const views = [identityCast(k), flip].map(c => publicView(k, c));
+  for (const v of views) {
+    assert.deepEqual(Object.keys(v), ['caseId', 'caseVersion', 'contentHash', 'title', 'order', 'copy', 'world', 'characters']);
+    assert.deepEqual(Object.keys(v.characters[0]), ['id', 'name', 'role', 'room', 'color', 'introduction', 'quickQuestion']);
+    const json = JSON.stringify(v);
+    assert.ok(!json.includes('SECRET'));
+    for (const w of ['boss', 'helper', 'bystander', 'villain', 'fooled', 'honest']) assert.ok(!json.includes(`"${w}"`), w);
+    assert.ok(!/\{[a-z]+\}/.test(json));
+  }
+  const key = v => v.characters.map(c => [c.id, c.name, c.color, c.room]);
+  assert.deepEqual(key(views[0]), key(views[1]));
+  assert.notEqual(views[0].characters[0].introduction, views[1].characters[0].introduction);
+});
+
+test('review_copy_placeholders_validated', () => {
+  const d = pcopy(); d.copy.briefing.hint = 'Ask {nobody}.';
+  assert.throws(() => defineCase(d, { worlds: W3 }), /copy\.briefing\.hint/);
+  const ok = pcopy(); ok.copy.briefing.hint = 'Ask {boss}.';
+  assert.ok(defineCase(ok, { worlds: W3 }));
+});
+
+test('review_resolve_ignores_inherited_keys_and_rejects_bad_cast', () => {
+  const k = defineCase(partCase, { worlds: W3 });
+  assert.equal(resolve(k, flip, '{constructor} {__proto__}'), '{constructor} {__proto__}');
+  assert.throws(() => resolve(k, { momo: 'boss', pip: 'boss', nori: 'bystander' }, '{boss}'), /cast/);
+  assert.throws(() => resolve(k, { momo: 'boss', pip: 'helper' }, '{boss}'), /cast/);
+  assert.throws(() => resolve(k, { momo: 'boss', pip: 'helper', nori: 'ghost' }, '{boss}'), /cast/);
+});
+
+test('review_identity_cast_on_legacy', () => {
+  const k = defineCase(minimalCase);
+  assert.deepEqual(identityCast(k), { momo: 'momo', pip: 'pip', nori: 'nori' });
 });

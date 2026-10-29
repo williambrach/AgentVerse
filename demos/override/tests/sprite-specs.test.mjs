@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { idleSpec, groveIdle, MonkeyIdle } from '../client/monkey-idle.ts';
+import { idleSpec, groveIdle, reskinIdle, MonkeyIdle } from '../client/monkey-idle.ts';
 import { walkSpec, groveWalk, DetectiveWalk } from '../client/detective-walk.ts';
 
 function fakeScene() {
@@ -66,4 +66,15 @@ test('origins come from the spec', () => {
   new DetectiveWalk(s, 0, 0, walkSpec(Array(16).fill(frame), 'k', 40));
   assert.deepEqual(s.sprite.origin, [0.5, 1]);
   assert.ok(s.frames.has('right-3'));
+});
+
+test('five idle entries keep distinct timing', () => {
+  const p = poses(40);
+  const specs = [0, 1, 2, 3, 4].map((slot) => idleSpec(p, 'k', 46, slot));
+  assert.deepEqual(specs.map((x) => x.period), [4800, 4300, 5600, 5000, 4500]);
+  assert.deepEqual(specs.map((x) => x.offset), [0, 1200, 2600, 1800, 3400]);
+  assert.equal(new Set(specs.map((x) => `${x.period}/${x.offset}`)).size, 5);
+  const skin = reskinIdle(specs[0], 'k-rc3', 3);
+  assert.equal(skin.textureKey, 'k-rc3');
+  assert.deepEqual([skin.period, skin.offset, skin.scale, skin.poses], [5000, 1800, specs[0].scale, p]);
 });

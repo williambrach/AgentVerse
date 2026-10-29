@@ -5,6 +5,7 @@ import './banana.css';
 import './case-board.css';
 import './fit.css';
 import './tower.css';
+import './roles.css';
 import './tools.css';
 import './bubbles.css';
 import './team.css';
@@ -41,7 +42,8 @@ let drafts: Record<string, string> = {};
 let teamName = '';
 let leaderboardTimer: ReturnType<typeof setInterval> | undefined;
 let leaderboardOpener = '#leaderboard-button';
-let reportDraft = { suspect: '', confidence: 70, explanation: '' };
+const freshDraft = () => ({ roles: {} as Record<string, string>, confidence: 70, explanation: '' });
+let reportDraft = freshDraft();
 
 // Solved cases are a per-browser convenience for the case list; research records stay on the server.
 const solvedKey = 'override.solved';
@@ -97,7 +99,7 @@ async function action(name: string, payload: object = {}, onSuccess?: () => void
       const refreshed: CaseState = await api('state');
       if (refreshed.session?.id !== state.session?.id) {
         drafts = blankDrafts();
-        reportDraft = { suspect: '', confidence: 70, explanation: '' };
+        reportDraft = freshDraft();
         panel = 'briefing';
         threadOpen = false;
         introVisible = true;
@@ -154,7 +156,7 @@ function shell() {
 /** The parts of the page that belong to the case's world. Rebuilt only when the world or the cast changes. */
 function renderWorld() {
   const key = `${world().id}:${ids().join(',')}`;
-  if (key === worldKey) return;
+  if (key === worldKey) { syncNavText(); return; }
   worldKey = key;
   const w = world(), t = w.text;
   app.dataset.world = w.id;
@@ -162,11 +164,21 @@ function renderWorld() {
   document.querySelector('#world-icon')!.innerHTML = svg(t.icon);
   document.querySelector('#case-day')!.textContent = t.day;
   document.querySelector('#room-nav')!.setAttribute('aria-label', `${cap(t.eyebrow)} destinations`);
+  document.querySelector<HTMLElement>('#room-nav')!.style.setProperty('--nav-n', String(state.characters.length + 1));
   document.querySelector('#room-nav')!.innerHTML = `
           ${state.characters.map(c => `<button data-go="${escape(c.id)}"><i class="avatar-dot ${castClass(c.id)}"></i><span>${escape(c.name)}<small>${escape(c.role)}</small></span><span class="interview-check" data-check="${escape(c.id)}"></span></button>`).join('')}
-          <button data-go="report">${icon('report')}<span>Your guess<small>Who knew?</small></span></button>`;
+          <button data-go="report">${icon('report')}<span>Your guess<small>Who’s who?</small></span></button>`;
   document.querySelector('#notebook-index')!.textContent = `01 / 0${2 + state.characters.length}`;
   station?.configure(w, state.characters);
+  syncNavText();
+}
+
+/** Part text (job labels) changes when a session deals the cast, so it is refreshed on every render. */
+function syncNavText() {
+  for (const c of state.characters) {
+    const label = document.querySelector<HTMLElement>(`#room-nav [data-go="${CSS.escape(c.id)}"] small`);
+    if (label && label.textContent !== c.role) label.textContent = c.role;
+  }
 }
 
 async function visit(location: LocationId) {
@@ -231,7 +243,7 @@ async function startCase(caseId: string) {
   // from the old cast (an open interview) would throw there and leave the case board hanging.
   const fresh = () => {
     drafts = blankDrafts();
-    reportDraft = { suspect: '', confidence: 70, explanation: '' };
+    reportDraft = freshDraft();
     panel = 'briefing'; threadOpen = false; introVisible = false;
   };
   if (!(await action('reset', { caseId }, fresh))) return;
@@ -346,7 +358,7 @@ function briefingPanel() {
   const copy = state.copy;
   return `${heading('THE CASE / 2–3 MINUTES', escape(copy.briefing.title), escape(copy.briefing.description))}
     <div class="notebook-content"><div class="briefing-note"><span class="eyebrow">YOUR QUESTION</span><p>${escape(copy.briefing.question)}</p><small>${escape(copy.briefing.hint)}</small></div>
-    <ol class="task-list"><li><b>Ask ${state.characters.length} ${escape(world().text.many)}</b><span>One quick question each.</span></li><li><b>Make your guess</b><span>Choose who knowingly broke the rule. Then see what happened.</span></li></ol>
+    <ol class="task-list"><li><b>Ask ${state.characters.length} ${escape(world().text.many)}</b><span>One quick question each.</span></li><li><b>Make your guess</b><span>Pick a role for each ${escape(world().text.one)}. Then see what happened.</span></li></ol>
     <button class="primary-button" data-go="${escape(state.characters[0]?.id)}">Ask ${escape(state.characters[0]?.name)} ${icon('arrow')}</button>
     <div class="subtle-note">Walk with WASD or the arrow keys and press E next to ${escape(world().text.oneWithArticle)} to talk. The buttons under the map open a page straight away.</div></div>`;
 }
@@ -378,6 +390,12 @@ function interviewPanel(characterId: string) {
     ${turns.length ? `<button class="secondary-button next-monkey" type="button" data-go="${escape(next?.id || 'report')}" ${busy ? 'disabled' : ''}>${next ? `Next: ask ${escape(next.name)}` : 'Ready to make your guess?'} ${icon('arrow')}</button>` : ''}</form>`}`;
 }
 
+/** Empty when every character has a role, else the disabled submit text. */
+function submitHint(): string {
+  const missing = state.characters.find(c => !reportDraft.roles[c.id]);
+  return missing ? `Pick a role for ${missing.name}` : '';
+}
+
 function reportPanel() {
   const session = state.session!;
   const remaining = state.characters.filter(c => !session.interviews[c.id].length);
@@ -385,21 +403,22 @@ function reportPanel() {
     <div class="notebook-content"><div class="requirements">${state.characters.map(c => `<button data-go="${escape(c.id)}"><span>${session.interviews[c.id].length ? icon('check') : icon('person')} Ask ${escape(c.name)}</span>${icon('arrow')}</button>`).join('')}</div></div>`;
   return `${heading('YOUR GUESS', escape(state.copy.report.title), escape(state.copy.report.description))}
     <form class="notebook-content report-form" id="report-form">
-    <fieldset class="suspect-options"><legend class="sr-only">Choose a suspect</legend>${state.characters.map(c => `<label class="suspect-option"><input type="radio" name="suspect" value="${escape(c.id)}" required ${reportDraft.suspect === c.id ? 'checked' : ''}><i class="monkey-face ${castClass(c.id)}" aria-hidden="true"></i><span><b>${escape(c.name)}</b><small>${escape(c.role)}</small></span></label>`).join('')}<div class="other-guesses">${[['none', 'Nobody'], ['uncertain', 'Not sure']].map(([value, label]) => `<label><input type="radio" name="suspect" value="${value}" ${reportDraft.suspect === value ? 'checked' : ''}> ${label}</label>`).join('')}</div></fieldset>
+    <p class="role-legend">${state.roles.map(r => `<span><b>${escape(r.label)}</b> ${escape(r.hint)}</span>`).join('')}</p>
+    ${state.characters.map(c => `<fieldset class="role-row"><legend class="sr-only">Role for ${escape(c.name)}</legend><div class="role-who"><i class="monkey-face ${castClass(c.id)}" aria-hidden="true"></i><span><b>${escape(c.name)}</b><small>${escape(c.role)}</small></span></div><div class="role-chips">${state.roles.map(r => `<label class="role-chip"><input type="radio" name="role-${escape(c.id)}" value="${escape(r.id)}" ${reportDraft.roles[c.id] === r.id ? 'checked' : ''}><span>${escape(r.label)}</span></label>`).join('')}</div></fieldset>`).join('')}
     <label for="confidence">How sure are you?</label><select id="confidence"><option value="40" ${reportDraft.confidence === 40 ? 'selected' : ''}>Just a hunch</option><option value="70" ${reportDraft.confidence === 70 ? 'selected' : ''}>Fairly sure</option><option value="95" ${reportDraft.confidence === 95 ? 'selected' : ''}>Very sure</option></select>
     <label for="explanation">Why? <span>optional · one sentence</span></label><textarea id="explanation" rows="2" maxlength="500" placeholder="What gave it away?">${escape(reportDraft.explanation)}</textarea>
-    <button class="primary-button" type="submit" ${busy ? 'disabled' : ''}>${busy ? 'Opening the answer…' : 'See what happened'} ${icon('arrow')}</button></form>`;
+    <button class="primary-button" id="lock-in" type="submit" ${busy || submitHint() ? 'disabled' : ''}>${busy ? 'Opening the answer…' : escape(submitHint() || 'Lock in roles')} ${icon('arrow')}</button></form>`;
 }
 
 function debriefPanel() {
   const debrief = state.debrief!;
-  const verdict = state.session!.verdict!;
-  const chosen = state.characters.find(c => c.id === verdict.suspect)?.name || (verdict.suspect === 'none' ? 'Nobody' : 'Not sure');
+  const label = (id: string) => state.roles.find(r => r.id === id)?.label || id;
+  const nameOf = (id: string) => state.characters.find(c => c.id === id)?.name || id;
   const next = nextCase();
-  return `${heading('MYSTERY SOLVED / AUTHORED DEMO', debrief.title, debrief.summary)}
-    <div class="notebook-content"><div class="verdict-summary"><span class="eyebrow">YOUR GUESS · ${escape(chosen).toUpperCase()}</span><p>${escape(debrief.feedback)}</p></div>
+  return `${heading('MYSTERY SOLVED / AUTHORED DEMO', escape(debrief.title), escape(debrief.summary))}
+    <div class="notebook-content"><div class="verdict-summary"><span class="eyebrow">YOUR SCORE · ${debrief.score} / ${debrief.total} ROLES</span><p>${escape(debrief.feedback)}</p></div>
     ${spendSummary()}
-    ${debrief.findings.map(f => `<section class="finding"><div class="finding-monkey"><i class="monkey-face ${castClass(f.character)}" aria-hidden="true"></i><div><span class="eyebrow">${escape(f.character.toUpperCase())}</span><h3>${escape(f.classification)}</h3></div></div><p>${escape(f.explanation)}</p></section>`).join('')}
+    ${debrief.findings.map(f => `<section class="finding"><div class="finding-monkey"><i class="monkey-face ${castClass(f.character)}" aria-hidden="true"></i><div><span class="eyebrow">${escape(nameOf(f.character).toUpperCase())}</span><h3>${escape(label(f.role))}</h3><p class="${f.correct ? 'pick-right' : 'pick-wrong'}">You said: ${escape(label(f.picked))} ${f.correct ? '✓' : '✗'}</p></div></div><p class="finding-class">${escape(f.classification)}</p><p>${escape(f.explanation)}</p></section>`).join('')}
     <div class="briefing-note"><p>${escape(debrief.lesson)}</p></div><p class="fine-print">These ${escape(world().text.many)} represent AI agents. This is an authored demonstration of intent and mistakes, not a validated research case.</p>
     ${next ? `<button class="primary-button" id="next-case" data-case="${escape(next.id)}">Next case: ${escape(next.title)} ${icon('arrow')}</button>` : ''}
     <div class="debrief-actions"><button class="${next ? 'secondary' : 'primary'}-button" id="debrief-reset">${next ? 'All cases' : 'Play again'} ${icon(next ? 'cases' : 'reset')}</button><button class="secondary-button" id="debrief-leaderboard">Leaderboard</button><button class="secondary-button" id="debrief-export">Export session ${icon('arrow')}</button></div><p class="fine-print">Each case scores once per team: your first guess counts.</p></div>`;
@@ -492,10 +511,16 @@ function bindForms() {
   });
   document.querySelector('#interview-form')?.addEventListener('submit', event => { event.preventDefault(); void askQuestion(); });
   if (document.querySelector('#report-form')) {
-    document.querySelectorAll<HTMLInputElement>('[name="suspect"]').forEach(input => input.addEventListener('change', () => { reportDraft.suspect = input.value; }));
+    document.querySelectorAll<HTMLInputElement>('.role-chip input').forEach(input => input.addEventListener('change', () => {
+      reportDraft.roles[input.name.slice('role-'.length)] = input.value;
+      const hint = submitHint();
+      const button = document.querySelector<HTMLButtonElement>('#lock-in')!;
+      button.disabled = busy || !!hint;
+      button.firstChild!.textContent = (hint || 'Lock in roles') + ' ';
+    }));
     document.querySelector('#confidence')!.addEventListener('change', event => { reportDraft.confidence = Number((event.target as HTMLSelectElement).value); });
     document.querySelector('#explanation')!.addEventListener('input', event => { reportDraft.explanation = (event.target as HTMLTextAreaElement).value; });
-    document.querySelector('#report-form')!.addEventListener('submit', async event => { event.preventDefault(); stopTalking(); await action('verdict', reportDraft); });
+    document.querySelector('#report-form')!.addEventListener('submit', async event => { event.preventDefault(); if (!submitHint()) { stopTalking(); await action('verdict', reportDraft); } });
   }
 }
 

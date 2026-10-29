@@ -19,12 +19,20 @@ function nameOf(row, catalog) {
   return ch ? ch.name : row.character || '';
 }
 
-function verdictText(row, catalog) {
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
+// A schema v2 verdict (suspect, no score) is old format.
+function verdictText(row) {
   const v = row.verdict;
   if (!v) return row.text ?? '';
-  const who = v.suspect === 'none' ? 'Nobody' : v.suspect === 'uncertain' ? 'Uncertain'
-    : nameOf({ ...row, character: v.suspect }, catalog);
-  return `${who} · ${v.confidence} % · ${v.correct ? 'correct' : 'wrong'}`;
+  if (!isNum(v.score) || !isNum(v.total)) return 'Verdict (old format)';
+  return `${v.score}/${v.total} roles · ${v.confidence} %`;
+}
+
+function verdictLine(row) {
+  const v = row.verdict;
+  if (!v || !isNum(v.score) || !isNum(v.total)) return 'Verdict (old format)';
+  return `Verdict: ${v.score} of ${v.total} roles right · ${v.confidence} %`;
 }
 
 function coinsText(row) {
@@ -41,7 +49,7 @@ export function describe(row, catalog) {
 function describeBase(row, catalog) {
   const who = nameOf(row, catalog);
   const arrow = ARROWS[row.kind] || '·';
-  if (row.kind === 'verdict') return { who, arrow, text: verdictText(row, catalog), meta: '' };
+  if (row.kind === 'verdict') return { who, arrow, text: verdictText(row), meta: '' };
   if (row.kind === 'failure') return { who, arrow, text: row.text ?? '', meta: row.reason || '' };
   const parts = [];
   if (row.kind === 'answer') {
@@ -172,7 +180,7 @@ export function createLog(root, { api, panel }) {
     if (seq !== openSeq) return;
     const rows = (data && data.rows) || [];
     const v = rows.filter((r) => r.kind === 'verdict').pop();
-    const vline = el('p', 'panel-verdict', v ? `Verdict: ${verdictText(v, catalog)}` : 'Verdict: none yet');
+    const vline = el('p', 'panel-verdict', v ? verdictLine(v) : 'Verdict: none yet');
     const tl = el('ol', 'panel-timeline');
     for (const r of rows) {
       const d = describe(r, catalog);

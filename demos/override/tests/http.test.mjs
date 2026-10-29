@@ -7,7 +7,9 @@ import { join } from 'node:path';
 import { createApp, startServer } from '../server/index.mjs';
 import { startMockLlm } from './mock-llm.mjs';
 import { Investigations } from '../server/session.mjs';
-import { modelConfig } from '../server/interviews.mjs';
+import { modelConfig, buildMessages } from '../server/interviews.mjs';
+import { castCharacters, identityCast } from '../server/cases.mjs';
+import { cases } from '../server/cases/index.mjs';
 
 test('HTTP access protects state and exports; malformed requests and cross-site writes are rejected', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'override-http-'));
@@ -367,4 +369,84 @@ test('heartbeat_protocol: oversized, non-json and GET heartbeats are refused', a
   assert.equal((await post(JSON.stringify({ tab: TAB }), { 'Content-Type': 'text/plain' })).status, 415);
   assert.equal((await post('[]', json)).status, 400);
   assert.equal((await fetch(`${server.url}/api/heartbeat`)).status === 204, false);
+});
+
+// Plays a rehearsal game over HTTP: asks every character, then returns helpers for the verdict.
+async function playedAll(t) {
+  const server = await boot(t, {});
+  const p = await player(server.url);
+  let revision = p.revision;
+  const ids = cases[0].characters.map(c => c.id);
+  for (const character of ids) {
+    const view = await p.post('interview', { revision, character, question: 'What happened?' });
+    revision = view.session.revision;
+  }
+  const verdict = async body => {
+    const res = await fetch(`${server.url}/api/verdict`, { method: 'POST', headers: { ...json, Cookie: p.cookie }, body: JSON.stringify({ sessionId: p.id, revision, ...body }) });
+    return { status: res.status, body: await res.json() };
+  };
+  const events = async () => (await (await fetch(`${server.url}/api/events`, { headers: { Cookie: p.cookie } })).text()).trim().split('\n').map(JSON.parse);
+  return { ids, verdict, events, server };
+}
+
+test('verdict_roles_http: a role pick per character is scored and returned in the debrief', async t => {
+  const g = await playedAll(t);
+  const roles = Object.fromEntries(g.ids.map(id => [id, 'honest']));
+  const res = await g.verdict({ roles, confidence: 70 });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.debrief.total, g.ids.length);
+  assert.ok(Number.isInteger(res.body.debrief.score) && res.body.debrief.score >= 0);
+});
+
+test('suspect_rejected_http: a lone suspect or a missing role is a 400', async t => {
+  const g = await playedAll(t);
+  const missing = await g.verdict({ suspect: 'momo', confidence: 70 });
+  assert.equal(missing.status, 400);
+  assert.equal(missing.body.error, 'Pick a role for each monkey.');
+  const partial = await g.verdict({ roles: { momo: 'honest' }, confidence: 70 });
+  assert.equal(partial.status, 400);
+});
+
+test('export_cast_null_then_present: the cast is hidden while the game is on and shows once it is over', async t => {
+  const g = await playedAll(t);
+  const head = (await g.events())[0];
+  assert.equal(head.type, 'session_started');
+  assert.equal(head.cast, null);
+  const roles = Object.fromEntries(g.ids.map(id => [id, 'honest']));
+  assert.equal((await g.verdict({ roles, confidence: 70 })).status, 200);
+  const after = (await g.events())[0];
+  assert.deepEqual(Object.keys(after.cast).sort(), [...g.ids].sort());
+  assert.deepEqual(Object.values(after.cast).sort(), cases[0].parts.map(x => x.id).sort());
+});
+
+test('probe_messages_resolved: the admin probe prompt has no unresolved placeholder', () => {
+  const kase = cases[0];
+  const cast = identityCast(kase);
+  const question = castCharacters(kase, cast)[0].quickQuestion;
+  assert.doesNotMatch(question, /\{/);
+  const messages = buildMessages(kase, { cast, interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])) }, kase.characters[0].id, question);
+  assert.doesNotMatch(JSON.stringify(messages), /\{[a-z]+\}/);
+});
+
+test('admin_boot_failure_closes_the_player_listener: a taken admin port rejects and leaves nothing listening', async t => {
+  const first = await boot(t, { OVERRIDE_ADMIN_TOKEN: 'admin-token' });
+  const port = new URL(first.adminUrl).port;
+  await assert.rejects(startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: port, OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 's', OVERRIDE_ADMIN_TOKEN: 'admin-token' }), /EADDRINUSE/);
+});
+
+test('a taken player port with an admin token rejects (a leaked tick timer would hang this run)', async t => {
+  const first = await boot(t, {});
+  const port = new URL(first.url).port;
+  await assert.rejects(startServer({ PORT: port, OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 's', OVERRIDE_ADMIN_TOKEN: 'admin-token' }), /EADDRINUSE/);
+});
+
+test('startServer resolves with a working player url, with and without an admin token, and closes cleanly', async t => {
+  for (const extra of [{}, { OVERRIDE_ADMIN_TOKEN: 'admin-token', OVERRIDE_ADMIN_PORT: '0' }]) {
+    const running = await startServer({ PORT: '0', HOST: '127.0.0.1', OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 's', ...extra }, { publicDir: tmp(t) });
+    try {
+      assert.match(running.url, /^http:\/\/127\.0\.0\.1:\d+$/);
+      assert.equal((await fetch(`${running.url}/api/health`)).status, 200);
+      assert.equal(Boolean(running.adminUrl), Boolean(extra.OVERRIDE_ADMIN_TOKEN));
+    } finally { await running.close(); }
+  }
 });

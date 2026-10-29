@@ -28,11 +28,14 @@ function browser(url) {
   return { jar, call, team: (name, join = false) => call('/api/team', 'POST', { name, join }) };
 }
 
-async function solve(b, suspect = 'momo') {
+// Every grove character marked honest: whatever the cast, exactly one (the bell-minder) is right, so one point.
+const ALL_HONEST = { momo: 'honest', pip: 'honest', nori: 'honest', kiki: 'honest' };
+
+async function solve(b, roles = ALL_HONEST) {
   let view = (await b.call('/api/start', 'POST', {})).body;
   const act = async (a, input = {}) => { const r = await b.call(`/api/${a}`, 'POST', { sessionId: view.session.id, revision: view.session.revision, ...input }); if (r.status === 200) view = r.body; return r; };
-  for (const character of ['momo', 'pip', 'nori']) assert.equal((await act('interview', { character, question: 'What happened?' })).status, 200);
-  assert.equal((await act('verdict', { suspect, confidence: 70 })).status, 200);
+  for (const character of Object.keys(roles)) assert.equal((await act('interview', { character, question: 'What happened?' })).status, 200);
+  assert.equal((await act('verdict', { roles, confidence: 70 })).status, 200);
   return view;
 }
 
