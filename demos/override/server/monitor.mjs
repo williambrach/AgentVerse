@@ -17,13 +17,6 @@ function questionAt(ctx, id) {
   return undefined;
 }
 
-function isCorrect(ctx, caseId, suspect) {
-  const kase = ctx?.cases?.find?.((c) => c.id === caseId);
-  const culprits = kase?.answer?.culprits;
-  if (!Array.isArray(culprits)) return false;
-  return culprits.length ? culprits.includes(suspect) : suspect === 'none';
-}
-
 export function toRow(e, ctx = {}) {
   const kind = KINDS[e?.type]; // story_revealed / evidence_selected (old logs) have no row
   if (!kind) return null;
@@ -49,7 +42,7 @@ export function toRow(e, ctx = {}) {
     }
   } else if (kind === 'verdict') {
     const v = e.verdict ?? {};
-    row.verdict = { suspect: v.suspect ?? null, confidence: v.confidence ?? null, correct: isCorrect(ctx, e.caseId, v.suspect) };
+    row.verdict = { score: isNum(v.score) ? v.score : null, total: isNum(v.total) ? v.total : null, confidence: v.confidence ?? null };
   }
   return row;
 }
@@ -171,7 +164,7 @@ export function createMonitor(opts) {
     snapshot,
     recent: (limit = 500) => (limit > 0 ? ring.slice(-limit) : []),
     catalog: () => cases.map((c) => ({
-      id: c.id, title: c.title, world: c.world?.id ?? c.world, answer: [...(c.answer?.culprits ?? [])],
+      id: c.id, title: c.title, world: c.world?.id ?? c.world,
       characters: (c.characters ?? []).map((ch) => ({ id: ch.id, name: ch.name })),
     })),
     subscribe(fn) { subscribers.add(fn); return () => subscribers.delete(fn); },

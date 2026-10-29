@@ -170,7 +170,7 @@ function fakeMonitor() {
     subs,
     snapshot: () => ({ at: 1, mode: 'live' }),
     recent: () => [row],
-    catalog: () => [{ id: 'c', title: 'C', world: 'w', answer: [], characters: [] }],
+    catalog: () => [{ id: 'c', title: 'C', world: 'w', characters: [] }],
     subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
     startRound(o) { this.round = o; return { label: o.label, startedAt: 777 }; },
     session: (id) => (id === UID ? [row] : null),
