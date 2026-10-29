@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer } from '../server/index.mjs';
+import { ROLE_IDS } from '../server/roles.mjs';
 import { startMockLlm } from './mock-llm.mjs';
 
 // Fault-injection load test: the real server against four mock endpoints (spec A2).
@@ -185,7 +186,7 @@ export async function runScenario(name, { players = 200, rampMs = 10_000, deadli
           }
           if (q.ok && ++ctx.firstDone === Math.ceil(players / 2) && spec.restart) ctx.restarted = restart();
         }
-        if (r.questions.every(q => q.ok)) r.verdict = (await act('verdict', { suspect: 'momo', confidence: 70 })).status === 200;
+        if (r.questions.every(q => q.ok)) r.verdict = (await act('verdict', { roles: Object.fromEntries(r.state.characters.map((c) => [c.id, ROLE_IDS[Math.floor(Math.random() * ROLE_IDS.length)]])), confidence: 70 })).status === 200;
         const exported = await call('GET', '/api/events');
         r.export = exported.status === 200 ? exported.text : null;
       } catch (error) { r.error = error.message || error.code || String(error); }

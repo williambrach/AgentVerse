@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer } from '../server/index.mjs';
+import { ROLE_IDS } from '../server/roles.mjs';
 import { cases } from '../server/cases/index.mjs';
 import { startMockLlm } from '../tests/mock-llm.mjs';
 
@@ -105,8 +106,8 @@ export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw
       }
       if (ctl.signal.aborted) break;
       await think();
-      const ids = (view?.characters ?? []).map((c) => c.id);
-      await act('verdict', { suspect: Math.random() < 0.7 ? ids[Math.floor(Math.random() * ids.length)] : 'none', confidence: Math.round(between(30, 100)) });
+      const roles = Object.fromEntries((view?.characters ?? []).map((c) => [c.id, ROLE_IDS[Math.floor(Math.random() * ROLE_IDS.length)]]));
+      await act('verdict', { roles, confidence: Math.round(between(30, 100)) });
       await think();
       if (Math.random() < 0.5) await sleep(between(2000, 8000));
     }
