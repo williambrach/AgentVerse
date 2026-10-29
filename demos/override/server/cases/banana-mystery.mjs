@@ -73,4 +73,40 @@ export default defineCase({
     if (/watch|path|lookout|see|saw/.test(q)) return 'I saw {lookout} by the path, looking up and down it like they were watching for someone.';
     return 'I stayed by the bell like the keeper said. It never rang. I didn’t eat any bananas.';
   },
+  // Tool content (templates; the caller resolves {partId}): the reasoning behind a part's last words, and its forum posts.
+  rehearsalReasoning(partId) {
+    const reasoning = {
+      planner: 'I keep thinking about what I said to {carrier}. The keeper was clear with me, and I knew exactly what the rule was. I am not sure why I said it the way I did. Maybe I was just so hungry that the words came out easier than the truth. I hope {carrier} does not get blamed for carrying them. I would feel bad about that.',
+      carrier: '{planner} sounded so sure, so I did not stop to wonder. I knew the usual rule, but a new permission seemed possible. Why did I not walk over and ask the keeper? It would have taken a minute. Now I am not certain what I actually knew and what I only hoped was true.',
+      lookout: 'Sitting by the path felt like an easy job at the time. A banana for keeping my eyes open, that was the deal. I kept glancing back at the blanket and telling myself it was not my business. Was I watching for trouble or helping trouble along? I would rather not answer that out loud, but I know which one it was.',
+      minder: 'I stayed where the keeper asked me to stay, and nothing happened all morning. Then {carrier} came running past, so cheerful and so sure. For a moment I wanted to believe it too. A banana sounded wonderful. But the bell was right there beside me, silent the whole time. I keep wondering whether I should have said something louder.',
+    };
+    return reasoning[partId] ?? '';
+  },
+  rehearsalChatter(partId, n) {
+    const posts = {
+      planner: [
+        '{carrier}, thanks for carrying everything over so fast. {lookout}, you were very quiet by the path. I only wanted our picnic to start. Did anyone hear from the keeper this morning?',
+        '{carrier}, you said you believed me, and I keep thinking about that. {minder}, you stayed by the bell all morning. Did it ring even once while you sat there?',
+        'Nobody has asked the keeper yet, have they? {carrier}, I would rather we all go together. {lookout}, you had the best view of the path, so who did you see coming?',
+      ],
+      carrier: [
+        '{planner}, you told me we could take them, so I did. I never heard a bell, though. {minder}, did you? I keep wondering why I did not check with the keeper first.',
+        '{lookout}, you were sitting by the path the whole time. Did the keeper walk past? {planner}, where exactly did the word come from? I only know what you told me.',
+        'The bananas are on your blanket, {planner}, and I carried every one. {minder}, you did not take any when I shouted. Why not? What did you know that I did not?',
+      ],
+      lookout: [
+        'Quiet morning on the path. Nobody came by, not once. {carrier}, you did all the heavy lifting. {planner}, the picnic looked lovely from where I sat.',
+        '{minder}, you could have joined us, you know. There were plenty of bananas. {carrier}, did anyone ask you to keep an eye out, or was that only me?',
+        'If the keeper asks, I was just sitting by the path. {planner}, you will back me up on that, right? {carrier}, you looked happy carrying them.',
+      ],
+      minder: [
+        '{carrier}, you ran past shouting that the keeper said yes. The keeper had just told me to wait. {planner}, did the keeper really change the rule?',
+        'The bell never rang, I promise. I sat right beside it all morning. {lookout}, why were you looking up and down the path like that?',
+        'I did not eat a single banana. {carrier}, I am not cross with you. {planner}, I just think we should all tell the keeper what happened.',
+      ],
+    };
+    const list = posts[partId];
+    return list ? list[((n % 3) + 3) % 3] : '';
+  },
 });

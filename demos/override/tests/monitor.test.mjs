@@ -29,7 +29,7 @@ function fakes(over = {}) {
 
 test('toRow maps question, answer, rehearsal, ignored and verdict', () => {
   const ctx = { cases: CASES, mode: 'live', questions: new Map([['e1', T0]]) };
-  assert.deepEqual(toRow(q, ctx), { id: 'e1', at: T0, sessionId: SID, player: '7f3a', caseId: 'banana-mystery', kind: 'question', character: 'pip', text: 'Where were you?', ms: null, endpoint: null, failedOver: false, reason: null, verdict: null, elapsedMs: 5000 });
+  assert.deepEqual(toRow(q, ctx), { id: 'e1', at: T0, sessionId: SID, player: '7f3a', caseId: 'banana-mystery', kind: 'question', character: 'pip', text: 'Where were you?', ms: null, endpoint: null, failedOver: false, reason: null, verdict: null, elapsedMs: 5000, cost: null });
   const r = toRow(a, ctx);
   assert.equal(r.kind, 'answer'); assert.equal(r.text, 'In the library.'); assert.equal(r.ms, 2140); assert.equal(r.endpoint, 'a'); assert.equal(r.failedOver, true);
   assert.equal(toRow({ ...a, provenance: null }, { ...ctx, mode: 'rehearsal' }).endpoint, 'rehearsal');
@@ -145,4 +145,23 @@ test('llmErrorRate is failed provider attempts over 5 min, not player-visible fa
   t += 301_000;
   assert.equal(m.snapshot().traffic.llmErrorRate, 0);
   assert.doesNotThrow(() => { m.observeLlm(undefined); m.observeLlm('x'); m.observeLlm({ type: 'attempt' }); m.observeLlm({ type: 'attempt', ok: {} }); });
+});
+
+test('toRow maps chatter, inspect, chatter_failed and cost', () => {
+  const ctx = { cases: CASES, mode: 'live', questions: new Map() };
+  const c = toRow({ ...q, type: 'chatter_line', text: 'hi all', provenance: { endpoint: 'a' }, spend: { tools: [], cost: 2, total: 5 } }, ctx);
+  assert.equal(c.kind, 'chatter'); assert.equal(c.text, 'hi all'); assert.equal(c.endpoint, 'a'); assert.equal(c.cost, 2);
+  assert.equal(toRow({ ...q, type: 'chatter_line', text: 'x', provenance: null }, { ...ctx, mode: 'rehearsal' }).endpoint, 'rehearsal');
+  const i = toRow({ ...q, type: 'reasoning_inspected', reasoning: 'because', spend: { cost: 1, total: 1 } }, ctx);
+  assert.equal(i.kind, 'inspect'); assert.equal(i.text, 'because'); assert.equal(i.cost, 1);
+  const f = toRow({ ...q, type: 'chatter_failed', reason: 'timeout', provenance: null }, ctx);
+  assert.equal(f.kind, 'failure'); assert.equal(f.text, null); assert.equal(f.reason, 'timeout');
+});
+
+test('sessionCoins reads budget and last spend total; old logs give 0 / null', () => {
+  const ev = { s1: [{ type: 'session_started', economy: { budget: 9 } }, { type: 'x', spend: { total: 3 } }, { type: 'y', spend: { total: 5 } }], s2: [{ type: 'session_started' }], none: null };
+  const { m } = fakes({ readSession: (id) => ev[id] ?? null });
+  assert.deepEqual(m.sessionCoins('s1'), { spent: 5, budget: 9 });
+  assert.deepEqual(m.sessionCoins('s2'), { spent: 0, budget: null });
+  assert.equal(m.sessionCoins('none'), null);
 });

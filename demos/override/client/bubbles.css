@@ -1,0 +1,18 @@
+.station-bubble {
+  position: absolute; box-sizing: border-box; display: flex; align-items: flex-end;
+  width: calc(var(--u) * 140); height: auto; max-height: calc(var(--u) * var(--max, 78));
+  padding: calc(var(--u) * 4) calc(var(--u) * 5);
+  font: 500 calc(var(--u) * 6) / 1.3 var(--mono);
+  color: var(--label, #40533c); background: var(--label-bg, #fff6dd);
+  border: calc(var(--u) * 1.5) solid var(--label, #40533c);
+  animation: bubble-in .18s ease-out;
+}
+.station-bubble > span { display: block; max-height: calc(var(--u) * (var(--max, 78) - 14)); overflow-y: auto; overflow-wrap: anywhere; }
+.station-bubble::after {
+  content: ''; position: absolute; bottom: calc(var(--u) * -4); left: var(--tail, 50%);
+  width: calc(var(--u) * 6); height: calc(var(--u) * 6); transform: translateX(-50%) rotate(45deg);
+  background: var(--label-bg, #fff6dd);
+  border-right: calc(var(--u) * 1.5) solid var(--label, #40533c); border-bottom: calc(var(--u) * 1.5) solid var(--label, #40533c);
+}
+@keyframes bubble-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .station-bubble { animation: none; } }

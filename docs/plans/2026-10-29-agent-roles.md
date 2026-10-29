@@ -1,7 +1,7 @@
 # Plan: agent roles, per-session cast, 3–5 agents
 
 **Review plan:** docs/plans/2026-10-29-agent-roles.feature.md
-**Goal:** a scored role pick per character; a random cast per session; 3–5 agents per world.
+**Goal:** scored role picks; a random cast per session; 3–5 agents per world.
 **Architecture:** part cases; the session draws, logs and hides a cast and scores role verdicts; the rest follows.
 **Tech stack:** Node 22 ESM (`node:test`), TypeScript + Vite + Phaser client, Playwright 1.58.
 **Spec:** docs/plans/2026-10-29-agent-roles.spec.md
@@ -11,7 +11,7 @@
 
 ## Global constraints
 
-- Owns are repo-root relative; code in `demos/override/`. Unit: `node --test demos/override/tests/<file>` from the repo root. Browser: `cd demos/override && npm run build && npx playwright test <spec> --output=<scratch>`; one Playwright run at a time (check `pgrep -fl "playwright test"` and `lsof -i :4317-4320` first); never unit and browser suites at once.
+- Owns are repo-root relative; code in `demos/override/`. Unit: `node --test demos/override/tests/<file>` from the repo root. Browser: `cd demos/override && npm run build && npx playwright test <spec> --output=<scratch>`; one Playwright run at a time (check `pgrep` and `lsof -i :4317-4321` first); never unit and browser suites at once.
 - Port from `PROTO=/Users/williambrach/Developer/AgentVerse/.superlite/worktrees/agent-roles/.superlite/sandboxes/agent-roles-proto` (same paths); never copy `?pad=5`, `playwright.proto.config.mjs` or `tests/proto-*`. Strings: `docs/plans/2026-10-29-agent-roles.content.md`.
 - Retarget, never weaken. Archived cases and their tests (`banana-control.test.mjs`, `tower-cases.test.mjs`) stay unchanged and pass.
 - Shared contract (spec Constraints is authoritative):
@@ -21,7 +21,7 @@
   - View `{...publicView(kase, cast), roles: ROLES, authored, mode, model, session, debrief}`. Verdict body `{sessionId, revision, roles, confidence, explanation?}`; logged verdict `{roles, truth, results, score, total, confidence, explanation, evidenceIds: [], submittedAt}`; bad roles → 400 `Pick a role for each monkey.` (world singular). Debrief per spec.
   - Log `schemaVersion` 3, `session_started.cast`; replay needs v3 + bijective cast. `GET /api/events` → `cast: null` while active. `interview-v4`; `banana-authored-v3.0.0`, `tower-echo-bell-v3.0.0`. Admin shapes: spec "Admin".
 - Spec coverage: Intent and Goals (T1–T13), Constraints (contract above), Done looks like 1–11 (T11/T12, T3/T6, T13), Decided (T2, T9, T10), Left to the builder / plan (T10 slots, T7 labels), Diagrams (main diagram).
-- Ruling: sequential edge T1 → T3 - T3's tests run T1's fixture and `defineCase` - cost if wrong: T3 starts ~2 min later.
+- Ruling: edge T1 → T3 - T3's tests run T1's fixture - cost if wrong: ~2 min.
 
 ```mermaid
 flowchart LR
@@ -220,13 +220,13 @@ e.g. partOf(fixture, {momo:'helper', pip:'boss', nori:'bystander'}, 'pip').role 
 **Test code (contracts):** `cast.mjs` reads `test-results/sessions/live/sessions/<id>.jsonl`; `nav_labels_follow_cast` (nav, report rows and interview heading show the held part's label, also after reset); `roles.spec` = the prototype acceptance spec on the default project; investigation/cases/provenance retargeted (4 monkeys, role picker, perfect via `castOf`, tower all `fooled` → 3/3, no leak before verdict, export cast null then present).
 
 ### T12 browser specs B and baseline · Complexity 4 · Est. context 40k
-**Owns:** demos/override/tests/browser/tower.spec.mjs, demos/override/tests/browser/walking.spec.mjs, demos/override/tests/browser/admin.spec.mjs, demos/override/tests/browser/grove-look.spec.mjs-snapshots/grove-darwin.png
+**Owns:** demos/override/tests/browser/tower.spec.mjs, demos/override/tests/browser/walking.spec.mjs, demos/override/tests/browser/admin.spec.mjs, demos/override/tests/browser/coins.spec.mjs, demos/override/tests/browser/grove-look.spec.mjs-snapshots/grove-darwin.png
 **Components:** 2
 **LOC owned:** 120
 **Tests:** slow
 **Model:** sonnet
 **Review Focus:** protocol
-**Test code (contracts):** tower ids/labels/aria in persona order; walking adds Kiki's stop; admin posts roles and reads "roles" in the log row; grove baseline regenerated on purpose (`--update-snapshots` for that spec only), then a clean rerun passes.
+**Test code (contracts):** tower ids/labels/aria in persona order; walking adds Kiki's stop; admin posts roles and reads "roles" in the log row; coins spec (port 4321) plays through the role picker; grove baseline regenerated on purpose (`--update-snapshots` for that spec only), then a clean rerun passes.
 
 ### T13 docs · Complexity 2 · Est. context 26k
 **Owns:** demos/override/README.md, demos/override/docs/CASES_PLAN.md

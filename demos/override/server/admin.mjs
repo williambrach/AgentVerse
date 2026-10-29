@@ -184,7 +184,7 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
         needMonitor();
         const rows = UUID.test(sid) ? monitor.session(sid) : null;
         if (!rows) throw new HttpError(404, 'No such session.');
-        return send(res, 200, { sessionId: sid, rows });
+        return send(res, 200, { sessionId: sid, rows, coins: monitor.sessionCoins?.(sid) ?? { spent: 0, budget: null } });
       }
       const paths = Object.keys(routes).map((k) => k.split(' ')[1]);
       const handler = routes[`${req.method} ${path}`];

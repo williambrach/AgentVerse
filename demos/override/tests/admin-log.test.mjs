@@ -163,3 +163,14 @@ test('panel shows old-format verdict for a v2 row', async () => {
   await root.find((e) => e.dataset.player === 's1')[0].fire('click');
   assert.ok(panel.textContent.includes('Verdict (old format)'));
 });
+
+test('describe appends coins', () => {
+  const base = { sessionId: 's', caseId: 'banana-mystery', character: 'pip', kind: 'chatter', text: 'hi', endpoint: null };
+  assert.equal(log.describe({ ...base, cost: 1 }, []).meta, '1 coin');
+  assert.equal(log.describe({ ...base, cost: 3 }, []).meta, '3 coins');
+  assert.equal(log.describe({ ...base, cost: 0 }, []).meta, '');
+  assert.equal(log.describe({ ...base, kind: 'answer', ms: 2100, endpoint: 'a', cost: 2 }, []).meta, '2.1 s · a · 2 coins');
+  assert.equal(log.describe({ ...base }, []).meta, '');
+  const verdict = log.describe({ ...base, character: null, kind: 'verdict', text: null, verdict: { score: 3, total: 4, confidence: 70 }, cost: 0 }, []);
+  assert.equal(verdict.text, '3/4 roles · 70 %');
+});

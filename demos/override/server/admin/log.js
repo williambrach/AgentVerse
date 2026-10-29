@@ -2,7 +2,7 @@
 const MESSAGE_KINDS = ['question', 'answer', 'failure'];
 const MAX_DOM = 1000;
 const MAX_KEEP = 5000;
-const ARROWS = { question: '→', answer: '←', failure: '✕' };
+const ARROWS = { question: '→', answer: '←', failure: '✕', chatter: '↔', inspect: '◎' };
 
 export function matches(row, f = {}) {
   if (f.sessionId && row.sessionId !== f.sessionId) return false;
@@ -35,7 +35,18 @@ function verdictLine(row) {
   return `Verdict: ${v.score} of ${v.total} roles right · ${v.confidence} %`;
 }
 
+function coinsText(row) {
+  return typeof row.cost === 'number' && row.cost > 0 ? `${row.cost} ${row.cost === 1 ? 'coin' : 'coins'}` : '';
+}
+
 export function describe(row, catalog) {
+  const d = describeBase(row, catalog);
+  const c = coinsText(row);
+  if (c) d.meta = d.meta ? `${d.meta} · ${c}` : c;
+  return d;
+}
+
+function describeBase(row, catalog) {
   const who = nameOf(row, catalog);
   const arrow = ARROWS[row.kind] || '·';
   if (row.kind === 'verdict') return { who, arrow, text: verdictText(row), meta: '' };
@@ -45,7 +56,7 @@ export function describe(row, catalog) {
     if (typeof row.ms === 'number') parts.push(`${(row.ms / 1000).toFixed(1)} s`);
     if (row.endpoint) parts.push(row.endpoint);
     if (row.failedOver) parts.push('failover');
-  }
+  } else if (row.kind === 'chatter' && row.endpoint) parts.push(row.endpoint);
   return { who, arrow, text: row.text ?? '', meta: parts.join(' · ') };
 }
 
@@ -176,7 +187,10 @@ export function createLog(root, { api, panel }) {
         el('span', 'log-text-cell', d.text), el('span', 'log-meta', d.meta));
       tl.append(li);
     }
-    panel.replaceChildren(head, vline, tl);
+    const co = data && data.coins;
+    const coinsLine = el('p', 'panel-coins', co && typeof co.spent === 'number'
+      ? (typeof co.budget === 'number' ? `Coins: ${co.spent} / ${co.budget}` : `Coins: ${co.spent}`) : 'Coins: 0');
+    panel.replaceChildren(head, vline, coinsLine, tl);
   }
   function closePanel() { openSeq++; panel.hidden = true; panel.replaceChildren(); }
   if (doc.addEventListener) doc.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePanel(); });

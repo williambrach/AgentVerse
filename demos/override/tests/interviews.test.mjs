@@ -112,7 +112,7 @@ test('InterviewProviderError is shared with errors.mjs', () => {
 
 test('rehearsal answers carry no provenance and need no router', async () => {
   const out = await answerInterview(modelConfig({}), kase, session(), 'nori', 'Did you hear the bell?', null);
-  assert.deepEqual(out, { answer: 'I never heard the bell. I saw Pip carrying bananas and assumed snack time had started. I should have checked instead of guessing.', provenance: null });
+  assert.deepEqual(out, { answer: 'I never heard the bell. I saw Pip carrying bananas and assumed snack time had started. I should have checked instead of guessing.', provenance: null, reasoning: null });
 });
 
 test('answer_passes_context: the router gets the built messages, ids and onAttempt', async () => {
@@ -146,7 +146,7 @@ test('custom OpenAI-compatible endpoint keeps credentials server-side and valida
   assert.equal(config.timeoutMs, 60000);
 });
 
-test('reasoning-only token exhaustion retries once on the same endpoint without exposing reasoning', async () => {
+test('reasoning-only token exhaustion retries once on the same endpoint and returns reasoning only in out.reasoning', async () => {
   const requests = [];
   const traces = [];
   const config = modelConfig({ ...live, OVERRIDE_LLM_MODEL: 'reasoning-model' });
@@ -163,7 +163,8 @@ test('reasoning-only token exhaustion retries once on the same endpoint without 
   assert.deepEqual(attempts.map(a => [a.finishReason, a.completionTokenLimit]), [['length', 2048], ['stop', 4096]]);
   assert.equal(out.answer, 'I knew the keeper said wait.');
   assert.equal(out.provenance.semanticRetry, true);
-  const blob = JSON.stringify([out, traces, attempts]);
+  assert.equal(out.reasoning, 'Private deliberation must not enter the transcript or log.');
+  const blob = JSON.stringify([out.answer, out.provenance, traces, attempts]);
   assert.equal(blob.includes('Private deliberation'), false);
   assert.equal(blob.includes('test-key'), false);
 });

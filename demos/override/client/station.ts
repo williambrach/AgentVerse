@@ -6,6 +6,7 @@ import { mirrorStride, sliceAtlas, type Frame } from './atlas';
 import { placeholderAtlas } from './placeholder-art';
 import { worldFor, type WorldPack } from './worlds';
 import { hueShift, faceSheetPlan, SHEET_CAST } from './recolor';
+import { BUBBLE_WIDTH, placeBubble } from './bubble-layout';
 
 type Point = { x: number; y: number };
 type Stop = Point & { title: string; label: string };
@@ -431,6 +432,28 @@ export class Station extends Phaser.Scene {
     overlay.append(el);
     return el;
   }
+
+  /** One speech bubble at a time, above a character. Text goes in with textContent only. */
+  say(characterId: string, text: string) {
+    const p = this.stops[characterId];
+    if (!p || !this.cast.some(c => c.id === characterId)) return;
+    this.clearBubbles();
+    const overlay = this.labelLayer();
+    const { left, bottom, maxHeight, tail } = placeBubble(p.x, p.y - 66, BUBBLE_WIDTH) /* anchored on the name label's centre */;
+    const el = document.createElement('div');
+    el.className = 'station-bubble';
+    el.dataset.character = characterId;
+    const inner = document.createElement('span');
+    inner.textContent = text;
+    el.append(inner);
+    el.style.left = `${left / width * 100}%`;
+    el.style.bottom = `${(height - bottom) / height * 100}%`;
+    el.style.setProperty('--max', String(maxHeight));
+    el.style.setProperty('--tail', `calc(var(--u) * ${tail})`);
+    overlay.append(el);
+  }
+
+  clearBubbles() { this.overlay?.querySelectorAll('.station-bubble').forEach(el => el.remove()); }
 
   /** The HTML layer over the canvas: same box as the canvas, with --u = one game pixel in CSS pixels. */
   private labelLayer(): HTMLDivElement {

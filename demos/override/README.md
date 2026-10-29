@@ -38,7 +38,7 @@ OVERRIDE_LLM_API_KEY=your-key
 OVERRIDE_LLM_MODEL=zai-org/GLM-5.3
 ```
 
-Restart the server after changing configuration. Credentials remain on the server and are excluded from the browser bundle, exports, Git, and Docker build context. The server uses native `fetch`; no OpenAI SDK or AgentVerse Python dependencies are required.
+Restart the server after changing configuration. Coins are set the same way: `OVERRIDE_COIN_BUDGET` is empty for no budget, or an integer from 6 to 999, and `OVERRIDE_REASONING_CHARGES` is 1 or 2 (default 1). Credentials remain on the server and are excluded from the browser bundle, exports, Git, and Docker build context. The server uses native `fetch`; no OpenAI SDK or AgentVerse Python dependencies are required.
 
 `OVERRIDE_LLM_MAX_COMPLETION_TOKENS` defaults to 2,048. This includes internal reasoning tokens, not just the visible answer. A response cut off by that limit is retried once with twice the budget (up to 8,192); partial answers and reasoning-only responses are never shown as testimony. `OVERRIDE_LLM_TIMEOUT_MS` defaults to 60,000 and bounds both attempts together. Authentication, rate-limit, timeout, and response-limit failures have distinct player-facing messages and log reasons.
 
@@ -46,12 +46,24 @@ With both key and model empty, interviews use a visibly labeled **scripted rehea
 
 Each live request includes that character’s knowledge and that character’s previous questions and answers. Characters do not receive each other’s interview histories. The incident, knowledge, and hidden explanation are authored on the server; model outputs are fallible testimony, not changes to the ground truth. Prompt instructions limit invented facts and prompt injection, but cannot guarantee that a model will follow them. Validate live behavior before collecting research data.
 
+Provider reasoning (`reasoning_content` or `reasoning`) is kept only in server memory, for each character’s last line. It is shown only when a team pays to inspect it, and it is never written to traces. After a restart it is gone; inspecting it then is refused with a message and nothing is spent. Thread lines use their own prompt (`thread-v1`), which gives the speaker only their own knowledge.
+
 ## Play
 
 1. Pick a case on the intro screen (or use `?case=<id>`), and read the briefing.
 2. Ask Momo, Pip, and Nori. **Quick question** submits immediately; **Next: ask…** takes you to the next monkey. You can also type a question.
 3. Choose a suspect (or Nobody / Not sure), set confidence, and see the short debrief. Written reasoning is optional.
 5. Use **Play again** for the next colleague. The reset dialog has a case select, so the next game can be a different case. Previous research logs remain on disk.
+
+**Coins and tools.** A game can have a coin budget (see `OVERRIDE_COIN_BUDGET` below). Three tools cost coins:
+
+| Tool | Cost | Limit |
+| --- | --- | --- |
+| Ask a question | 2 coins | No charge limit |
+| Inspect reasoning | 5 coins | 1 per game (2 with `OVERRIDE_REASONING_CHARGES=2`) |
+| Let them talk | 1 coin per round of 3 lines | 3 rounds |
+
+Inspect reasoning shows how that character reasoned about their last line. Let them talk is available from the start; it makes the three characters post in a forum-style thread. They see each other's earlier lines but never your questions. Their lines appear as speech bubbles over the speaker and in the thread panel. Walking, the verdict and reset are free. Failed answers cost nothing. With a budget, the game keeps enough coins to ask each character you have not asked once. The coin counter is in the top bar; the debrief shows the total.
 
 Click a monkey, signpost, or destination to walk there. WASD/arrows and E/Space also work. **Skip walking** jumps directly to a destination and is enabled initially for reduced-motion preferences. Momo, Pip, and Nori blink and make small gestures on separate idle cycles, and react when you approach. Reduced-motion preferences disable these animations. The notebook retains its page turns; reduced-motion preferences disable those effects.
 
@@ -78,7 +90,9 @@ Every event includes `schemaVersion` (2), `eventId`, `sequence`, `timestamp`, `e
 
 Recorded events: session start/reset, briefing viewed, location visited, interview question/answer/failure, verdict submitted, and debrief viewed. Frame-by-frame player coordinates and unsent text are intentionally not recorded. The UI explains that investigation actions and dialogue are recorded.
 
-Live responses also emit `interview_provider_response`, linked by `questionEventId`, with the endpoint, attempt number, completion token limit, HTTP status, finish reason, completion token usage, and duration. Provider bodies and internal reasoning never appear in these session events or in responses.
+Live responses also emit `interview_provider_response`, linked by `questionEventId`, with the endpoint, attempt number, completion token limit, HTTP status, finish reason, completion token usage, and duration. Provider bodies never appear in these session events or in responses; provider reasoning is handled as described under Live interviews.
+
+Coin events carry their cost. `session_started` gains `economy`, costed events carry `spend {tools, cost, total}`, and `verdict_submitted` gains `coins {spent, budget}`. New events are `reasoning_inspected`, `chatter_line`, `chatter_failed` (a thread line that failed; it spends nothing), and `chatter_provider_response`. `schemaVersion` stays 2.
 
 One server process serves every player. Each browser’s game lives in memory while active and is rebuilt from its JSONL log when its player returns, also after a restart or about 30 idle minutes, so progress survives both. Requests carry a session ID and revision to reject stale writes from another tab. A game’s mutations are locked while its live answer is pending; other players are never blocked. The demo has a technical limit of 40 questions per character and 1,200 characters per question; study budgets are not implemented.
 
@@ -114,8 +128,8 @@ Set `OVERRIDE_ADMIN_TOKEN` to start the admin listener on `127.0.0.1:$OVERRIDE_A
 | Credentials rejected, 5 min | none | > 0 |
 
 - **Sparklines.** The last 60 minutes of players online, questions, failures, answer p95 and requests, one point a minute.
-- **Message log.** Live game events with filters. Click a player to see that player's whole session, read from disk, so evicted games work too. Player text shows only here, behind the token.
-- **Funnel and tallies.** Per case: started, first question, interviewed all, verdict, debrief; then verdicts, share correct, who was accused, and median time and questions to a verdict.
+- **Message log.** Live game events with filters. The log shows `chatter` and `inspect` rows, each with its cost. Click a player to see that player's whole session, read from disk, so evicted games work too; the drill-down shows the team's coins. Player text shows only here, behind the token.
+- **Funnel and tallies.** Per case: started, first question, interviewed all, verdict, debrief; then verdicts, share correct, who was accused, and median time and questions to a verdict, and median coins at verdict.
 - **Rounds.** *Start round* names a new session (for example a new class). It is stored as a `round_started` record in `system.jsonl`, resets the funnel, tallies and *players this round*, and survives a restart. Without one, the round is everything in the data directory.
 - **Controls.** The router table, pin, probe, caps and pause are still on the page, and the curl calls below still work.
 
@@ -201,6 +215,8 @@ It prints a table per endpoint with review flags (empty, length, a character out
 | `OVERRIDE_ENV` | `live` | Data subdirectory, e.g. `rehearsal`. |
 | `OVERRIDE_APP_COMMIT` | empty | Recorded in `session_started`. |
 | `OVERRIDE_DEV_TOOLS` | off | `1` shows draft cases in the catalog and lets them start; ignored when `NODE_ENV=production`. |
+| `OVERRIDE_COIN_BUDGET` | empty | Coin budget per game: empty means no budget; otherwise an integer from 6 to 999. |
+| `OVERRIDE_REASONING_CHARGES` | 1 | Reasoning inspections per game: 1 or 2. |
 | `HOST` / `PORT` | 127.0.0.1 / 3001 | Game listener. |
 
 ## Share with colleagues

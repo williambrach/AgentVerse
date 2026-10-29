@@ -68,7 +68,7 @@ export function createRoundStats(cases) {
       case 'interview_question': s.questions += 1; s.asked = true; break;
       case 'interview_answer': if ((byId.get(s.caseId).characters ?? []).some((c) => c.id === e.character)) s.answered.add(e.character); break;
       case 'verdict_submitted':
-        if (!s.verdict && e.verdict && Number.isFinite(e.elapsedMs)) s.verdict = { roles: roleTally(e.verdict), ms: e.elapsedMs, questions: s.questions };
+        if (!s.verdict && e.verdict && Number.isFinite(e.elapsedMs)) s.verdict = { roles: roleTally(e.verdict), ms: e.elapsedMs, questions: s.questions, coins: Number.isFinite(e.coins?.spent) ? e.coins.spent : null };
         break;
       case 'debrief_viewed': s.debrief = true; break;
       default: break;
@@ -99,9 +99,10 @@ export function createRoundStats(cases) {
 
   function tallies() {
     const out = {};
-    for (const c of cases) out[c.id] = { verdicts: 0, perfect: 0, rolesRight: 0, rolesTotal: 0, byRole: {}, medianMsToVerdict: null, medianQuestions: null };
+    for (const c of cases) out[c.id] = { verdicts: 0, perfect: 0, rolesRight: 0, rolesTotal: 0, byRole: {}, medianMsToVerdict: null, medianQuestions: null, medianCoins: null };
     const ms = {};
     const qs = {};
+    const cs = {};
     for (const s of sessions.values()) {
       const roles = s.verdict?.roles;
       if (!roles) continue;
@@ -117,10 +118,12 @@ export function createRoundStats(cases) {
       }
       (ms[s.caseId] ??= []).push(s.verdict.ms);
       (qs[s.caseId] ??= []).push(s.verdict.questions);
+      if (s.verdict.coins !== null) (cs[s.caseId] ??= []).push(s.verdict.coins);
     }
     for (const id of Object.keys(ms)) {
       out[id].medianMsToVerdict = lowerMiddle(ms[id]);
       out[id].medianQuestions = lowerMiddle(qs[id]);
+      out[id].medianCoins = lowerMiddle(cs[id] ?? []);
     }
     return out;
   }

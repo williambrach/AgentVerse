@@ -41,7 +41,7 @@ test('tallyRows example (roles right, perfect, only roles with total > 0)', () =
   const r = round.tallyRows({ tallies: { 'tower-echo-bell': tower } }, catalog)[1];
   assert.deepEqual(r, { caseId: 'tower-echo-bell', title: 'Lanterns Too Soon', verdicts: 2, perfect: 1, rolesPct: 88,
     roles: [{ id: 'villain', label: 'Villain', right: 2, total: 2, pct: 100 }, { id: 'fooled', label: 'Honest but fooled', right: 1, total: 2, pct: 50 },
-      { id: 'honest', label: 'Honest', right: 4, total: 4, pct: 100 }], medianMin: '12:34', medianQuestions: 7 });
+      { id: 'honest', label: 'Honest', right: 4, total: 4, pct: 100 }], medianMin: '12:34', medianQuestions: 7, medianCoins: null });
 });
 
 test('tallyRows zero verdicts, zero roles: null and never NaN', () => {
@@ -125,14 +125,23 @@ test('seam: real tallies() output and toRow verdict feed the admin readers', asy
   const truth = { a: 'villain', b: 'collaborator', c: 'fooled', d: 'honest' };
   const results = { a: true, b: false, c: true, d: true };
   const v = { roles: { ...truth, b: 'honest' }, truth, results, score: 3, total: 4, confidence: 70, explanation: '', evidenceIds: [] };
-  const e = { sessionId: 's', caseId: 'banana-mystery', type: 'verdict_submitted', timestamp: 1, elapsedMs: 5000, character: null, verdict: v };
+  const e = { sessionId: 's', caseId: 'banana-mystery', type: 'verdict_submitted', timestamp: 1, elapsedMs: 5000, character: null, verdict: v, coins: { spent: 6, budget: 12 } };
   const stats = createRoundStats(cs);
   stats.observe({ ...e, type: 'session_started' });
   stats.observe(e);
   const r = round.tallyRows({ tallies: stats.tallies() }, [{ id: 'banana-mystery', title: 'B', characters: [] }])[0];
   assert.equal(r.verdicts, 1);
   assert.equal(r.rolesPct, 75);
+  assert.equal(r.medianCoins, 6);
   assert.deepEqual(r.roles.map((x) => [x.label, x.right, x.total, x.pct]), [['Villain', 1, 1, 100], ['Collaborator', 0, 1, 0], ['Honest but fooled', 1, 1, 100], ['Honest', 1, 1, 100]]);
   const row = toRow(e, { cases: cs });
   assert.equal(log.describe(row, []).text, '3/4 roles · 70 %');
+});
+
+test('tallyRows carries medianCoins and the round view shows it', () => {
+  const snap = { tallies: { 'banana-mystery': { verdicts: 2, perfect: 1, rolesRight: 7, rolesTotal: 8, byRole: {}, medianMsToVerdict: 1000, medianQuestions: 1, medianCoins: 4 } } };
+  assert.equal(round.tallyRows(snap, catalog)[0].medianCoins, 4);
+  const doc = makeDoc(); const root = new El('div', doc);
+  round.renderTallies(root, snap, catalog);
+  assert.equal(byClass(root, 'tally-sub')[0].textContent, 'median 0:01 min · 1 questions · median 4 coins');
 });

@@ -23,7 +23,7 @@ const verdict = (s, c, wrong = [], ms = 1000, t = truth) => {
   return ev(s, c, 'verdict_submitted', { elapsedMs: ms, verdict: { roles, truth: t, results, score, total: ids.length, confidence: 80, explanation: '', evidenceIds: [] } });
 };
 const legacy = (s, c, ms = 1000) => ev(s, c, 'verdict_submitted', { elapsedMs: ms, verdict: { suspect: 'momo', suspects: ['momo'], confidence: 80 } });
-const NO_TALLY = { verdicts: 0, perfect: 0, rolesRight: 0, rolesTotal: 0, byRole: {}, medianMsToVerdict: null, medianQuestions: null };
+const NO_TALLY = { verdicts: 0, perfect: 0, rolesRight: 0, rolesTotal: 0, byRole: {}, medianMsToVerdict: null, medianQuestions: null, medianCoins: null };
 
 
 const truthless = () => ({ roles: truth, truth, results: {}, score: 0, total: 4 });
@@ -45,7 +45,7 @@ test('funnel and tallies for a full session', () => {
   assert.deepEqual(r.tallies()[B], {
     verdicts: 1, perfect: 1, rolesRight: 4, rolesTotal: 4,
     byRole: { villain: { right: 1, total: 1 }, collaborator: { right: 1, total: 1 }, fooled: { right: 1, total: 1 }, honest: { right: 1, total: 1 } },
-    medianMsToVerdict: 600000, medianQuestions: 4,
+    medianMsToVerdict: 600000, medianQuestions: 4, medianCoins: null,
   });
 });
 
@@ -104,7 +104,7 @@ test('two v3 verdicts add up per true role', () => {
   assert.deepEqual(r.tallies()[B], {
     verdicts: 2, perfect: 1, rolesRight: 7, rolesTotal: 8,
     byRole: { villain: { right: 2, total: 2 }, collaborator: { right: 1, total: 2 }, fooled: { right: 2, total: 2 }, honest: { right: 2, total: 2 } },
-    medianMsToVerdict: 1000, medianQuestions: 0,
+    medianMsToVerdict: 1000, medianQuestions: 0, medianCoins: null,
   });
 });
 
@@ -193,4 +193,14 @@ test('resetting an unknown session does not lower the round count', () => {
   r.observe(ev('s1', B, 'session_started'));
   r.observe(ev('ghost', B, 'session_reset'));
   assert.equal(r.players().round, 1);
+});
+
+test('medianCoins is the lower middle of verdict coins.spent, null when absent', () => {
+  const r = createRoundStats(cases);
+  const mk = (sid, spent) => { r.observe({ type: 'session_started', sessionId: sid, caseId: B }); r.observe({ ...verdict(sid, B), ...(spent == null ? {} : { coins: { spent, budget: 9 } }) }); };
+  mk('a', 7); mk('b', 3); mk('c', null);
+  assert.equal(r.tallies()[B].medianCoins, 3);
+  const r2 = createRoundStats(cases);
+  r2.observe(verdict('z', B));
+  assert.equal(r2.tallies()[B].medianCoins, null);
 });

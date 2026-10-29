@@ -29,6 +29,12 @@ const deepFreeze = value => {
   return value;
 };
 
+const TOOL_KEYS = ['rehearsalReasoning', 'rehearsalChatter'];
+const toolsOf = (data, fail) => {
+  for (const key of TOOL_KEYS) if (data[key] !== undefined && typeof data[key] !== 'function') fail(key, 'must be a function');
+  return Object.fromEntries(TOOL_KEYS.filter(k => data[k]).map(k => [k, data[k]]));
+};
+
 export function defineCase(data, { worlds = liveWorlds } = {}) {
   const id = data?.id;
   const fail = (path, message) => { throw new Error(`case ${id}: ${path}: ${message}`); };
@@ -94,7 +100,7 @@ export function defineCase(data, { worlds = liveWorlds } = {}) {
     text(data.answer?.feedback?.correct, 'answer.feedback.correct');
     text(data.answer?.feedback?.other, 'answer.feedback.other');
     if (typeof data.rehearsal !== 'function') fail('rehearsal', 'must be a function');
-    return deepFreeze({ ...clone(data), world: { ...worlds[worldId] }, rehearsal: data.rehearsal, contentHash: contentHash(data) });
+    return deepFreeze({ ...clone(data), world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...toolsOf(data, fail), contentHash: contentHash(data) });
   }
   const legacyChapters = data.chapters !== undefined;
   if (legacyChapters) {
@@ -134,7 +140,7 @@ export function defineCase(data, { worlds = liveWorlds } = {}) {
     if (f.evidence !== undefined && (!Array.isArray(f.evidence) || !f.evidence.every(e => recordIds.has(e)))) fail(`debrief.findings[${i}].evidence`, 'must list record ids');
   });
   if (typeof data.rehearsal !== 'function') fail('rehearsal', 'must be a function');
-  return deepFreeze({ ...clone(data), legacy: true, world: { ...worlds[worldId] }, rehearsal: data.rehearsal, contentHash: contentHash(data) });
+  return deepFreeze({ ...clone(data), legacy: true, world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...toolsOf(data, fail), contentHash: contentHash(data) });
 }
 
 const nameMap = (kase, cast) => {
