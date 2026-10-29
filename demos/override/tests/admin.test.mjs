@@ -1,7 +1,7 @@
 import http from 'node:http';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createAdmin } from '../server/admin.mjs';
@@ -29,7 +29,8 @@ async function boot(over = {}) {
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${srv.address().port}`;
   const req = (path, { method = 'GET', body, token = 't', raw } = {}) => fetch(base + path, { method, headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), 'content-type': 'application/json' }, body: raw ?? (body === undefined ? undefined : JSON.stringify(body)) });
-  return { srv, req, events, ...f, close: () => { srv.close(); srv.closeAllConnections(); } };
+  const opened = [];
+  return { srv, req, events, opened, ...f, close: () => { for (const s of opened) { s.r.resume(); s.abort(); } srv.close(); srv.closeAllConnections(); } };
 }
 
 test('empty_token_throws', () => {
@@ -159,23 +160,183 @@ test('metrics_content_type', async () => {
   a.close();
 });
 
-test('page: csp, no data, textContent', async () => {
+const CSP_WANT = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+const UID = '0123abcd-0000-4000-8000-000000000001';
+
+function fakeMonitor() {
+  const subs = new Set();
+  const row = { id: 1, at: 1, sessionId: UID, player: '0123', kind: 'start' };
+  return {
+    subs,
+    snapshot: () => ({ at: 1, mode: 'live' }),
+    recent: () => [row],
+    catalog: () => [{ id: 'c', title: 'C', world: 'w', answer: [], characters: [] }],
+    subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
+    startRound(o) { this.round = o; return { label: o.label, startedAt: 777 }; },
+    session: (id) => (id === UID ? [row] : null),
+    push(r) { for (const f of [...subs]) f(r); },
+  };
+}
+
+function openStream(a, { host } = {}) {
+  return new Promise((resolve, reject) => {
+    const lines = [];
+    let buf = '';
+    const waiters = [];
+    const rq = http.request({ host: '127.0.0.1', port: a.srv.address().port, path: '/admin/stream', headers: { authorization: 'Bearer t', ...(host ? { host } : {}) } }, (r) => {
+      r.setEncoding('utf8');
+      r.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { lines.push(JSON.parse(buf.slice(0, i))); buf = buf.slice(i + 1); } waiters.splice(0).forEach((w) => w()); });
+      const handle = { r, lines, abort: () => rq.destroy(), next: async (pred, ms = 1000) => { const end = Date.now() + ms; for (;;) { const f = lines.find(pred); if (f) return f; if (Date.now() > end) throw new Error('timeout'); await new Promise((ok) => { waiters.push(ok); setTimeout(ok, 20); }); } } };
+      a.opened?.push(handle);
+      resolve(handle);
+    });
+    rq.on('error', reject);
+    rq.end();
+  });
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('stream_hello_event_tick', async () => {
+  const monitor = fakeMonitor();
+  const a = await boot({ monitor, tickMs: 50 });
+  const s = await openStream(a);
+  assert.equal(s.r.statusCode, 200);
+  assert.equal(s.r.headers['content-type'], 'application/x-ndjson');
+  assert.equal(s.r.headers['cache-control'], 'no-store');
+  const hello = await s.next((l) => l.type === 'hello');
+  assert.ok(hello.catalog && hello.snapshot && hello.recent);
+  monitor.push({ id: 2, kind: 'clue' });
+  assert.deepEqual(await s.next((l) => l.type === 'event'), { type: 'event', row: { id: 2, kind: 'clue' } });
+  await s.next((l) => l.type === 'tick', 300);
+  s.abort(); a.close();
+});
+
+test('stream_auth', async () => {
+  const a = await boot({ monitor: fakeMonitor() });
+  assert.equal((await a.req('/admin/stream', { token: null })).status, 401);
+  const s = await openStream(a, { host: 'evil.example' });
+  assert.equal(s.r.statusCode, 403);
+  a.close();
+});
+
+test('stream_cap', async () => {
+  const a = await boot({ monitor: fakeMonitor() });
+  const ss = [];
+  for (let i = 0; i < 5; i++) ss.push(await openStream(a));
+  const six = await openStream(a);
+  assert.equal(six.r.statusCode, 503);
+  six.r.resume();
+  ss[0].abort();
+  await sleep(100);
+  const again = await openStream(a);
+  assert.equal(again.r.statusCode, 200);
+  again.abort(); ss.forEach((s) => s.abort()); a.close();
+});
+
+test('stream_cap error body', async () => {
+  const a = await boot({ monitor: fakeMonitor() });
+  const ss = [];
+  for (let i = 0; i < 5; i++) ss.push(await openStream(a));
+  const r = await a.req('/admin/stream');
+  assert.equal(r.status, 503);
+  assert.deepEqual(await r.json(), { error: 'Too many admin streams.' });
+  ss.forEach((s) => s.abort()); a.close();
+});
+
+test('stream_cleanup', async () => {
+  const monitor = fakeMonitor();
+  const a = await boot({ monitor, tickMs: 20 });
+  const s = await openStream(a);
+  await s.next((l) => l.type === 'hello');
+  assert.equal(monitor.subs.size, 1);
+  const snaps = monitor.snapshot;
+  let calls = 0;
+  monitor.snapshot = () => { calls++; return snaps(); };
+  s.abort();
+  await sleep(300);
+  assert.equal(monitor.subs.size, 0);
+  const before = calls;
+  await sleep(100);
+  assert.equal(calls, before);
+  a.close();
+});
+
+test('stream_no_monitor', async () => {
   const a = await boot();
+  for (const [m, p] of [['GET', '/admin/stream'], ['POST', '/admin/round'], ['GET', `/admin/sessions/${UID}`]]) {
+    const r = await a.req(p, { method: m, body: m === 'POST' ? { label: 'x' } : undefined });
+    assert.equal(r.status, 409, p);
+    assert.deepEqual(await r.json(), { error: 'The monitor is off.' });
+  }
+  a.close();
+});
+
+test('round_post', async () => {
+  const monitor = fakeMonitor();
+  const a = await boot({ monitor });
+  const r = await a.req('/admin/round', { method: 'POST', body: { label: 'Session B', reason: 'second class' } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { label: 'Session B', startedAt: 777 });
+  const ev = a.events.find((e) => e.type === 'round_started');
+  assert.deepEqual({ ...ev, timestamp: typeof ev.timestamp }, { type: 'round_started', timestamp: 'number', label: 'Session B', reason: 'second class', startedAt: 777 });
+  for (const label of ['', '   ', 'x'.repeat(61), 5, undefined, null]) {
+    const bad = await a.req('/admin/round', { method: 'POST', body: { label } });
+    assert.equal(bad.status, 400, String(label));
+    assert.deepEqual(await bad.json(), { error: 'Label is required (1-60 characters).' });
+  }
+  await a.req('/admin/round', { method: 'POST', body: { label: 'L', reason: 'r'.repeat(300) } });
+  assert.equal(monitor.round.reason.length, 200);
+  assert.equal((await a.req('/admin/round', { method: 'POST', token: null, body: { label: 'L' } })).status, 401);
+  a.close();
+});
+
+test('session_drilldown', async () => {
+  const a = await boot({ monitor: fakeMonitor() });
+  const r = await a.req(`/admin/sessions/${UID}`);
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.equal(j.sessionId, UID); assert.equal(j.rows.length, 1);
+  const none = await a.req('/admin/sessions/ffffffff-0000-4000-8000-000000000000');
+  assert.equal(none.status, 404);
+  assert.deepEqual(await none.json(), { error: 'No such session.' });
+  assert.equal((await a.req('/admin/sessions/abc')).status, 404);
+  assert.equal((await a.req(`/admin/sessions/${UID}`, { token: null })).status, 401);
+  a.close();
+});
+
+test('static_files', async () => {
+  const pageDir = mkdtempSync(join(tmpdir(), 'page-'));
+  writeFileSync(join(pageDir, 'index.html'), '<!doctype html>hi');
+  writeFileSync(join(pageDir, 'app.js'), 'export {};');
+  writeFileSync(join(pageDir, 'app.css'), 'body{}');
+  const a = await boot({ pageDir });
+  for (const [p, type, body] of [['/admin', 'text/html; charset=utf-8', '<!doctype html>hi'], ['/admin/app.js', 'text/javascript; charset=utf-8', 'export {};'], ['/admin/app.css', 'text/css; charset=utf-8', 'body{}']]) {
+    const r = await a.req(p, { token: null });
+    assert.equal(r.status, 200, p);
+    assert.equal(r.headers.get('content-type'), type);
+    assert.equal(r.headers.get('cache-control'), 'no-store');
+    assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(await r.text(), body);
+  }
+  assert.equal((await a.req('/admin/nope.js', { token: null })).status, 401);
+  a.close();
+});
+
+test('static_missing_dir serves 404 without throwing', async () => {
+  const a = await boot({ pageDir: join(tmpdir(), 'does-not-exist-xyz') });
+  assert.equal((await a.req('/admin', { token: null })).status, 404);
+  assert.equal((await a.req('/admin/health')).status, 200);
+  a.close();
+});
+
+test('page_csp_strict', async () => {
+  const pageDir = mkdtempSync(join(tmpdir(), 'page-'));
+  writeFileSync(join(pageDir, 'index.html'), '<!doctype html>');
+  const a = await boot({ pageDir });
   const r = await a.req('/admin', { token: null });
-  assert.match(r.headers.get('content-type'), /^text\/html/);
   const csp = r.headers.get('content-security-policy');
-  assert.match(csp, /default-src 'none'/);
-  assert.match(csp, /connect-src 'self'/);
-  assert.doesNotMatch(csp, /https?:|\*/);
-  assert.equal(r.headers.get('cache-control'), 'no-store');
-  const html = await r.text();
-  // page_has_no_data: static, contains neither token nor live state
-  assert.ok(!html.includes('"t"') && !html.includes('model-a') && !html.includes('a.test'));
-  assert.equal(html, await (await a.req('/admin', { token: null })).text());
-  // page_uses_textContent
-  assert.ok(html.includes('textContent'));
-  assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(/.test(html));
-  assert.ok(!/src=["']?https?:|href=["']?https?:/.test(html));
+  assert.equal(csp, CSP_WANT);
+  assert.doesNotMatch(csp, /unsafe-inline|http|\*/);
   a.close();
 });
 
@@ -189,4 +350,60 @@ test('rejects foreign Host header and accepts lowercase bearer', async () => {
   const ok = await fetch(`http://127.0.0.1:${a.srv.address().port}/admin/health`, { headers: { authorization: 'bearer t' } });
   assert.equal(ok.status, 200);
   a.close();
+});
+
+test('stream_monitor_throws_hello_drops_client_frees_slot', async () => {
+  const monitor = fakeMonitor();
+  monitor.snapshot = () => { throw new Error('boom'); };
+  const a = await boot({ monitor });
+  for (let i = 0; i < 7; i++) {
+    await openStream(a).then((s) => new Promise((r) => { s.r.on('close', r); s.r.on('error', r); s.r.resume(); }), () => {});
+  }
+  monitor.snapshot = () => ({ at: 1 });
+  const ok = await openStream(a);
+  await ok.next((l) => l.type === 'hello');
+  assert.equal(monitor.subs.size, 1);
+  ok.abort(); a.close();
+});
+
+test('stream_monitor_throws_on_tick_does_not_crash', async () => {
+  const monitor = fakeMonitor();
+  const a = await boot({ monitor, tickMs: 20 });
+  const s = await openStream(a);
+  await s.next((l) => l.type === 'hello');
+  monitor.snapshot = () => { throw new Error('tick boom'); };
+  await sleep(150);
+  assert.equal(monitor.subs.size, 0);
+  assert.equal((await a.req('/admin/health')).status, 200);
+  s.abort(); a.close();
+});
+
+test('stream_rows_with_line_separators_stay_one_line', async () => {
+  const monitor = fakeMonitor();
+  const a = await boot({ monitor });
+  const s = await openStream(a);
+  await s.next((l) => l.type === 'hello');
+  const text = 'a b c\nd\re';
+  monitor.push({ id: 9, text });
+  const ev = await s.next((l) => l.type === 'event');
+  assert.equal(ev.row.text, text);
+  s.abort(); a.close();
+});
+
+test('close_ends_streams', async () => {
+  const monitor = fakeMonitor();
+  let snaps = 0;
+  const snap = monitor.snapshot;
+  monitor.snapshot = () => { snaps++; return snap(); };
+  const a = await boot({ monitor, tickMs: 20 });
+  const s1 = await openStream(a);
+  const s2 = await openStream(a);
+  await s1.next((l) => l.type === 'hello'); await s2.next((l) => l.type === 'hello');
+  const closed = new Promise((r) => a.srv.once('close', r));
+  a.srv.close(); a.srv.closeAllConnections();
+  await closed;
+  assert.equal(monitor.subs?.size ?? monitor.subscribers?.(), 0);
+  const n = snaps;
+  await sleep(100);
+  assert.equal(snaps, n);
 });

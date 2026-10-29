@@ -1,9 +1,15 @@
 import http from 'node:http';
 import { timingSafeEqual, createHash } from 'node:crypto';
-import { accessSync, constants, statfsSync } from 'node:fs';
+import { accessSync, constants, statfsSync, readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { extname, join } from 'node:path';
 
 const MAX_BODY = 16 * 1024;
-const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const MAX_STREAMS = 5;
+const MAX_BUFFERED = 1_000_000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -38,7 +44,21 @@ function readBody(req) {
   });
 }
 
-export function createAdmin({ token, router = null, investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {} }) {
+// Reads the page files once; a missing directory just means no page.
+function loadPage(dir) {
+  const files = new Map();
+  try {
+    const d = typeof dir === 'string' ? dir : fileURLToPath(dir);
+    for (const name of readdirSync(d)) {
+      const type = TYPES[extname(name)];
+      if (!type || name.includes('/')) continue;
+      try { files.set(name === 'index.html' ? '/admin' : `/admin/${name}`, { type, body: readFileSync(join(d, name)) }); } catch {}
+    }
+  } catch {}
+  return files;
+}
+
+export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = new URL('./admin/', import.meta.url), router = null, investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {} }) {
   if (typeof token !== 'string' || !token) throw new Error('An admin token is required.');
   const want = digest(token);
   const authed = (req) => {
@@ -50,6 +70,41 @@ export function createAdmin({ token, router = null, investigations, registry, da
   const log = (action, details) => onSystem({ type: 'admin_action', timestamp: Date.now(), action, ...details });
   const needRouter = () => { if (!router) throw new HttpError(409, 'Live LLM mode is off.'); };
   const str = (v, what) => { if (typeof v !== 'string' || !v) throw new HttpError(400, `${what} is required.`); return v; };
+
+  const pageFiles = loadPage(pageDir);
+  let streams = 0;
+  const active = new Set();
+  const needMonitor = () => { if (!monitor) throw new HttpError(409, 'The monitor is off.'); };
+
+  const stream = (req, res) => {
+    needMonitor();
+    if (streams >= MAX_STREAMS) throw new HttpError(503, 'Too many admin streams.');
+    streams++;
+    res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+    let done = false;
+    let unsub = () => {};
+    let timer = null;
+    function cleanup() {
+      if (done) return;
+      done = true; streams--; active.delete(cleanup);
+      clearInterval(timer); unsub();
+      if (!res.destroyed) res.destroy();
+    }
+    active.add(cleanup);
+    // Takes a thunk so a throwing monitor drops this client, not the listener.
+    const write = (make) => {
+      if (done) return;
+      if (res.writableLength > MAX_BUFFERED) return cleanup();
+      try { res.write(JSON.stringify(make()).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029') + '\n'); } catch { cleanup(); }
+    };
+    req.on('close', cleanup);
+    res.on('close', cleanup);
+    res.on('error', cleanup);
+    write(() => ({ type: 'hello', catalog: monitor.catalog(), snapshot: monitor.snapshot(), recent: monitor.recent() }));
+    if (done) return;
+    try { unsub = monitor.subscribe((row) => write(() => ({ type: 'event', row }))); } catch { return cleanup(); }
+    timer = setInterval(() => write(() => ({ type: 'tick', snapshot: monitor.snapshot() })), tickMs);
+  };
 
   const health = () => {
     let dataWritable = false;
@@ -85,6 +140,15 @@ export function createAdmin({ token, router = null, investigations, registry, da
       log('cap', { endpoint, value });
       return snap;
     },
+    'POST /admin/round': async (body) => {
+      needMonitor();
+      const label = typeof body.label === 'string' ? body.label.trim() : '';
+      if (!label || label.length > 60) throw new HttpError(400, 'Label is required (1-60 characters).');
+      const reason = typeof body.reason === 'string' ? body.reason.slice(0, 200) : '';
+      const { startedAt } = monitor.startRound({ label, reason });
+      onSystem({ type: 'round_started', timestamp: Date.now(), label, reason, startedAt });
+      return { label, startedAt };
+    },
     'POST /admin/sessions/pause': async (body) => {
       if (typeof body.paused !== 'boolean') throw new HttpError(400, 'paused must be true or false.');
       investigations.setPaused(body.paused);
@@ -93,13 +157,16 @@ export function createAdmin({ token, router = null, investigations, registry, da
     },
   };
 
-  return http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
     try {
       if (!hostOk(req.headers.host)) throw new HttpError(403, 'Forbidden host.');
       const path = (req.url || '').split('?')[0];
-      if (req.method === 'GET' && path === '/admin') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': CSP });
-        return res.end(PAGE);
+      const file = req.method === 'GET' ? pageFiles.get(path) : undefined;
+      if (file) {
+        const h = { 'Content-Type': file.type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+        if (path === '/admin') h['Content-Security-Policy'] = CSP;
+        res.writeHead(200, h);
+        return res.end(file.body);
       }
       const known = path === '/metrics' || path.startsWith('/admin/');
       if (!known) throw new HttpError(404, 'Not found.');
@@ -108,88 +175,29 @@ export function createAdmin({ token, router = null, investigations, registry, da
         if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed.');
         return send(res, 200, registry.render(), 'text/plain; version=0.0.4');
       }
+      if (path === '/admin/stream') {
+        if (req.method !== 'GET') throw new HttpError(405, 'Method not allowed.');
+        return stream(req, res);
+      }
+      const sid = req.method === 'GET' ? /^\/admin\/sessions\/([^/]+)$/.exec(path)?.[1] : undefined;
+      if (sid && sid !== 'pause') {
+        needMonitor();
+        const rows = UUID.test(sid) ? monitor.session(sid) : null;
+        if (!rows) throw new HttpError(404, 'No such session.');
+        return send(res, 200, { sessionId: sid, rows });
+      }
       const paths = Object.keys(routes).map((k) => k.split(' ')[1]);
       const handler = routes[`${req.method} ${path}`];
       if (!handler) throw new HttpError(paths.includes(path) ? 405 : 404, paths.includes(path) ? 'Method not allowed.' : 'Not found.');
       const body = req.method === 'POST' ? await readBody(req) : {};
       send(res, 200, await handler(body));
     } catch (e) {
+      if (res.headersSent) return res.destroy();
       if (e instanceof HttpError) return send(res, e.status, { error: e.message });
       console.error('admin error:', e?.message);
       send(res, 500, { error: 'Internal error.' });
     }
   });
+  server.on('close', () => { for (const c of [...active]) c(); });
+  return server;
 }
-
-// Static page: no data is embedded; all state comes from the polled API and is written with textContent.
-const PAGE = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Override admin</title>
-<style>
-body{font:14px system-ui,sans-serif;margin:16px;background:#111;color:#eee}
-table{border-collapse:collapse;margin:8px 0}td,th{border:1px solid #444;padding:4px 8px;text-align:left}
-button,input{font:inherit;margin:2px}.bad{color:#f66}.ok{color:#6c6}pre{white-space:pre-wrap}
-</style></head><body>
-<h1>Override admin</h1>
-<div><label>Token <input id="token" type="password" autocomplete="off"></label> <button id="save">Use token</button> <span id="status"></span></div>
-<h2>Router</h2><div id="routerSummary"></div>
-<table id="endpoints"></table>
-<div><label>Global cap <input id="capValue" type="number" min="1" max="1000" value="50"></label>
-<button id="capAll">Set global cap</button></div>
-<h2>Sessions</h2><table id="sessions"></table>
-<button id="pause">Pause</button> <button id="resume">Resume</button>
-<h2>System</h2><table id="system"></table>
-<pre id="result"></pre>
-<script>
-(function () {
-  var $ = function (id) { return document.getElementById(id); };
-  var tokenInput = $('token');
-  tokenInput.value = sessionStorage.getItem('adminToken') || '';
-  function cell(tr, text, tag) { var c = document.createElement(tag || 'td'); c.textContent = text == null ? '' : String(text); tr.appendChild(c); return c; }
-  function btn(tr, label, fn) { var td = document.createElement('td'); var b = document.createElement('button'); b.textContent = label; b.addEventListener('click', fn); td.appendChild(b); tr.appendChild(td); }
-  function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
-  function api(path, body) {
-    var opt = { headers: { Authorization: 'Bearer ' + tokenInput.value } };
-    if (body !== undefined) { opt.method = 'POST'; opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-    return fetch(path, opt).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; }); });
-  }
-  function act(path, body) {
-    api(path, body).then(function (j) { $('result').textContent = JSON.stringify(j, null, 2); poll(); })
-      .catch(function (e) { $('result').textContent = 'Error: ' + e.message; });
-  }
-  $('save').addEventListener('click', function () { sessionStorage.setItem('adminToken', tokenInput.value); poll(); });
-  $('pause').addEventListener('click', function () { act('/admin/sessions/pause', { paused: true }); });
-  $('resume').addEventListener('click', function () { act('/admin/sessions/pause', { paused: false }); });
-  $('capAll').addEventListener('click', function () { act('/admin/llm/cap', { endpoint: null, value: Number($('capValue').value) }); });
-  function render(h) {
-    var st = $('status'); st.textContent = h.ok ? 'connected' : 'error'; st.className = h.ok ? 'ok' : 'bad';
-    var r = h.router, rs = $('routerSummary'), t = $('endpoints'); clear(t);
-    if (!r) { rs.textContent = 'Live LLM mode is off (rehearsal).'; }
-    else {
-      rs.textContent = 'Active: ' + r.active + (r.pinned ? ' (pinned)' : '') + ' | in flight ' + r.inFlight + '/' + r.maxInFlight + ' | queued ' + r.queued;
-      var hd = document.createElement('tr');
-      ['Name','Model','Host','In flight','Cap','Queued','Failures 5m','Last failure','Actions'].forEach(function (x) { cell(hd, x, 'th'); }); t.appendChild(hd);
-      r.endpoints.forEach(function (e) {
-        var tr = document.createElement('tr');
-        cell(tr, e.name); cell(tr, e.model); cell(tr, e.apiBaseHost); cell(tr, e.inFlight); cell(tr, e.maxInFlight);
-        cell(tr, e.queued); cell(tr, e.failures5m); cell(tr, e.lastFailureReason);
-        btn(tr, 'Move + pin', function () { var why = prompt('Reason for moving to ' + e.name + '?'); if (why) act('/admin/llm/active', { endpoint: e.name, pinned: true, reason: why }); });
-        btn(tr, 'Unpin', function () { var why = prompt('Reason for unpinning on ' + e.name + '?'); if (why) act('/admin/llm/active', { endpoint: e.name, pinned: false, reason: why }); });
-        btn(tr, 'Probe', function () { act('/admin/llm/probe', { endpoint: e.name }); });
-        btn(tr, 'Cap', function () { var v = Number(prompt('Cap for ' + e.name + ' (1-1000)?', String(e.maxInFlight))); if (v) act('/admin/llm/cap', { endpoint: e.name, value: v }); });
-        t.appendChild(tr);
-      });
-    }
-    var s = h.sessions, ss = $('sessions'); clear(ss);
-    var row = function (k, v) { var tr = document.createElement('tr'); cell(tr, k); cell(tr, v); ss.appendChild(tr); };
-    row('games', s.games); row('waiting', s.waiting); row('paused', s.paused);
-    Object.keys(s.byStage || {}).forEach(function (k) { row('stage ' + k, s.byStage[k]); });
-    var sy = $('system'); clear(sy);
-    (h.recentSystem || []).slice().reverse().forEach(function (rec) { var tr = document.createElement('tr'); cell(tr, JSON.stringify(rec)); sy.appendChild(tr); });
-  }
-  function poll() {
-    if (!tokenInput.value) return;
-    api('/admin/health').then(render).catch(function (e) { var st = $('status'); st.textContent = 'Error: ' + e.message; st.className = 'bad'; });
-  }
-  setInterval(poll, 1000); poll();
-})();
-</script></body></html>`;
