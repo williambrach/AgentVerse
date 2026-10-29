@@ -323,7 +323,16 @@ export class Investigation {
       this.remember(character.id, answered.eventId, reasoning);
       s.interviews[character.id].push({ question, answer, timestamp: answered.timestamp });
     } catch (error) {
-      if (!answeredLogged) s.economy = wallet;
+      if (!answeredLogged) {
+        // The answer write itself may have thrown after the line reached the file:
+        // then the log already holds the spend, so memory must follow the log.
+        let onDisk = null;
+        try {
+          const events = readJsonl(this.file(s.id));
+          if (events.some(e => e.type === 'interview_answer' && e.questionEventId === asked.eventId)) onDisk = replay(events, [this.kase]);
+        } catch { /* fall back to the pre-spend wallet */ }
+        if (onDisk) { this.session = onDisk; this.wrote = onDisk.id; } else s.economy = wallet;
+      }
       const providerError = error?.name === 'InterviewProviderError';
       this.log('interview_failed', { character: character.id, question, questionEventId: asked.eventId, reason: providerError ? error.code : 'provider_or_storage_error', ...(providerError ? error.diagnostics : {}), provenance: error?.provenance ?? null });
       const failure = new RequestError(502, providerError ? error.message : 'The interview could not complete. Check the server’s storage and retry.');

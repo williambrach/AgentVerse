@@ -182,3 +182,21 @@ test('failure after the answer is logged keeps the logged spend', async t => {
   assert.equal(logged, 4);
   assert.equal(g.session.economy.spent, logged);
 });
+
+test('answer write that throws after reaching the file leaves the wallet matching the log', async t => {
+  const { g, act, ask, events } = await begun(t);
+  await ask('momo');
+  const orig = g.log.bind(g);
+  g.log = (type, details, state) => {
+    const e = orig(type, details, state);
+    if (type === 'interview_answer') { (state ?? g.session).revision -= 1; throw new Error('disk'); }
+    return e;
+  };
+  await assert.rejects(ask('pip'));
+  g.log = orig;
+  const logged = events().filter(e => e.type === 'interview_answer').at(-1).spend.total;
+  assert.equal(g.session.economy.spent, logged);
+  const seqs = events().map(e => e.sequence);
+  assert.deepEqual(seqs, seqs.map((_, i) => i + 1));
+  await act('visit', { location: 'report' });
+});
