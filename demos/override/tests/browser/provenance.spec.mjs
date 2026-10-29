@@ -8,15 +8,18 @@ const LEAKS = [
   'Nobody broke the rule.',
   'Right. Nobody broke the rule.',
   'Nobody knowingly broke the rule this time.',
+  'Nobody knew it was too soon.',
+  'Right. The rule was broken, but nobody knew it. The echo shell fooled everyone.',
+  'The potions came out too soon, but by mistake. The echo shell sounds just like the tower bell.',
 ];
 
 test('export carries case provenance', async ({ page }) => {
-  await page.goto('/?case=banana-control');
+  await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
   await page.locator('#skip-walking').check();
   await page.locator('nav [data-go="replay"]').click();
   await page.locator('#reveal-button').click();
-  for (const id of ['momo', 'pip', 'nori']) {
+  for (const id of ['wren', 'basil', 'juniper']) {
     await page.locator(`nav [data-go="${id}"]`).click();
     await page.locator('[data-quick-question]').click();
     await expect(page.locator('.speech.character')).not.toHaveCount(0);
@@ -24,15 +27,15 @@ test('export carries case provenance', async ({ page }) => {
   await page.locator('nav [data-go="report"]').click();
   await page.locator('[name="suspect"][value="none"]').check();
   await page.getByRole('button', { name: 'See what happened' }).click();
-  await expect(page.locator('#panel h2')).toHaveText('Nobody broke the rule.');
+  await expect(page.locator('#panel h2')).toHaveText('Nobody knew it was too soon.');
 
   const res = await page.request.get('/api/events');
   expect(res.ok()).toBe(true);
   const events = (await res.text()).split('\n').filter(Boolean).map(l => JSON.parse(l));
   expect(events.length).toBeGreaterThan(0);
   for (const e of events) {
-    expect(e.caseId).toBe('banana-control');
-    expect(e.caseVersion).toBe('banana-control-v1.0.0');
+    expect(e.caseId).toBe('tower-echo-bell');
+    expect(e.caseVersion).toBe('tower-echo-bell-v1.0.0');
     expect(e.contentHash).toMatch(/^[0-9a-f]{12}$/);
   }
   expect(events.find(e => e.type === 'session_started').assignment).toBe('fixed');

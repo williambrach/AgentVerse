@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// Runs in the `tower` project (port 4318, dev tools on, so the draft tower cases are listed).
+// Runs in the `tower` project (port 4318, dev tools on; the tower case no longer needs them).
 // The tower PNGs are routed to 404 so the tests behave the same with or without real art.
 const groveFiles = {
   'apprentices.png': 'monkeys.png', 'apprentice-idle.png': 'monkey-idle.png',
@@ -9,7 +9,7 @@ const groveFiles = {
 
 // `page.art.bytes` null: every tower PNG is a 404. Otherwise each is served as the matching grove PNG.
 // `realArt` serves the committed tower PNGs as they are.
-async function start(page, caseId = 'tower-bell-charm', { realArt = false } = {}) {
+async function start(page, caseId = 'tower-echo-bell', { realArt = false } = {}) {
   const errors = [];
   const art = { bytes: null };
   page.art = art;
@@ -101,7 +101,7 @@ test('art that appears later replaces the placeholder', async ({ page }) => {
   for (const [tower, grove] of Object.entries(groveFiles)) page.art.bytes[tower] = await (await page.request.get(`/assets/banana/${grove}`)).body();
   await switchTo(page, 'banana-mystery');
   await settled(page, 'grove', ['momo', 'pip', 'nori']);
-  await switchTo(page, 'tower-bell-charm');
+  await switchTo(page, 'tower-echo-bell');
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   expect((await sceneState(page)).artSources).toEqual({ cast: 'file', idle: 'file', walk: 'file', props: 'file' });
 });
@@ -111,7 +111,7 @@ test('one key press after round trips arrives once', async ({ page }) => {
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   await switchTo(page, 'banana-mystery');
   await settled(page, 'grove', ['momo', 'pip', 'nori']);
-  await switchTo(page, 'tower-bell-charm');
+  await switchTo(page, 'tower-echo-bell');
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   const visits = [];
   page.on('request', request => { if (request.url().endsWith('/api/visit')) visits.push(request.url()); });
@@ -169,7 +169,7 @@ test('nav follows the world on every switch', async ({ page }) => {
   await expect(page.locator('#app')).toHaveAttribute('data-world', 'grove');
   for (const id of ['momo', 'pip', 'nori']) await expect(page.locator(`nav [data-go="${id}"]`)).toHaveCount(1);
   await expect(page.locator('nav [data-go="wren"]')).toHaveCount(0);
-  await switchTo(page, 'tower-bell-charm');
+  await switchTo(page, 'tower-echo-bell');
   await expect(page.locator('#app')).toHaveAttribute('data-world', 'tower');
   await expect(page.locator('nav [data-go="momo"]')).toHaveCount(0);
   await switchTo(page, 'banana-mystery');
@@ -198,7 +198,7 @@ test('a tower session resumes from its cookie', async ({ page }) => {
 });
 
 test('the real tower art keeps its proportions, uses the corrected walk atlas and sits on the grove chrome', async ({ page }) => {
-  const errors = await start(page, 'tower-bell-charm', { realArt: true });
+  const errors = await start(page, 'tower-echo-bell', { realArt: true });
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   const look = await page.evaluate(() => {
     const scene = window.walkingTestGame.scene.getScene('banana-grove');

@@ -138,14 +138,14 @@ test('compact notebook keeps drafts and reading position when showing a clue', a
 test('copy, counts and nav come from the active case', async ({ page }) => {
   await fresh(page);
   const before = await (await page.request.get('/api/state')).json();
-  const reset = await page.request.post('/api/reset', { data: { sessionId: before.session.id, revision: before.session.revision, caseId: 'banana-control' } });
+  const reset = await page.request.post('/api/reset', { data: { sessionId: before.session.id, revision: before.session.revision, caseId: 'tower-echo-bell' } });
   expect(reset.ok()).toBe(true);
   await page.reload();
-  await expect(page.locator('h1')).toHaveText('Who broke the rule?');
+  await expect(page.locator('h1')).toHaveText('Was it time?');
   await expect(page.locator('.wordmark')).toHaveAttribute('aria-label', 'The Override home');
-  await expect(page.locator('#intro-title')).toContainText('The Banana Mix-up'.split(' ').slice(0, -1).join(' '));
+  await expect(page.locator('#intro-title')).toContainText('Lanterns');
   await page.locator('#begin-button').click();
-  await expect(page.locator('#panel h2')).toHaveText('A mix-up at the picnic.');
+  await expect(page.locator('#panel h2')).toHaveText('Lanterns, too soon.');
   await expect(page.locator('.eyebrow', { hasText: 'CASE 002' })).toBeVisible();
-  await expect(page.locator('.station-topline')).toContainText('THE BANANA MIX-UP / PICNIC DAY');
+  await expect(page.locator('.station-topline')).toContainText('LANTERNS TOO SOON / POTION DAY');
 });

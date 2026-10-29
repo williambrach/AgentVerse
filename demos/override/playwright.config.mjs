@@ -29,7 +29,7 @@ export default defineConfig({
       env: { PORT: '4317', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: './test-results/sessions' },
     },
     {
-      // Dev tools on, so the draft tower cases are visible. Only the tower project talks to this server.
+      // Dev tools on, as in local development. Only the tower project talks to this server.
       command: 'node server/index.mjs',
       url: 'http://127.0.0.1:4318/api/access',
       reuseExistingServer: false,
