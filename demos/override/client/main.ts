@@ -7,7 +7,9 @@ import './fit.css';
 import './tower.css';
 import './tools.css';
 import './bubbles.css';
+import './team.css';
 import { HINTS, coinLabel, toolChip, toolBlock, toolsBlock, reasoningBlock, threadPanel, pluralise } from './tools';
+import { teamGate, teamNameError, leaderboardPanel, type GateView } from './team';
 import { renderNotebook } from './notebook';
 import { createStation, type Station } from './station';
 import { postHeartbeat, startHeartbeat } from './heartbeat';
@@ -37,6 +39,9 @@ interface CaseRow { id: string; title: string; lead: string; order: number; worl
 let catalog: CaseRow[] = [];
 let selectedCase = '';
 let drafts: Record<string, string> = {};
+let teamName = '';
+let leaderboardTimer: ReturnType<typeof setInterval> | undefined;
+let leaderboardOpener = '#leaderboard-button';
 let reportDraft = { suspect: '', confidence: 70, explanation: '' };
 
 // Solved cases are a per-browser convenience for the case list; research records stay on the server.
@@ -110,6 +115,8 @@ function shell() {
     <header class="topbar">
       <a class="wordmark" href="/" aria-label="The Override home"><span class="banana-mark" id="world-icon"></span><span>THE OVERRIDE<small>AGENTVERSE</small></span></a>
       <div class="top-meta"><span class="authored-label">AUTHORED DEMONSTRATION</span><span id="mode-badge" class="mode-badge"></span><span class="coin-wrap"><span id="coin-counter" class="mode-badge coin-badge" tabindex="0" aria-describedby="coin-tip" hidden></span><span id="coin-tip" class="coin-tip" role="tooltip">${escape(HINTS.coins)}</span></span></div>
+      <button class="quiet-button team-chip" id="team-button" title="Change team">${icon('person')}<span>${escape(teamName)}</span></button>
+      <button class="quiet-button" id="leaderboard-button" title="See how the teams rank">${svg('<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/>')}<span>Leaderboard</span></button>
       <button class="quiet-button" id="restart-button" title="Start this case over in a fresh session">${icon('reset')}<span>Reset session</span></button>
       <button class="quiet-button" id="reset-button" title="Choose another case or restart this one">${icon('cases')}<span>Cases</span></button>
     </header>
@@ -135,7 +142,7 @@ function shell() {
     selectedCase = input.value;
     renderPreview();
   });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.querySelector('#case-switch, #reset-confirm')) closeOverlay(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard')) closeOverlay(); });
   document.querySelector('#skip-walking')!.addEventListener('change', event => { skipWalking = (event.target as HTMLInputElement).checked; });
   setInterval(() => {
     const elapsed = document.querySelector('#elapsed');
@@ -204,6 +211,9 @@ async function onClick(event: MouseEvent) {
   }
   if (button.id === 'reset-button' || button.id === 'debrief-reset') showCases();
   if (button.id === 'restart-button') showRestart();
+  if (button.id === 'team-button') showTeamSwitch();
+  if (button.id === 'leaderboard-button' || button.id === 'debrief-leaderboard') showLeaderboard(`#${button.id}`);
+  if (button.id === 'leaderboard-close') closeOverlay();
   if (button.id === 'cancel-reset' || button.id === 'cancel-restart') closeOverlay();
   if (button.id === 'confirm-reset') await startCase(selectedCase || state.caseId);
   if (button.id === 'confirm-restart') await startCase(state.caseId);
@@ -260,7 +270,7 @@ function render() {
   const toast = document.querySelector<HTMLElement>('#toast')!;
   toast.hidden = !errorMessage;
   toast.textContent = errorMessage;
-  station?.setEnabled(Boolean(session && !introVisible && !busy && !document.querySelector('#case-switch, #reset-confirm')));
+  station?.setEnabled(Boolean(session && !introVisible && !busy && !document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard')));
   const target = document.querySelector<HTMLElement>('#panel')!;
   const sections: Record<string, string> = { briefing: 'Case briefing', ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
   document.querySelector('#notebook-section')!.textContent = threadOpen ? 'Thread' : sections[panel];
@@ -390,7 +400,7 @@ function debriefPanel() {
     ${debrief.findings.map(f => `<section class="finding"><div class="finding-monkey"><i class="monkey-face ${castClass(f.character)}" aria-hidden="true"></i><div><span class="eyebrow">${escape(f.character.toUpperCase())}</span><h3>${escape(f.classification)}</h3></div></div><p>${escape(f.explanation)}</p></section>`).join('')}
     <div class="briefing-note"><p>${escape(debrief.lesson)}</p></div><p class="fine-print">These ${escape(world().text.many)} represent AI agents. This is an authored demonstration of intent and mistakes, not a validated research case.</p>
     ${next ? `<button class="primary-button" id="next-case" data-case="${escape(next.id)}">Next case: ${escape(next.title)} ${icon('arrow')}</button>` : ''}
-    <div class="debrief-actions"><button class="${next ? 'secondary' : 'primary'}-button" id="debrief-reset">${next ? 'All cases' : 'Play again'} ${icon(next ? 'cases' : 'reset')}</button><button class="secondary-button" id="debrief-export">Export session ${icon('arrow')}</button></div></div>`;
+    <div class="debrief-actions"><button class="${next ? 'secondary' : 'primary'}-button" id="debrief-reset">${next ? 'All cases' : 'Play again'} ${icon(next ? 'cases' : 'reset')}</button><button class="secondary-button" id="debrief-leaderboard">Leaderboard</button><button class="secondary-button" id="debrief-export">Export session ${icon('arrow')}</button></div><p class="fine-print">Each case scores once per team: your first guess counts.</p></div>`;
 }
 
 /** Coins to keep back so the player can still ask everyone once, not counting the action's own target. */
@@ -509,11 +519,91 @@ function showRestart() {
 /** Closes the case board or the reset question and gives focus back to the button that opened it. */
 function closeOverlay() {
   if (busy) return;
-  const opener = document.querySelector('#reset-confirm') ? '#restart-button' : '#reset-button';
+  const opener = document.querySelector('#reset-confirm') ? '#restart-button'
+    : document.querySelector('#team-switch') ? '#team-button'
+    : document.querySelector('#leaderboard') ? leaderboardOpener : '#reset-button';
+  stopLeaderboardPoll();
   document.querySelector('#overlay-root')!.innerHTML = '';
   station.setEnabled(Boolean(state.session));
   applyTheme();
   document.querySelector<HTMLButtonElement>(opener)?.focus({ preventScroll: true });
+}
+
+function stopLeaderboardPoll() { if (leaderboardTimer) clearInterval(leaderboardTimer); leaderboardTimer = undefined; }
+
+/** The leaderboard overlay: fetched on open and every 10 s until it closes. */
+function showLeaderboard(opener: string) {
+  stopLeaderboardPoll();
+  leaderboardOpener = opener;
+  station.setEnabled(false);
+  document.querySelector('#overlay-root')!.innerHTML = `<div class="modal-shade" id="leaderboard"><section class="reset-card board-card" role="dialog" aria-modal="true" aria-labelledby="board-title"><span class="eyebrow" id="board-title">LEADERBOARD</span><div id="leaderboard-body"><p class="board-empty">Loading…</p></div><div class="reset-actions"><button class="secondary-button" id="leaderboard-close">Close</button></div></section></div>`;
+  const shade = document.querySelector('#leaderboard')!;
+  shade.addEventListener('click', event => { if (event.target === event.currentTarget) closeOverlay(); });
+  document.querySelector<HTMLButtonElement>('#leaderboard-close')!.focus({ preventScroll: true });
+  const load = async () => {
+    if (document.querySelector('#leaderboard') !== shade) { stopLeaderboardPoll(); return; }
+    try {
+      const board = await api('leaderboard');
+      if (document.querySelector('#leaderboard') !== shade) return;
+      document.querySelector('#leaderboard-body')!.innerHTML = leaderboardPanel(board);
+    } catch {
+      if (document.querySelector('#leaderboard') !== shade) return;
+      document.querySelector('#leaderboard-body')!.innerHTML = '<p class="board-empty">The leaderboard could not be loaded. Trying again shortly.</p>';
+    }
+  };
+  void load();
+  leaderboardTimer = setInterval(() => void load(), 10000);
+}
+
+/** POST /api/team with the body kept on errors, so a 409 can name the team that is taken. */
+async function postTeam(name: string, join: boolean): Promise<{ ok: true } | { ok: false; error: string; taken: string | null }> {
+  try {
+    const response = await fetch('/api/team', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(join ? { name, join: true } : { name }) });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) return { ok: true };
+    return { ok: false, error: response.status === 409 ? '' : String(data.error || 'The server could not complete this request.'), taken: response.status === 409 && typeof data.taken === 'string' ? data.taken : null };
+  } catch { return { ok: false, error: 'The server could not be reached.', taken: null }; }
+}
+
+/** Renders the check-in form into `host` and wires it once per render. Resolves when a team is set. */
+function mountGate(host: HTMLElement, switching: boolean, onDone: () => void, onCancel?: () => void) {
+  const view: GateView = { name: '', error: '', taken: null, busy: false, switching };
+  const draw = () => {
+    host.innerHTML = teamGate(view);
+    const input = host.querySelector<HTMLInputElement>('#team-name')!;
+    input.addEventListener('input', () => { view.name = input.value; });
+    const send = async (name: string, join: boolean) => {
+      view.busy = true; view.error = ''; draw();
+      const result = await postTeam(name, join);
+      view.busy = false;
+      if (result.ok) { onDone(); return; }
+      view.error = result.error; view.taken = result.taken;
+      draw();
+      if (!view.taken) host.querySelector<HTMLInputElement>('#team-name')!.focus();
+    };
+    host.querySelector('#team-form')!.addEventListener('submit', event => {
+      event.preventDefault();
+      if (view.busy) return;
+      view.name = input.value;
+      const problem = teamNameError(view.name);
+      if (problem) { view.error = problem; view.taken = null; draw(); host.querySelector<HTMLInputElement>('#team-name')!.focus(); return; }
+      void send(view.name, false);
+    });
+    host.querySelector('#team-join')?.addEventListener('click', () => { if (view.taken && !view.busy) void send(view.taken, true); });
+    host.querySelector('#team-other')?.addEventListener('click', () => { view.taken = null; view.error = ''; view.name = ''; draw(); host.querySelector<HTMLInputElement>('#team-name')!.focus(); });
+    host.querySelector('#team-cancel')?.addEventListener('click', () => onCancel?.());
+  };
+  draw();
+  host.querySelector<HTMLInputElement>('#team-name')!.focus();
+}
+
+function showTeamSwitch() {
+  station.setEnabled(false);
+  const root = document.querySelector('#overlay-root')!;
+  root.innerHTML = '<div class="modal-shade" id="team-switch"></div>';
+  const shade = document.querySelector<HTMLElement>('#team-switch')!;
+  shade.addEventListener('click', event => { if (event.target === event.currentTarget) closeOverlay(); });
+  mountGate(shade, true, () => location.reload(), () => closeOverlay());
 }
 
 /** The next case in catalog order that this browser has not solved yet. */
@@ -536,6 +626,14 @@ async function boot() {
       });
       return;
     }
+    stopHeartbeat ??= startHeartbeat(document, postHeartbeat, 30000);
+    const mine = (await api('team')).team as { name: string } | null;
+    if (!mine) {
+      app.innerHTML = '<div class="access-screen"></div>';
+      mountGate(app.querySelector<HTMLElement>('.access-screen')!, false, () => void boot());
+      return;
+    }
+    teamName = mine.name;
     state = await api('state');
     try { catalog = ((await api('cases')).cases as CaseRow[]).sort((a, b) => a.order - b.order); } catch { catalog = []; }
     const wanted = new URLSearchParams(location.search).get('case');
@@ -543,7 +641,6 @@ async function boot() {
     drafts = blankDrafts();
     shell();
     render();
-    stopHeartbeat ??= startHeartbeat(document, postHeartbeat, 30000);
   } catch {
     app.innerHTML = `<div class="access-screen"><div class="reset-card"><span class="eyebrow">CONNECTION UNAVAILABLE</span><h1>The grove is offline.</h1><p>The case server could not be reached. Start the demo server, then reload this page.</p><button class="primary-button" onclick="location.reload()">Try again</button></div></div>`;
   }
