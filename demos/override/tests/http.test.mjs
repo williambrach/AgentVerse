@@ -250,7 +250,7 @@ test('cookie_secure_trusted_only: a spoofed X-Forwarded-Proto marks cookies Secu
 test('the case catalog needs the access token and lists public rows only', async t => {
   const rows = [
     { id: 'banana-mystery', title: 'The Banana Mystery', lead: 'The bananas are gone.\nThe bell never rang.', order: 1 },
-    { id: 'banana-control', title: 'The Banana Mix-up', lead: 'The bananas are gone.\nBut did anyone break the rule?', order: 2 },
+    { id: 'tower-echo-bell', title: 'Lanterns Too Soon', lead: 'A bell rang.\nThe potions came out too soon.', order: 2 },
   ];
   const investigations = { catalog: () => rows, view: () => ({ session: null }), mutate: async () => ({ session: null }), export: () => '' };
   const app = createApp({ investigations, accessCode: 'colleague-code' });
@@ -264,5 +264,5 @@ test('the case catalog needs the access token and lists public rows only', async
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.deepEqual(await response.json(), { cases: rows });
-  assert.equal((await fetch(`${base}/server/cases/banana-control.mjs`)).status, 404);
+  assert.equal((await fetch(`${base}/server/cases/tower-echo-bell.mjs`)).status, 404);
 });

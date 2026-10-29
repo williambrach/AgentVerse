@@ -10,6 +10,7 @@ import { cases } from '../server/cases/index.mjs';
 import { defineCase } from '../server/cases.mjs';
 import { minimalCase } from './fixtures/minimal-case.mjs';
 import bananaControl from '../server/cases/banana-control.mjs';
+import towerEcho from '../server/cases/tower-echo-bell.mjs';
 import { modelConfig, buildMessages } from '../server/interviews.mjs';
 
 function setup(t, options = {}) {
@@ -395,22 +396,22 @@ test('every registered case keeps its answer off the wire before the verdict', a
 });
 
 test('control case feedback', async t => {
-  for (const [suspect, line] of [['none', 'correct'], ['momo', 'other']]) {
+  for (const [suspect, line] of [['none', 'correct'], ['wren', 'other']]) {
     const { act } = newGames(t);
-    const id = (await act(undefined, 'start', { caseId: 'banana-control' })).session.id;
-    await act(id, 'reveal'); await talkToAll(act, id);
+    const id = (await act(undefined, 'start', { caseId: 'tower-echo-bell' })).session.id;
+    await act(id, 'reveal'); await talkToAll(act, id, towerEcho);
     const view = await act(id, 'verdict', { suspect, confidence: 80 });
-    assert.equal(view.debrief.feedback, bananaControl.answer.feedback[line]);
-    assert.equal(view.debrief.title, 'Nobody broke the rule.');
+    assert.equal(view.debrief.feedback, towerEcho.answer.feedback[line]);
+    assert.equal(view.debrief.title, 'Nobody knew it was too soon.');
   }
 });
 
 test('logs carry provenance', async t => {
   const { games, act } = newGames(t);
-  const id = (await act(undefined, 'start', { caseId: 'banana-control' })).session.id;
+  const id = (await act(undefined, 'start', { caseId: 'tower-echo-bell' })).session.id;
   await act(id, 'reveal');
   const events = games.export(id).trim().split('\n').map(JSON.parse);
-  assert.ok(events.every(e => /^[0-9a-f]{12}$/.test(e.contentHash) && e.caseId === 'banana-control'));
+  assert.ok(events.every(e => /^[0-9a-f]{12}$/.test(e.contentHash) && e.caseId === 'tower-echo-bell'));
   assert.equal(events.find(e => e.type === 'session_started').assignment, 'fixed');
   const other = (await act(undefined, 'start')).session.id;
   assert.equal(JSON.parse(games.export(other).split('\n')[0]).assignment, 'default');
@@ -428,15 +429,15 @@ test('catalog lists the ready cases in order', t => {
   const { games } = newGames(t);
   assert.deepEqual(games.catalog(), [
     { id: 'banana-mystery', title: 'The Banana Mystery', lead: 'The bananas are gone.\nThe bell never rang.', order: 1, world: 'grove' },
-    { id: 'banana-control', title: 'The Banana Mix-up', lead: 'The bananas are gone.\nBut did anyone break the rule?', order: 2, world: 'grove' },
+    { id: 'tower-echo-bell', title: 'Lanterns Too Soon', lead: 'A bell rang.\nThe potions came out too soon.', order: 2, world: 'tower' },
   ]);
 });
 
 test('reset keeps or switches the case', async t => {
   const { act } = newGames(t);
-  const first = (await act(undefined, 'start', { caseId: 'banana-control' })).session.id;
+  const first = (await act(undefined, 'start', { caseId: 'tower-echo-bell' })).session.id;
   const kept = await act(first, 'reset');
-  assert.equal(kept.caseId, 'banana-control');
+  assert.equal(kept.caseId, 'tower-echo-bell');
   assert.notEqual(kept.session.id, first);
   const switched = await act(kept.session.id, 'reset', { caseId: 'banana-mystery' });
   assert.equal(switched.caseId, 'banana-mystery');
@@ -450,27 +451,27 @@ test('reset with a caseId during a pending interview is still a 409', async t =>
   const id = (await act(undefined, 'start')).session.id;
   await act(id, 'reveal');
   const pending = act(id, 'interview', { character: 'pip', question: 'Who told you?' });
-  await assert.rejects(act(id, 'reset', { caseId: 'banana-control' }), error => error.status === 409);
+  await assert.rejects(act(id, 'reset', { caseId: 'tower-echo-bell' }), error => error.status === 409);
   finish('Momo told me.');
   await pending;
   assert.equal(games.view(id).caseId, 'banana-mystery');
 });
 
-test('a restarted server restores a control game', async t => {
+test('a restarted server restores a tower game', async t => {
   const { games, act, dir } = newGames(t);
-  const id = (await act(undefined, 'start', { caseId: 'banana-control' })).session.id;
-  await act(id, 'reveal'); await talkToAll(act, id);
+  const id = (await act(undefined, 'start', { caseId: 'tower-echo-bell' })).session.id;
+  await act(id, 'reveal'); await talkToAll(act, id, towerEcho);
   const restarted = new Investigations({ dataDir: dir, config: modelConfig({}) });
-  assert.equal(restarted.view(id).title, 'The Banana Mix-up');
-  assert.equal(restarted.view(id).session.interviews.nori.length, 1);
+  assert.equal(restarted.view(id).title, 'Lanterns Too Soon');
+  assert.equal(restarted.view(id).session.interviews.juniper.length, 1);
   assert.deepEqual(restarted.view(id), games.view(id));
 });
 
 test('replay needs a registered case with the same version', async t => {
   const { games, act } = newGames(t);
-  const id = (await act(undefined, 'start', { caseId: 'banana-control' })).session.id;
+  const id = (await act(undefined, 'start', { caseId: 'tower-echo-bell' })).session.id;
   const events = games.export(id).trim().split('\n').map(JSON.parse);
-  assert.equal(replay(events, cases).caseId, 'banana-control');
+  assert.equal(replay(events, cases).caseId, 'tower-echo-bell');
   assert.equal(replay(events, [cases[0]]), null);
   assert.equal(replay(events.map(e => ({ ...e, caseVersion: 'old' })), cases), null);
   assert.equal(replay([], cases), null);
