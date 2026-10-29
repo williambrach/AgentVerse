@@ -3,7 +3,10 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/browser',
   // Keep the snapshot names from before the projects existed (no project name in the file name).
-  snapshotPathTemplate: '{snapshotDir}/{testDir}/{testFileDir}/{testFileName}-snapshots/{arg}{-snapshotSuffix}{ext}',
+  // {snapshotDir} is already the test folder; adding the absolute {testDir} nests the path under tests/browser/Users/….
+  snapshotPathTemplate: '{snapshotDir}/{testFileDir}/{testFileName}-snapshots/{arg}{-snapshotSuffix}{ext}',
+  // A missing baseline fails instead of being written, so a test can never pass against its own fresh screenshot.
+  updateSnapshots: 'none',
   projects: [
     { name: 'default', testIgnore: 'tower.spec.mjs' },
     { name: 'tower', testMatch: 'tower.spec.mjs', use: { baseURL: 'http://127.0.0.1:4318' } },
