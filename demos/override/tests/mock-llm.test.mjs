@@ -69,3 +69,14 @@ test('unknown path is 404', async () => {
   const mock = await startMockLlm({ delayMs: [0, 0] });
   try { assert.equal((await fetch(`${mock.url}/nope`)).status, 404); } finally { await mock.close(); }
 });
+
+test('reasoning option adds reasoning_content to ok replies and can be toggled', async () => {
+  const mock = await startMockLlm({ delayMs: [0, 0], reasoning: 'Mock reasoning' });
+  try {
+    assert.equal((await (await post(mock)).json()).choices[0].message.reasoning_content, 'Mock reasoning');
+    mock.setReasoning(null);
+    assert.ok(!('reasoning_content' in (await (await post(mock)).json()).choices[0].message));
+    mock.setReasoning('Later');
+    assert.equal((await (await post(mock)).json()).choices[0].message.reasoning_content, 'Later');
+  } finally { await mock.close(); }
+});

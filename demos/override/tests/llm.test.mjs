@@ -258,12 +258,36 @@ test('no_keys_in_trace: traces and errors never contain keys, headers or reasoni
   const secret = 'Private deliberation';
   const { r, traces } = router(['a', 'b'], { a: http(401), b: () => ok('fine', { message: { reasoning_content: secret } }) });
   const out = await r.complete({ messages: MSGS, sessionId: 's1', questionEventId: 'q1' });
-  const blob = JSON.stringify([traces, out]);
+  const blob = JSON.stringify([traces, out.provenance]);
+  assert.equal(out.reasoning, secret);
   assert.ok(!blob.includes('secret-key') && !blob.includes('Bearer') && !blob.includes('Authorization') && !blob.includes(secret));
   assert.equal(traces.length, 2);
   assert.deepEqual(traces.map(t => [t.attempt, t.endpoint, t.error, t.providerStatus, t.sessionId, t.questionEventId]), [[1, 'a', 'credentials_rejected', 401, 's1', 'q1'], [2, 'b', null, 200, 's1', 'q1']]);
   assert.deepEqual(traces[0].request.messages, MSGS);
   assert.equal(traces[1].response.content, 'fine'); assert.equal(traces[1].schemaVersion, 1);
+});
+
+test('reasoning_returned, reasoning_field_fallback and null when absent', async () => {
+  const msg = m => () => ({ ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: 'stop', message: { content: 'fine', ...m } }] }) });
+  for (const [m, want] of [[{ reasoning_content: 'R1' }, 'R1'], [{ reasoning: 'R2' }, 'R2'], [{ reasoning_content: '  ', reasoning: 'R3' }, 'R3'], [{}, null]]) {
+    const { r } = router(['a'], { a: msg(m) });
+    const out = await r.complete({ messages: MSGS });
+    assert.equal(out.content, 'fine'); assert.equal(out.reasoning, want);
+  }
+});
+
+test('reasoning_capped: 5000 chars become 4000 plus an ellipsis', async () => {
+  const { r } = router(['a'], { a: () => ok('fine', { message: { reasoning_content: 'x'.repeat(5000) } }) });
+  const out = await r.complete({ messages: MSGS });
+  assert.equal(out.reasoning, 'x'.repeat(4000) + '…');
+});
+
+test('reasoning_after_semantic_retry: the final attempt reasoning is returned', async () => {
+  const bad = () => ({ ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: 'stop', message: { content: '', reasoning_content: 'first' } }] }) });
+  const { r, traces } = router(['a', 'b'], { a: bad, b: () => ok('fine', { message: { reasoning_content: 'second' } }) });
+  const out = await r.complete({ messages: MSGS });
+  assert.equal(out.reasoning, 'second');
+  assert.ok(!JSON.stringify([traces, out.provenance]).match(/first|second/));
 });
 
 test('reasoning_only_failure: null content plus reasoning is empty_or_invalid_answer and reasoning is not traced', async () => {

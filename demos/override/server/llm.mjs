@@ -23,6 +23,13 @@ const SEMANTIC = new Set(['empty_or_invalid_answer', 'content_filter', 'completi
 const FIVE_MINUTES = 300_000;
 const safe = (fn, label) => (...args) => { try { fn(...args); } catch (error) { console.error(`${label} failed: ${error.message}`); } };
 
+const REASONING_CAP = 4000;
+function pickReasoning(message) {
+  const text = [message?.reasoning_content, message?.reasoning].find(v => typeof v === 'string' && v.trim());
+  if (!text) return null;
+  return text.length > REASONING_CAP ? `${text.slice(0, REASONING_CAP)}…` : text;
+}
+
 export class LlmRouter {
   constructor({
     endpoints, maxInFlight = 200, deadlineMs = 60_000, maxCompletionTokens = 2048, failover = { failures: 5, windowMs: 30_000 },
@@ -161,6 +168,7 @@ export class LlmRouter {
       out.usage = data?.usage && typeof data.usage === 'object' ? data.usage : null;
       out.providerModel = typeof data?.model === 'string' ? data.model : null;
       out.content = typeof text === 'string' ? text : null;
+      out.reasoning = pickReasoning(choice?.message);
       if (out.finishReason === 'length') out.code = 'completion_limit';
       else if (out.finishReason === 'content_filter') out.code = 'content_filter';
       else if (typeof text !== 'string' || !text.trim() || text.length > 6000) out.code = 'empty_or_invalid_answer';
@@ -241,7 +249,7 @@ export class LlmRouter {
         if (!result.code) {
           ep.lastSuccessAt = this.iso();
           held = null; this.release(idx);
-          return { content: result.content.trim(), provenance: this.provenance(track, idx, result) };
+          return { content: result.content.trim(), reasoning: result.reasoning ?? null, provenance: this.provenance(track, idx, result) };
         }
         this.recordFailure(idx, result.code, result.status);
         let target = null;
