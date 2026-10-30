@@ -1,3 +1,5 @@
+> **Status (2026-10-30):** Built: sessions and replay, the LLM failover router, the admin command centre, Prometheus metrics, teams and leaderboard. Never built: `/p/<token>` participant links, `participants/`, `/api/telemetry`, the consent step, `OVERRIDE_IDENTITY`, `/admin/export`, grafana, launchd, `stack-up.sh`.
+
 # Backend plan: The Banana Mystery for 200 concurrent players
 
 This plan takes the Override demo from one shared investigation to a hosted study: 200 players at once, each with an independent game, running on one Mac, collecting a research dataset, with LLM fallback across 3–4 endpoints and live monitoring.

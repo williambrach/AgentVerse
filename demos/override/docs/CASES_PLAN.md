@@ -1,10 +1,10 @@
 # Plan: multiple cases for The Override
 
-> 2026-10-29: clues removed. A case is the briefing, three interviews, a verdict, and a debrief; the live cases are `banana-authored-v2.0.0` and `tower-echo-bell-v2.0.0` (`interview-v3`). Everything below that mentions clues, chapters, records, `revealedPosition`, the basket or `--chapter`/`--evidence` is the original 2026-10-26 design, kept as history. Archived cases still use it.
+> 2026-10-29: clues removed. A case is the briefing, three interviews, a verdict, and a debrief; the live cases are `banana-authored-v3.0.0` and `tower-echo-bell-v3.0.0` (`interview-v5`). Everything below that mentions clues, chapters, records, `revealedPosition`, the basket or `--chapter`/`--evidence` is the original 2026-10-26 design, kept as history. That legacy format was removed on 2026-10-30; only the parts-based `defineCase` format exists.
 
 Status: Steps 0–4 implemented on `superlite/override-cases` (2026-10-26).
 
-Revised 2026-10-26. This replaces [LEVELS_PLAN.md](LEVELS_PLAN.md), which stays for reference. The review that produced this version is summarised in [What changed](#what-changed-and-why).
+Revised 2026-10-26. This replaces the earlier levels plan, which has been removed. The review that produced this version is summarised in [What changed](#what-changed-and-why).
 
 ## Goal
 
@@ -125,7 +125,7 @@ The server already sends `characters`, `chapters` and `records`. The client rend
 
 ## Step 4: One tool (hours)
 
-`npm run cases:prompt -- banana-control momo --chapter 1 [--evidence note] [--question "…"]` prints the exact messages from `buildMessages`. About fifteen lines. This is the tool that would have caught "the The planner".
+`npm run cases:prompt -- <caseId> <characterId> [--question "…"] [--part <partId>]` prints the exact messages from `buildMessages`. About fifteen lines. This is the tool that would have caught "the The planner".
 
 ## Total
 
@@ -179,7 +179,7 @@ Both plans touch the same files and were written without reference to each other
 
 ## What changed and why
 
-Compared with [LEVELS_PLAN.md](LEVELS_PLAN.md):
+Compared with the earlier levels plan (removed):
 
 - **Levels became cases.** The axis of variation that matters for the research is the story's truth structure, not the map. Fixing the grove and the cast removed Phases 2 (most), 5 and 6 from the critical path.
 - **YAML, zod, the rehearsal rules DSL, hot reload and the frozen lock file were dropped or deferred.** They solved problems that one live level does not have.
