@@ -430,7 +430,7 @@ const pageText = (f) => readFileSync(new URL(f, PAGE_DIR), 'utf8');
 const pageUrl = (f) => (f === 'index.html' ? '/admin' : `/admin/${f}`);
 
 test('page directory has the expected files', () => {
-  for (const f of ['index.html', 'app.js', 'tiles.js', 'log.js', 'round.js', 'controls.js']) assert.ok(PAGE_FILES.includes(f), f);
+  for (const f of ['index.html', 'app.js', 'tiles.js', 'log.js', 'round.js', 'controls.js', 'maker.html', 'maker.js', 'maker.css', 'maker-form.js']) assert.ok(PAGE_FILES.includes(f), f);
 });
 
 test('every served file is safe, static and secret-free', async () => {
