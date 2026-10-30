@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { coinLabel, toolChip, toolBlock, reasoningBlock, threadPanel, pluralise, HINTS } from '../client/tools.ts';
+import { coinLabel, toolChip, toolBlock, toolCard, toolGuide, reasoningBlock, threadPanel, pluralise, HINTS } from '../client/tools.ts';
 
 const eco = (budget, spent, used = {}) => ({
   budget, spent, costs: { ask: 2, inspect: 5, continue: 1 },
@@ -58,6 +58,30 @@ test('thread_panel', () => {
   assert.ok(!html.includes('thread-pending'));
   assert.match(threadPanel(lines, { momo: '<M>', pip: 'Pip' }, 1), /thread-pending/);
   assert.match(threadPanel(lines, { momo: '<M>', pip: 'Pip' }, 1), /#1 &lt;M&gt;/);
+});
+
+test('tool_card', () => {
+  const on = toolCard({ tool: 'inspect', id: 'inspect-button', label: 'Inspect reasoning', target: '<Momo>', chip: '5 coins · 1 left', enabled: true, busy: false, fresh: true });
+  assert.match(on, /<button class="tool-button" id="inspect-button" type="button" aria-describedby="tip-inspect">Inspect reasoning<\/button>/);
+  assert.match(on, /<span class="tool-target">&lt;Momo&gt;<\/span><span class="tool-chip" data-tool="inspect">5 coins · 1 left<\/span>/);
+  assert.match(on, /class="tool-card fresh"/);
+  assert.match(on, /class="tool-new"/);
+  assert.match(on, /id="tip-inspect" role="tooltip">See how this character reasoned/);
+  const off = toolCard({ tool: 'continue', id: 'continue-button', label: 'Let them talk', target: '', chip: '0 left', enabled: false, busy: false, fresh: false, extra: '<button id="read-thread">Read thread</button>' });
+  assert.match(off, /class="tool-card off"/);
+  assert.match(off, /aria-describedby="tip-continue" disabled>Let them talk<\/button>/);
+  assert.ok(!off.includes('tool-target') && !off.includes('tool-new'));
+  assert.match(off, /<button id="read-thread">Read thread<\/button>/);
+  const busy = toolCard({ tool: 'inspect', id: 'inspect-button', label: 'Inspect reasoning', target: 'Momo', chip: '5 coins · 1 left', enabled: true, busy: true, fresh: false });
+  assert.match(busy, /class="tool-card" data-card="inspect"/);
+  assert.match(busy, /aria-describedby="tip-inspect" disabled>/);
+});
+
+test('tool_guide', () => {
+  const html = toolGuide(eco(15, 0));
+  assert.equal(html.match(/<li>/g).length, 2);
+  assert.match(html, /<b>Inspect reasoning<\/b>.*<em>5 coins · 1 use<\/em>/);
+  assert.match(html, /<b>Let them talk<\/b>.*<em>1 coin · 3 uses<\/em>/);
 });
 
 test('hints', () => {

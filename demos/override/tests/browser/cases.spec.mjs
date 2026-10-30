@@ -10,8 +10,8 @@ test('picker starts the chosen case', async ({ page }) => {
   await page.locator('#begin-button').click();
   await expect(page.locator('h1')).toHaveText('Was it time?');
   await expect(page.locator('#panel h2')).toHaveText('Lanterns, too soon.');
-  await expect(page.locator('.task-list li:first-child')).toContainText('Ask 3');
-  await expect(page.locator('.task-list li:first-child')).not.toContainText('the message');
+  await expect(page.locator('.task-list > li:first-child')).toContainText('Ask 3');
+  await expect(page.locator('.task-list > li:first-child')).not.toContainText('the message');
 });
 
 test('picker preview follows the selected case', async ({ page }) => {

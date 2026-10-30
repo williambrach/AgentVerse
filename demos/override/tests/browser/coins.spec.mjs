@@ -58,7 +58,31 @@ test('inspect_once', async ({ page }) => {
   await expect(page.locator(COUNTER)).toHaveText('9 / 15 coins');
   await expect(page.locator('.speech.reasoning')).toBeVisible();
   await expect(page.locator('#inspect-button')).toBeDisabled();
-  await expect(page.locator('#panel [data-tool="inspect"]')).toHaveText('0 left');
+  await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('0 left');
+});
+
+test('toolbelt', async ({ page }) => {
+  await fresh(page);
+  await expect(page.locator('.task-list .tool-guide li')).toHaveCount(2);
+  await expect(page.locator('.task-list .tool-guide')).toContainText('5 coins · 1 use');
+  await expect(page.locator('#toolbelt')).toContainText('ARBITER TOOLS');
+  await expect(page.locator('#inspect-button')).toBeDisabled();
+  await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('Open a monkey’s chat');
+  await go(page, 'momo', 'Momo');
+  await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('Momo has not spoken yet');
+  await page.locator('[data-quick-question]').click();
+  await expect(page.locator('#inspect-button')).toBeEnabled();
+  await expect(page.locator('#toolbelt .tool-target')).toHaveText('Momo');
+  await expect(page.locator('[data-card="inspect"]')).toHaveClass(/fresh/);
+  await expect(page.locator('[data-card="continue"]')).not.toHaveClass(/fresh/);
+  // The whole card is the button.
+  await page.locator('[data-card="inspect"]').click();
+  await expect(page.locator('.speech.reasoning')).toBeVisible();
+  await expect(page.locator('[data-card="inspect"]')).not.toHaveClass(/fresh/);
+  await ask(page, 'pip', 'Pip', 9);
+  await ask(page, 'nori', 'Nori', 11);
+  await ask(page, 'kiki', 'Kiki', 13);
+  await expect(page.locator('[data-card="continue"]')).toHaveClass(/fresh/);
 });
 
 test('talk_round', async ({ page }) => {
