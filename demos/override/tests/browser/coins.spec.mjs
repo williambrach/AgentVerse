@@ -67,6 +67,38 @@ test('inspect_once', async ({ page }) => {
   await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('0 left');
 });
 
+test('inspect_stays_open_and_says_the_character_did_not_think', async ({ page }) => {
+  await fresh(page);
+  // Rehearsal always has reasoning, so the first live-style answer is rewritten to have none.
+  let first = true;
+  await page.route('**/api/interview', async route => {
+    const response = await route.fetch();
+    const json = await response.json();
+    if (first) json.session.inspectable.momo = false;
+    first = false;
+    await route.fulfill({ response, json });
+  });
+  await ask(page, 'momo', 'Momo', 2);
+  await expect(page.locator('#inspect-button')).toBeEnabled();
+  await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('5 coins · 1 left');
+  await expect(page.locator('[data-card="inspect"]')).not.toHaveClass(/off/);
+  await page.locator('#inspect-button').click();
+  await expect(page.locator('.speech.no-thought p')).toHaveText('Momo did not think. No coins spent.');
+  await coinsLeft(page, 13);
+  await expect(page.locator('#inspect-button')).toBeEnabled();
+  await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('5 coins · 1 left');
+  await expect(page.locator('#toast')).toBeHidden();
+  // A new line replaces the note, and the charge was not used up.
+  await page.locator('#question').fill('Are you sure?');
+  await page.keyboard.press('Enter');
+  await coinsLeft(page, 11);
+  await expect(page.locator('.speech.no-thought')).toHaveCount(0);
+  await page.locator('#inspect-button').click();
+  await coinsLeft(page, 6);
+  await expect(page.locator('.speech.reasoning').first()).toBeVisible();
+  await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('0 left');
+});
+
 test('toolbelt', async ({ page }) => {
   await fresh(page);
   await expect(page.locator('.task-list .tool-guide li')).toHaveCount(2);

@@ -595,3 +595,19 @@ test('fonts_load_with_every_outside_host_blocked', async ({ page, baseURL }) => 
   expect(fonts[0].headers()['cache-control']).toContain('immutable');
   expect(await page.locator('.topbar #case-headline').evaluate(el => getComputedStyle(el).fontFamily)).toContain('Atkinson Hyperlegible Next');
 });
+
+test('box_does_not_blink_on_updates', async ({ page }) => {
+  await begin(page, '/?case=banana-mystery');
+  await castButtons(page).first().click();
+  await expect(page.locator('[data-quick-question]')).toBeVisible();
+  await page.waitForTimeout(700); // The page-turn animation belongs to a change of page, and has finished here.
+  await page.evaluate(() => {
+    window.lowest = 1;
+    const tick = () => { window.lowest = Math.min(window.lowest, Number(getComputedStyle(document.querySelector('.notebook-page')).opacity)); requestAnimationFrame(tick); };
+    tick();
+  });
+  await page.locator('[data-quick-question]').click();
+  await expect(page.locator('.speech.character.latest')).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.lowest)).toBeGreaterThan(0.99);
+});

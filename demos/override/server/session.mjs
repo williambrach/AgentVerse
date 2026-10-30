@@ -235,7 +235,7 @@ export class Investigation {
     // Before a game starts there is no cast; the preview deals parts in persona order and reveals nothing drawn.
     const cast = s?.cast ?? identityCast(kase);
     let session = null;
-    if (s) { session = structuredClone(s); delete session.cast; }
+    if (s) { session = structuredClone(s); delete session.cast; session.inspectable = this.inspectable(); }
     return {
       ...publicView(kase, cast), roles: ROLES, authored: true, mode: this.config.mode, model: this.config.model,
       session, debrief: s?.status === 'closed' ? this.debrief(s) : null,
@@ -382,6 +382,12 @@ export class Investigation {
     }
   }
 
+  // Whose latest line can be inspected. Every line goes through remember(), so held reasoning is always the latest line's.
+  inspectable() {
+    const scripted = typeof this.kase.rehearsalReasoning === 'function';
+    return Object.fromEntries(this.kase.characters.map(c => [c.id, this.config.mode === 'live' ? this.reasoning.has(c.id) : scripted]));
+  }
+
   // Live reasoning stays in memory, tied to the line it explains, until inspected.
   remember(characterId, eventId, reasoning) {
     if (typeof reasoning === 'string' && reasoning) {
@@ -405,13 +411,13 @@ export class Investigation {
     const live = this.config.mode === 'live';
     const sourceEventId = said[said.length - 1].eventId;
     const held = this.reasoning.get(character.id);
-    if (live ? !held || held.eventId !== sourceEventId : typeof this.kase.rehearsalReasoning !== 'function') throw new RequestError(409, `No reasoning available for ${character.name}.`);
+    if (live ? !held || held.eventId !== sourceEventId : typeof this.kase.rehearsalReasoning !== 'function') throw new RequestError(409, `${character.name} did not think.`);
     const check = quote(s.economy, ['inspect'], this.reserve());
     if (!check.ok) throw new RequestError(409, check.reason);
     let reasoning;
     if (live) reasoning = held.text;
     else try { reasoning = resolveText(this.kase, s.cast, this.kase.rehearsalReasoning(s.cast[character.id])); } catch { reasoning = null; }
-    if (typeof reasoning !== 'string' || !reasoning) throw new RequestError(409, `No reasoning available for ${character.name}.`);
+    if (typeof reasoning !== 'string' || !reasoning) throw new RequestError(409, `${character.name} did not think.`);
     const paid = spend(s.economy, ['inspect']);
     const event = this.log('reasoning_inspected', { character: character.id, sourceEventId, reasoning, spend: paid });
     s.inspections.push({ character: character.id, sourceEventId, reasoning, timestamp: event.timestamp });

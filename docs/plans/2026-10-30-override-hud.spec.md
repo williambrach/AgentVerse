@@ -68,6 +68,7 @@ The Override reads as a web page: a small map beside a notebook. The design turn
 | 9 | The big screen is `/?view=board` on the public port, behind the existing access gate. | Needs no new route, and `?case=` already sets this convention. |
 | 10 | Admin uses `ui-monospace` rather than Atkinson Mono. | Web fonts need a CSP change; this is the design's own fallback. |
 | 11 | Leaderboard additions are additive JSON fields. | Existing clients keep working. |
+| 13 | Reasoning effort stays `low`. A line with no reasoning keeps Inspect available and shows `<name> did not think.` in the chat, at no cost in coins or charges. | The user's call. `low` skips reasoning on most lines, so charging would spend the tool on nothing. |
 | 12 | Open item F-INT-1, cause unknown: in one of three full Playwright runs the test server on 4317 stopped silently before handling a reset. | Not reproduced in targeted runs; no fix is claimed. Tracked in the incident log and rulings. |
 
 ## Left to the builder / plan

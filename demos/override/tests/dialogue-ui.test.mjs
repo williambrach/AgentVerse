@@ -136,5 +136,14 @@ test('notebook.css is retired and dialogue.css stands alone', async () => {
   assert.ok(!existsSync(new URL('../client/notebook.css', import.meta.url)));
   for (const c of ['.notebook-page', '.task-list', '.thinking-dots', '.thread-post', '.tool-guide', '.dossier-close'])
     assert.ok(css.includes(c), c);
-  assert.match(css, /dialogue-fade 160ms/);
+  // The page is rebuilt on every update, so an animation on it would blink the whole box each time.
+  assert.doesNotMatch(css, /\.notebook-page[^{}]*\{[^}]*animation/);
+});
+
+test('noThought adds the did-not-think line after the latest answer', () => {
+  const turn = { question: 'Why?', answer: 'Because.', timestamp: '2026-10-30T10:00:00.000Z' };
+  assert.ok(!interviewPanel(view({ turns: [turn] })).includes('no-thought'));
+  const html = interviewPanel(view({ turns: [turn], noThought: true }));
+  assert.ok(html.indexOf('no-thought') > html.indexOf('Because.'));
+  assert.ok(html.includes(`${character.name} did not think.`));
 });

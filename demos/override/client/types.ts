@@ -15,6 +15,8 @@ export interface Session {
   location: LocationId;
   interviews: Record<string, Turn[]>; verdict: Verdict | null;
   economy: Economy; thread: ThreadLine[]; chatter: { round: number; pending: number }; inspections: Inspection[];
+  /** True when the character's latest line has reasoning to inspect. */
+  inspectable: Record<CharacterId, boolean>;
   team: { id: string; name: string } | null;
 }
 export interface CaseState {

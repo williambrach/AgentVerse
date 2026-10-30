@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { coinLabel, toolChip, toolBlock, toolCard, toolGuide, reasoningBlock, threadPanel, pluralise, HINTS } from '../client/tools.ts';
+import { coinLabel, toolChip, toolBlock, toolCard, toolGuide, reasoningBlock, noThoughtBlock, threadPanel, pluralise, HINTS } from '../client/tools.ts';
 
 const eco = (budget, spent, used = {}) => ({
   budget, spent, costs: { ask: 2, inspect: 5, continue: 1 },
@@ -103,4 +103,12 @@ test('pluralise', () => {
   assert.equal(pluralise(2, 'inspection'), '2 inspections');
   assert.equal(pluralise(1, 'conversation'), '1 conversation');
   assert.equal(pluralise(3, 'conversation'), '3 conversations');
+});
+
+test('noThoughtBlock says the character did not think, escaped', () => {
+  const html = noThoughtBlock('<b>Momo</b>', 2);
+  assert.match(html, /class="speech reasoning no-thought"/);
+  assert.match(html, /data-motion-key="no-thought-2"/);
+  assert.ok(html.includes('&lt;b&gt;Momo&lt;/b&gt; did not think. No coins spent.'));
+  assert.ok(!html.includes('<b>Momo'));
 });

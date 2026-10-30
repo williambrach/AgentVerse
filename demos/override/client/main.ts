@@ -51,6 +51,9 @@ let leaderboardTimer: ReturnType<typeof setInterval> | undefined;
 let leaderboardOpener = '#leaderboard-button';
 const freshDraft = () => ({ roles: {} as Record<string, string>, confidence: 70, explanation: '' });
 let reportDraft = freshDraft();
+/** Lines where Inspect found no reasoning. The note stays in the chat until the character says something new. */
+const noThought = new Set<string>();
+const lineKey = (id: string) => `${state.session?.id}:${id}:${state.session?.interviews[id].length}:${state.session?.thread.length}`;
 
 // Solved cases are a per-browser convenience for the case list; research records stay on the server.
 const solvedKey = 'override.solved';
@@ -222,7 +225,13 @@ async function onClick(event: MouseEvent) {
   if (button.id === 'notebook-button') { stopTalking(); if (state.session && !introVisible) { dialogueOpen = true; render(); } return; }
   if (button.id === 'dialogue-close' || button.id === 'lineup-back') { closeDialogue(); return; }
   if (button.id === 'read-thread') { stopTalking(); threadOpen = true; render(); return; }
-  if (button.id === 'inspect-button') { stopTalking(); if (ids().includes(panel)) await action('inspect', { character: panel }); return; }
+  if (button.id === 'inspect-button') {
+    stopTalking();
+    if (!ids().includes(panel)) return;
+    if (state.session?.inspectable[panel]) await action('inspect', { character: panel });
+    else { noThought.add(lineKey(panel)); threadOpen = false; dialogueOpen = true; render(); }
+    return;
+  }
   stopTalking();
   if (button.dataset.go) { go(button.dataset.go as LocationId); return; }
   if (button.dataset.quickQuestion && ids().includes(panel)) {
@@ -395,7 +404,7 @@ function interviewMarkup(characterId: string) {
   const askBlock = economy ? toolsBlock(economy, ['ask'], reserveFor(characterId)) : { enabled: true, reason: null };
   return interviewPanel({
     character, turns: session?.interviews[characterId] || [], inspections: (session?.inspections || []).filter(n => n.character === characterId),
-    faceClass: castClass(characterId), closed: session?.status === 'closed', busy, draft: drafts[characterId],
+    noThought: noThought.has(lineKey(characterId)), faceClass: castClass(characterId), closed: session?.status === 'closed', busy, draft: drafts[characterId],
     waitingOn: pendingCharacter === characterId && busy ? characterId : null,
     next: state.characters.find(c => c.id !== characterId && !session?.interviews[c.id].length) || null,
     askLabel: economy ? toolChip(economy, 'ask') : null, askOff: askBlock.reason, hint: HINTS.ask, many: world().text.many,

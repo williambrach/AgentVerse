@@ -45,12 +45,34 @@ test('reasoning_hidden_until_inspected', async t => {
   assert.equal(x.log().at(-1).type, 'reasoning_inspected');
 });
 
+test('inspectable_follows_the_latest_line', async t => {
+  const lines = ['R', null];
+  const x = await begun(t, { answer: async () => ({ answer: 'fine', provenance: prov, reasoning: lines.shift() }) });
+  assert.equal(x.state.inv.find(x.state.id).view().session.inspectable.momo, false);
+  const first = await ask(x.act);
+  assert.deepEqual(first.session.inspectable, { momo: true, pip: false, nori: false, kiki: false });
+  assert.ok(!JSON.stringify(first.session.inspectable).includes('"R"'));
+  const second = await ask(x.act);
+  assert.equal(second.session.inspectable.momo, false);
+  await assert.rejects(() => x.act('inspect', { character: 'momo' }), e => e.status === 409);
+});
+
+test('inspectable_is_false_after_restore_and_true_in_rehearsal', async t => {
+  const live = await begun(t, { answer: ans('R') });
+  await ask(live.act);
+  live.restart();
+  assert.equal(live.state.inv.find(live.state.id).view().session.inspectable.momo, false);
+  const scripted = await begun(t, { kase: rehearsal, mode: 'rehearsal', answer: ans(null) });
+  await ask(scripted.act);
+  assert.equal(scripted.state.inv.find(scripted.state.id).view().session.inspectable.momo, true);
+});
+
 test('reasoning_lost_on_restore', async t => {
   const x = await begun(t, { answer: ans('R') });
   await ask(x.act);
   const spent = x.state.inv.find(x.state.id).session.economy.spent;
   x.restart();
-  await assert.rejects(() => x.act('inspect', { character: 'momo' }), e => e.status === 409 && e.message === 'No reasoning available for Momo.');
+  await assert.rejects(() => x.act('inspect', { character: 'momo' }), e => e.status === 409 && e.message === 'Momo did not think.');
   assert.equal(x.state.inv.find(x.state.id).session.economy.spent, spent);
 });
 

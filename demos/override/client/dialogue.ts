@@ -1,6 +1,6 @@
 import type { Character, Inspection, Turn, CaseCopy } from './types.ts';
 // The .ts extension keeps `node --test` resolving this file.
-import { reasoningBlock } from './tools.ts';
+import { noThoughtBlock, reasoningBlock } from './tools.ts';
 
 const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
@@ -13,6 +13,8 @@ export interface InterviewView {
   turns: Turn[];
   /** Inspections already filtered to this character. */
   inspections: Inspection[];
+  /** Inspect found no reasoning on the latest line. */
+  noThought?: boolean;
   /** Classes for the portrait sprite, for example `momo slot-0`. */
   faceClass: string;
   closed: boolean;
@@ -89,6 +91,6 @@ export function interviewPanel(v: InterviewView): string {
   return `<section class="dialogue" aria-label="Conversation with ${esc(character.name)}">
     <div class="speaker-tag"><b>${name}</b><span>${esc(character.role)}</span></div>
     <div class="portrait dialogue-portrait ${esc(v.faceClass)}"><span class="pixel-person"></span></div>
-    <div class="dialogue-body"><div class="interview-transcript" id="transcript" role="log" aria-label="Interview transcript" aria-live="polite">${intro}${items.map(i => i.html).join('')}${waiting}</div>
+    <div class="dialogue-body"><div class="interview-transcript" id="transcript" role="log" aria-label="Interview transcript" aria-live="polite">${intro}${items.map(i => i.html).join('')}${v.noThought ? noThoughtBlock(character.name, turns.length) : ''}${waiting}</div>
     ${form}</div></section>`;
 }

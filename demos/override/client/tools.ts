@@ -97,6 +97,12 @@ export function reasoningBlock(i: Inspection, name: string): string {
     `<h4>${esc(name)}’s reasoning</h4><p>${esc(i.reasoning)}</p></article>`;
 }
 
+/** Inspect's answer when the character's latest line has no reasoning. */
+export function noThoughtBlock(name: string, line: number): string {
+  return `<article class="speech reasoning no-thought" data-motion-key="no-thought-${line}">` +
+    `<h4>${esc(name)}’s reasoning</h4><p>${esc(name)} did not think. No coins spent.</p></article>`;
+}
+
 export function threadPanel(thread: ThreadLine[], names: Record<string, string>, pending: number): string {
   const posts = thread.map((l, n) =>
     `<li class="thread-post" data-motion-key="thread-${n + 1}"><h4 class="thread-author">#${n + 1} ${esc(names[l.character] ?? l.character)}</h4>` +

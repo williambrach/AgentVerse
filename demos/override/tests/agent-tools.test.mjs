@@ -78,7 +78,7 @@ test('inspect_no_function_409', async t => {
   await ask();
   const kase = { ...banana, rehearsalReasoning: undefined };
   g.kase = kase;
-  await assert.rejects(act('inspect', { character: 'momo' }), { status: 409, message: 'No reasoning available for Momo.' });
+  await assert.rejects(act('inspect', { character: 'momo' }), { status: 409, message: 'Momo did not think.' });
   assert.equal(g.session.economy.spent, 2);
 });
 
