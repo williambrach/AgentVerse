@@ -41,7 +41,7 @@ function mount(t, { overrides = {}, caseId = null } = {}) {
     if (/^\/admin\/content\/[a-z-]+$/.test(path) && !body) return detail();
     return {};
   };
-  const app = mountMaker(s.root, { api, caseId, location: { search: '' } });
+  const app = mountMaker(s.root, { api, caseId, location: { search: '' }, confirm: () => true });
   return { ...s, app, calls };
 }
 const area = (s, path) => s.$('form').all(e => e.tag === 'textarea' && e.dataset.path === path)[0];
@@ -165,4 +165,48 @@ test('stale_detail_response_is_ignored', async t => {
   await p;
   assert.ok(area(s, 'copy.intro.lead'));
   assert.equal(s.$('history').children.length, 3);
+});
+
+function mountWithConfirm(t, answer) {
+  const s = shell();
+  const calls = [];
+  const asked = [];
+  const api = async (path, body) => {
+    calls.push(path);
+    if (path === '/admin/content') return list;
+    if (path === '/admin/content/tower-echo-bell') return detail({ id: 'tower-echo-bell', title: 'Tower', authored: { 'copy.intro.lead': 'Tower lead' }, current: { 'copy.intro.lead': 'Tower lead' } });
+    if (/^\/admin\/content\/[a-z-]+$/.test(path) && !body) return detail();
+    return {};
+  };
+  const app = mountMaker(s.root, { api, location: { search: '' }, confirm: m => { asked.push(m); return answer; } });
+  return { ...s, app, calls, asked };
+}
+
+test('tab_switch_while_dirty_asks_and_can_cancel', async t => {
+  const s = mountWithConfirm(t, false);
+  await s.app.load();
+  type(s, 'copy.intro.lead', 'Edited');
+  await s.$('cases').all(e => e.tag === 'button')[1].click();
+  assert.deepEqual(s.asked, ['Discard unsaved changes?']);
+  assert.ok(!s.calls.includes('/admin/content/tower-echo-bell'));
+  assert.equal(area(s, 'copy.intro.lead').value, 'Edited');
+  assert.equal(s.$('status').textContent, 'Unsaved changes');
+});
+
+test('tab_switch_while_dirty_confirmed_discards', async t => {
+  const s = mountWithConfirm(t, true);
+  await s.app.load();
+  type(s, 'copy.intro.lead', 'Edited');
+  await s.$('cases').all(e => e.tag === 'button')[1].click();
+  assert.equal(s.asked.length, 1);
+  assert.ok(s.calls.includes('/admin/content/tower-echo-bell'));
+  assert.equal(area(s, 'copy.intro.lead').value, 'Tower lead');
+});
+
+test('tab_switch_when_clean_never_asks', async t => {
+  const s = mountWithConfirm(t, false);
+  await s.app.load();
+  await s.$('cases').all(e => e.tag === 'button')[1].click();
+  assert.equal(s.asked.length, 0);
+  assert.ok(s.calls.includes('/admin/content/tower-echo-bell'));
 });

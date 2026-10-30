@@ -4,7 +4,7 @@ import { renderForm } from './maker-form.js';
 
 const REHEARSAL_NOTE = 'Rehearsal mode: replies are scripted. Start the server in live mode to try the model.';
 
-export function mountMaker(root, { api, caseId = null, location = null } = {}) {
+export function mountMaker(root, { api, caseId = null, location = null, confirm = (m) => window.confirm(m) } = {}) {
   const doc = root.ownerDocument || root;
   const $ = (id) => doc.getElementById(id);
   let cases = [];
@@ -81,6 +81,7 @@ export function mountMaker(root, { api, caseId = null, location = null } = {}) {
   }
 
   async function select(next) {
+    if (form && form.dirty() && !confirm('Discard unsaved changes?')) return;
     id = next;
     $('prompt').textContent = '';
     $('answer').textContent = '';
