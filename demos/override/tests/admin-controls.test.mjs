@@ -12,6 +12,12 @@ test('systemLine examples', () => {
   assert.equal(systemLine({ type: 'admin_action', timestamp: 1, action: 'pause', paused: false }, fmt), '14:02 resume new games');
   assert.equal(systemLine({ type: 'admin_action', timestamp: 1, action: 'probe', endpoint: 'b', ok: false }, fmt), '14:02 probe b failed');
   assert.equal(systemLine({ type: 'x', timestamp: 1 }, fmt), '14:02 x');
+  const act = (action, rest) => systemLine({ type: 'admin_action', timestamp: 1, action, ...rest }, fmt);
+  assert.equal(act('content_published', { caseId: 'banana-mystery', rev: 3, by: 'alice', fields: 2 }), '14:02 content banana-mystery rev 3 published by alice (2 fields)');
+  assert.equal(act('content_published', { caseId: 'banana-mystery', rev: 4, by: 'alice', fields: ['copy.headline'] }), '14:02 content banana-mystery rev 4 published by alice (1 field)');
+  assert.equal(act('content_reverted', { caseId: 'tower-echo-bell', rev: 5, revertOf: 2, by: 'bob' }), '14:02 content tower-echo-bell rev 5 reverted to rev 2 by bob');
+  assert.equal(act('content_try', { caseId: 'banana-mystery', characterId: 'momo', by: 'alice', ok: true }), '14:02 content try banana-mystery momo by alice ok');
+  assert.equal(act('content_try', { caseId: 'banana-mystery', characterId: 'momo', by: 'alice', ok: false }), '14:02 content try banana-mystery momo by alice failed');
 });
 
 // ---- tiny fake DOM

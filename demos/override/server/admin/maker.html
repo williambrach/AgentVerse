@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Override · Content editor</title>
+<link rel="stylesheet" href="/admin/app.css">
+<link rel="stylesheet" href="/admin/maker.css">
+<script type="module" src="/admin/maker.js"></script>
+</head>
+<body>
+<header class="top">
+  <h1>content-editor</h1>
+  <a id="back-link" href="/admin/">command centre</a>
+  <span id="status" class="status">offline</span>
+  <form class="auth" id="auth">
+    <input id="token" type="password" placeholder="maker token" autocomplete="off">
+    <button id="save" type="submit">Save</button>
+  </form>
+</header>
+<div class="maker">
+  <nav id="cases" aria-label="Cases"></nav>
+  <main id="form"></main>
+  <aside id="panel">
+    <section class="box" id="preview-box">
+      <h2>Preview</h2>
+      <label for="character">Character</label>
+      <select id="character"></select>
+      <label for="question">Question</label>
+      <input id="question" type="text" autocomplete="off">
+      <button id="preview" type="button">Preview prompt</button>
+      <pre id="prompt"></pre>
+    </section>
+    <section class="box" id="try-box">
+      <h2>Try</h2>
+      <button id="try" type="button">Ask the model</button>
+      <pre id="answer"></pre>
+      <pre id="reasoning"></pre>
+      <p id="try-note"></p>
+    </section>
+    <section class="box" id="publish-box">
+      <h2>Publish</h2>
+      <button id="publish" type="button">Publish</button>
+      <p id="publish-note"></p>
+    </section>
+    <section class="box" id="history-box">
+      <h2>History</h2>
+      <ol id="history"></ol>
+    </section>
+  </aside>
+</div>
+</body>
+</html>

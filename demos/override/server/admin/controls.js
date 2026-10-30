@@ -10,6 +10,13 @@ export function systemLine(rec, fmt) {
   if (rec.type === 'llm_active') {
     return `${at} endpoint ${rec.from} → ${rec.active}, ${rec.pinned ? 'pinned' : 'unpinned'}${rec.by ? `, by ${rec.by}` : ''}${rec.reason ? `: ${rec.reason}` : ''}`;
   }
+  const kind = rec.type === 'admin_action' ? rec.action : rec.type;
+  if (kind === 'content_published') {
+    const n = Array.isArray(rec.fields) ? rec.fields.length : Number(rec.fields) || 0;
+    return `${at} content ${rec.caseId} rev ${rec.rev} published by ${rec.by} (${n} ${n === 1 ? 'field' : 'fields'})`;
+  }
+  if (kind === 'content_reverted') return `${at} content ${rec.caseId} rev ${rec.rev} reverted to rev ${rec.revertOf} by ${rec.by}`;
+  if (kind === 'content_try') return `${at} content try ${rec.caseId} ${rec.characterId} by ${rec.by} ${rec.ok ? 'ok' : 'failed'}`;
   if (rec.type === 'admin_action') {
     if (rec.action === 'cap') return `${at} cap ${rec.endpoint ?? 'all'} → ${rec.value}`;
     if (rec.action === 'pause') return `${at} ${rec.paused ? 'pause' : 'resume'} new games`;
