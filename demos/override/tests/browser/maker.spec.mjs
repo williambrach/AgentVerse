@@ -17,6 +17,7 @@ async function freshView() {
 test('maker_edits_publishes_and_restores', async ({ page }) => {
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
+  page.on('dialog', d => d.accept()); // Restore asks to discard unsaved edits when the form is dirty
 
   try {
     const response = await page.goto('/admin/maker.html?case=banana-mystery');

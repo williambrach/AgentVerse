@@ -157,6 +157,7 @@ export function makerTokens(env) {
     const name = at < 0 ? item : item.slice(0, at);
     const secret = at < 0 ? '' : item.slice(at + 1);
     if (!/^[a-z0-9_-]{1,32}$/.test(name)) throw new Error('OVERRIDE_MAKER_TOKENS: maker names are 1 to 32 characters of a-z, 0-9, _ or -.');
+    if (name === 'admin') throw new Error('OVERRIDE_MAKER_TOKENS: the name admin is reserved for the operator token.');
     if (!secret) throw new Error(`OVERRIDE_MAKER_TOKENS: maker ${name} has no secret.`);
     if (out.some(m => m.name === name)) throw new Error(`OVERRIDE_MAKER_TOKENS: maker ${name} is listed twice.`);
     if (secret === env.OVERRIDE_ADMIN_TOKEN || out.some(m => m.token === secret)) throw new Error(`OVERRIDE_MAKER_TOKENS: the secret for ${name} is not unique.`);

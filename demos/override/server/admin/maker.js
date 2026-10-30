@@ -13,14 +13,18 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
   let form = null;
 
   const clear = (node) => { node.textContent = ''; };
-  const setStatus = () => { $('status').textContent = form && form.dirty() ? 'Unsaved changes' : 'Up to date'; };
+  const flags = () => [
+    detail?.stale ? 'Stale: the last revision no longer fits this case version, so the authored text is shown' : null,
+    detail?.corrupt ? 'History file has an unreadable line; the readable revisions were kept' : null,
+  ].filter(Boolean);
+  const setStatus = () => { $('status').textContent = form && form.dirty() ? 'Unsaved changes' : (flags().join(' · ') || 'Up to date'); };
   const wanted = () => caseId ?? (location && location.search ? new URLSearchParams(location.search).get('case') : null);
 
   function renderTabs() {
     const nav = $('cases');
     clear(nav);
     for (const c of cases) {
-      const b = el(doc, 'button', c.id === id ? 'tab active' : 'tab', { text: `${c.title} · ${c.rev ? 'rev ' + c.rev : 'authored'}`, parent: nav });
+      const b = el(doc, 'button', c.id === id ? 'tab active' : 'tab', { text: `${c.title} · ${c.rev ? 'rev ' + c.rev : 'authored'}${c.stale ? ' · stale' : ''}`, parent: nav });
       b.type = 'button';
       b.addEventListener('click', () => select(c.id).catch((err) => { $('status').textContent = err.message; }));
     }
@@ -146,6 +150,7 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
   }
 
   async function restore(rev) {
+    if (form && form.dirty() && !confirm('Discard unsaved changes?')) return;
     const note = $('publish-note');
     note.textContent = '';
     try {

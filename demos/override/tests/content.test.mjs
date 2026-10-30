@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defineCase } from '../server/cases.mjs';
@@ -20,7 +20,7 @@ test('identity_when_unedited', () => {
   assert.equal(store.current('mini-parts'), kase);
   assert.equal(store.base('mini-parts'), kase);
   assert.equal(store.list()[0], kase);
-  assert.deepEqual(store.info('mini-parts'), { id: 'mini-parts', title: 'Mini Parts', version: 'mini-parts-v1', status: 'ready', world: 'grove', rev: 0, by: null, editedAt: null, contentHash: kase.contentHash, baseContentHash: kase.contentHash, stale: false });
+  assert.deepEqual(store.info('mini-parts'), { id: 'mini-parts', title: 'Mini Parts', version: 'mini-parts-v1', status: 'ready', world: 'grove', rev: 0, by: null, editedAt: null, contentHash: kase.contentHash, baseContentHash: kase.contentHash, stale: false, corrupt: false });
 });
 
 test('content_folder_is_private', () => {
@@ -171,7 +171,46 @@ test('boot_survives_garbage_and_partial_line', () => {
   writeFileSync(file(dir), `${JSON.stringify(rec)}\n{"type":"cont`);
   assert.equal(make(dir).store.current('mini-parts').copy.headline, 'Kept');
   writeFileSync(file(dir), 'not json\n{"a":1}\n');
-  assert.equal(make(dir).store.info('mini-parts').rev, 0);
+  const info = make(dir).store.info('mini-parts');
+  assert.equal(info.rev, 0); assert.equal(info.corrupt, true); assert.equal(info.stale, false);
+});
+
+test('corrupt_line_keeps_revisions_and_never_repeats_a_rev', () => {
+  const { store, dir } = make();
+  const r1 = store.publish('mini-parts', { 'copy.headline': 'A' }, { by: 'a', baseRev: 0 });
+  store.publish('mini-parts', { 'copy.headline': 'B' }, { by: 'a', baseRev: 1 });
+  appendFileSync(file(dir), 'garbage\n');
+  // Trailing garbage with a newline: revs 1 and 2 survive and the next publish is rev 3, not a second rev 1.
+  let again = make(dir).store;
+  let info = again.info('mini-parts');
+  assert.equal(info.rev, 2); assert.equal(info.corrupt, true); assert.equal(info.stale, false);
+  assert.equal(again.current('mini-parts').copy.headline, 'B');
+  assert.equal(again.history('mini-parts').length, 2);
+  assert.equal(again.publish('mini-parts', { 'copy.headline': 'C' }, { by: 'a', baseRev: 2 }).rev, 3);
+  // Garbage in the middle: the revision after it is kept too, and restore of rev 1 finds the real rev 1.
+  again = make(dir).store;
+  info = again.info('mini-parts');
+  assert.equal(info.rev, 3); assert.equal(info.by, 'a'); assert.equal(info.corrupt, true);
+  assert.equal(again.current('mini-parts').copy.headline, 'C');
+  assert.deepEqual(again.history('mini-parts').map(h => h.rev), [1, 2, 3]);
+  const back = again.revert('mini-parts', 1, { by: 'b' });
+  assert.equal(back.rev, 4); assert.equal(back.contentHash, r1.contentHash);
+  assert.equal(again.current('mini-parts').copy.headline, 'A');
+  assert.equal(again.info('mini-parts').corrupt, true, 'the flag stays until the file is repaired');
+  assert.equal(JSON.parse(readFileSync(file(dir), 'utf8').trim().split('\n').at(-1)).rev, 4);
+});
+
+test('corrupt_line_plus_partial_last_line_does_not_glue_the_next_append', () => {
+  const { store, dir } = make();
+  store.publish('mini-parts', { 'copy.headline': 'A' }, { by: 'a', baseRev: 0 });
+  appendFileSync(file(dir), 'garbage\n{"type":"cont');
+  const again = make(dir).store;
+  assert.equal(again.info('mini-parts').rev, 1); assert.equal(again.info('mini-parts').corrupt, true);
+  assert.equal(again.publish('mini-parts', { 'copy.headline': 'B' }, { by: 'a', baseRev: 1 }).rev, 2);
+  const third = make(dir).store;
+  assert.equal(third.info('mini-parts').rev, 2);
+  assert.equal(third.current('mini-parts').copy.headline, 'B');
+  assert.deepEqual(third.history('mini-parts').map(h => h.rev), [1, 2]);
 });
 
 test('structure_lists_locked_facts', () => {

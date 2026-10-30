@@ -191,7 +191,7 @@ curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"teamId":"<team-id>","h
 
 For game makers who change the words of a case, not its structure. Open `http://127.0.0.1:3002/admin/maker.html?case=<caseId>` on the admin port, one link per game (for example `?case=banana-mystery`). Reach it over the same SSH forward as the command centre, over Tailscale, or over a protected hostname; see [DEPLOY](DEPLOY.md#6-run-the-event). The admin port is never on the public player tunnel.
 
-Each maker gets a token of their own. Set `OVERRIDE_MAKER_TOKENS=alice:secret1,bob:secret2`, one `name:secret` pair per maker; a name is 1 to 32 characters of `a-z`, `0-9`, `_` or `-`, and names must be unique. A maker token opens the editor page and the `/admin/content` routes only; every other admin route answers 403. The admin token can edit too, and its edits are logged as `admin`.
+Each maker gets a token of their own. Set `OVERRIDE_MAKER_TOKENS=alice:secret1,bob:secret2`, one `name:secret` pair per maker; a name is 1 to 32 characters of `a-z`, `0-9`, `_` or `-`, names must be unique, and `admin` is reserved for the operator. A maker token opens the editor page and the `/admin/content` routes only; every other admin route answers 403. The admin token can edit too, and its edits are logged as `admin`.
 
 **Editable:** the setting and the use and avoid word lists; each part's knowledge, label, introduction, quick question and finding; the briefing, intro and report copy; the debrief and the feedback text.
 
@@ -207,7 +207,7 @@ Edits apply to new games only. A game in progress keeps the text it started with
 
 Each publish or revert adds a revision: 1, 2, and so on. Rev 0 is the authored text. **Restore** sets an earlier revision as current by adding a new revision that carries its text, so the history is never rewritten. Restore authored returns to rev 0.
 
-Edits live in `data/<env>/content/<caseId>.jsonl`, one line per revision, append-only. The server replays the file at boot. A revision whose case version no longer matches is skipped, so a new case version starts authored. If a stored text no longer validates against the case, the case stays authored and the page shows it as stale.
+Edits live in `data/<env>/content/<caseId>.jsonl`, one line per revision, append-only. The server replays the file at boot. A revision whose case version no longer matches is skipped, so a new case version starts authored. If a stored text no longer validates against the case, the case stays authored and the page marks it stale, in the case tab and in the status line. If a line of the file cannot be read, the readable revisions are kept, the next revision number follows the highest one on file, and the status line says the history has an unreadable line until the file is repaired.
 
 ```sh
 export TOKEN=...   # a maker token from OVERRIDE_MAKER_TOKENS
@@ -220,7 +220,7 @@ curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"edits":{},"characterId
 curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"rev":0}' http://127.0.0.1:3002/admin/content/banana-mystery/revert
 ```
 
-`GET /admin/content` lists every case with its revision, maker and content hash. `GET /admin/content/<caseId>` adds the structure, the authored and current text, and the history (no text). A `PUT` with a stale `baseRev` answers 409; a bad path answers 400 with `{error, path}`, and the 409 body is `{error, rev, by}` (the current revision and its maker). Request bodies are limited to 512 KB.
+`GET /admin/content` lists every case with its revision, maker and content hash. `GET /admin/content/<caseId>` adds the structure, the authored and current text, and the history (no text). A `PUT` with a stale `baseRev` answers 409; a bad path answers 400 with `{error, path}`, and the 409 body is `{error, rev, by}` (the current revision and its maker). Request bodies are limited to 512 KB; in `preview` and `try`, the question and each history question are limited to 2000 characters and each history answer to 6000.
 
 ## Rehearse the command centre
 

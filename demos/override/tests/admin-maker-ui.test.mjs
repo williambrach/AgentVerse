@@ -203,6 +203,50 @@ test('tab_switch_while_dirty_confirmed_discards', async t => {
   assert.equal(area(s, 'copy.intro.lead').value, 'Tower lead');
 });
 
+test('restore_while_dirty_asks_and_can_cancel', async t => {
+  const s = mountWithConfirm(t, false);
+  await s.app.load();
+  type(s, 'copy.intro.lead', 'Edited');
+  await s.$('history').children[1].all(e => e.tag === 'button')[0].click();
+  assert.deepEqual(s.asked, ['Discard unsaved changes?']);
+  assert.ok(!s.calls.some(c => c.endsWith('/revert')));
+  assert.equal(area(s, 'copy.intro.lead').value, 'Edited');
+  assert.equal(s.$('status').textContent, 'Unsaved changes');
+});
+
+test('restore_while_dirty_confirmed_posts_revert', async t => {
+  const s = mountWithConfirm(t, true);
+  await s.app.load();
+  type(s, 'copy.intro.lead', 'Edited');
+  await s.app.restore(1);
+  assert.equal(s.asked.length, 1);
+  assert.ok(s.calls.includes('/admin/content/banana-mystery/revert'));
+});
+
+test('restore_when_clean_never_asks', async t => {
+  const s = mountWithConfirm(t, false);
+  await s.app.load();
+  await s.app.restore(1);
+  assert.equal(s.asked.length, 0);
+  assert.ok(s.calls.includes('/admin/content/banana-mystery/revert'));
+});
+
+test('stale_and_corrupt_cases_are_shown', async t => {
+  const s = mount(t, { overrides: {
+    'GET /admin/content': () => ({ cases: [{ id: 'banana-mystery', title: 'Banana', rev: 0, stale: true }, { id: 'tower-echo-bell', title: 'Tower', rev: 1, stale: false, corrupt: true }] }),
+    'GET /admin/content/banana-mystery': () => detail({ rev: 0, stale: true }),
+    'GET /admin/content/tower-echo-bell': () => detail({ id: 'tower-echo-bell', title: 'Tower', rev: 1, corrupt: true }),
+  } });
+  await s.app.load();
+  const tabs = s.$('cases').all(e => e.tag === 'button').map(b => b.textContent);
+  assert.deepEqual(tabs, ['Banana · authored · stale', 'Tower · rev 1']);
+  assert.match(s.$('status').textContent, /^Stale: /);
+  await s.app.select('tower-echo-bell');
+  assert.match(s.$('status').textContent, /unreadable line/);
+  type(s, 'copy.intro.lead', 'Edited');
+  assert.equal(s.$('status').textContent, 'Unsaved changes');
+});
+
 test('tab_switch_when_clean_never_asks', async t => {
   const s = mountWithConfirm(t, false);
   await s.app.load();

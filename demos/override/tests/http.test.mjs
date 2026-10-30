@@ -510,7 +510,7 @@ test('maker_tokens_parse', () => {
   assert.deepEqual(makerTokens({ OVERRIDE_MAKER_TOKENS: 'alice:s1,bob:s2' }), [{ name: 'alice', token: 's1' }, { name: 'bob', token: 's2' }]);
   assert.deepEqual(makerTokens({}), []);
   assert.deepEqual(makerTokens({ OVERRIDE_MAKER_TOKENS: '  ' }), []);
-  for (const bad of ['alice:s1,alice:s2', 'bad name:x', 'alice:', 'alice', 'a:s,b:s']) {
+  for (const bad of ['alice:s1,alice:s2', 'bad name:x', 'alice:', 'alice', 'a:s,b:s', 'admin:s1', 'alice:s1,admin:s2']) {
     assert.throws(() => makerTokens({ OVERRIDE_MAKER_TOKENS: bad }), /OVERRIDE_MAKER_TOKENS/, bad);
   }
   assert.throws(() => makerTokens({ OVERRIDE_MAKER_TOKENS: 'alice:ops', OVERRIDE_ADMIN_TOKEN: 'ops' }), /OVERRIDE_MAKER_TOKENS/);

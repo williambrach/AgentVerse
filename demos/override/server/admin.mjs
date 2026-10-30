@@ -108,6 +108,7 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
     if (body.history !== undefined) {
       const h = body.history;
       if (!Array.isArray(h) || h.length > 20 || h.some((t) => !t || typeof t.question !== 'string' || typeof t.answer !== 'string')) throw new RequestError(400, 'history must be at most 20 question and answer pairs.');
+      if (h.some((t) => t.question.length > 2000 || t.answer.length > 6000)) throw new RequestError(400, 'history questions must be at most 2000 characters and answers at most 6000.');
       history = h.map((t) => ({ question: t.question, answer: t.answer }));
     }
     if (body.question !== undefined && (typeof body.question !== 'string' || body.question.length > 2000)) throw new RequestError(400, 'question must be a string of at most 2000 characters.');

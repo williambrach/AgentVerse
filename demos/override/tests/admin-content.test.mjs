@@ -186,6 +186,10 @@ test('draft_inputs_validated', async () => {
   const h = (n) => Array.from({ length: n }, () => ({ question: 'q', answer: 'a' }));
   assert.equal((await p({ edits: {}, characterId: 'pip', history: h(21) })).status, 400);
   assert.equal((await p({ edits: {}, characterId: 'pip', history: h(20), question: 'x'.repeat(2000) })).status, 200);
+  const long = (question, answer) => p({ edits: {}, characterId: 'pip', history: [{ question, answer }] });
+  assert.equal((await long('x'.repeat(2001), 'a')).status, 400);
+  assert.equal((await long('q', 'x'.repeat(6001))).status, 400);
+  assert.equal((await long('x'.repeat(2000), 'x'.repeat(6000))).status, 200);
   assert.equal((await a.call('PUT', `/admin/content/${ID}`, 'null')).status, 400);
   a.close();
 });

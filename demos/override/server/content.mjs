@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { defineCase } from './cases.mjs';
 import { appendJsonl, readJsonl } from './dataset.mjs';
@@ -73,6 +73,24 @@ const editPathOf = (base, path) => {
   return path.replace(/\[\d+\]/g, '');
 };
 
+// Every parsable record of a revision file. readJsonl repairs a partial last line but throws on a
+// corrupt line anywhere else; that must not drop the revisions around it, so fall back to a
+// line-by-line read and flag the case as corrupt. The file is newline-terminated either way, so
+// the next append never glues onto an unterminated line.
+const readRecords = file => {
+  try { return { records: readJsonl(file, { repair: true }), corrupt: false }; } catch {
+    let text = '';
+    try { text = readFileSync(file, 'utf8'); } catch { return { records: [], corrupt: true }; }
+    const records = [];
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      try { records.push(JSON.parse(line)); } catch { /* reported by the corrupt flag */ }
+    }
+    if (text && !text.endsWith('\n')) { try { writeFileSync(file, `${text}\n`); } catch { /* read-only data stays as it is */ } }
+    return { records, corrupt: true };
+  }
+};
+
 export function createContentStore({ cases, dataDir, worlds = liveWorlds, now = () => Date.now() }) {
   const dir = resolvePath(dataDir, 'content');
   mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -127,10 +145,10 @@ export function createContentStore({ cases, dataDir, worlds = liveWorlds, now = 
   const rebuildList = () => { listCache = order.map(id => states.get(id).current); };
 
   for (const base of cases) {
-    const s = { base, current: base, overlay: null, records: [], stale: false };
+    const s = { base, current: base, overlay: null, records: [], stale: false, corrupt: false };
     states.set(base.id, s);
-    let records = [];
-    try { records = readJsonl(resolvePath(dir, `${base.id}.jsonl`), { repair: true }); } catch { records = []; }
+    const { records, corrupt } = readRecords(resolvePath(dir, `${base.id}.jsonl`));
+    s.corrupt = corrupt;
     s.records = records.filter(r => r && r.type === 'content_revision' && r.version === base.version && Number.isInteger(r.rev));
     const last = s.records.at(-1);
     if (last) {
@@ -143,7 +161,8 @@ export function createContentStore({ cases, dataDir, worlds = liveWorlds, now = 
   }
   rebuildList();
 
-  const revOf = s => s.records.at(-1)?.rev ?? 0;
+  // The highest rev on file, not the last line: a corrupt line must never make a number repeat.
+  const revOf = s => s.records.reduce((max, r) => Math.max(max, r.rev), 0);
 
   const append = (id, s, edits, by, revertOf) => {
     const kase = edits ? build(s.base, edits) : s.base;
@@ -172,8 +191,8 @@ export function createContentStore({ cases, dataDir, worlds = liveWorlds, now = 
       const last = s.records.at(-1);
       return {
         id, title: s.base.title, version: s.base.version, status: s.base.status, world: s.base.world.id,
-        rev: last?.rev ?? 0, by: last?.by ?? null, editedAt: last?.timestamp ?? null,
-        contentHash: s.current.contentHash, baseContentHash: s.base.contentHash, stale: s.stale,
+        rev: revOf(s), by: last?.by ?? null, editedAt: last?.timestamp ?? null,
+        contentHash: s.current.contentHash, baseContentHash: s.base.contentHash, stale: s.stale, corrupt: s.corrupt,
       };
     },
     fields(id) {
