@@ -117,7 +117,7 @@ Coin events carry their cost. `session_started` gains `economy`, costed events c
 
 One server process serves every player. Each browser’s game lives in memory while active and is rebuilt from its JSONL log when its player returns, also after a restart or about 30 idle minutes, so progress survives both. Requests carry a session ID and revision to reject stale writes from another tab. A game’s mutations are locked while its live answer is pending; other players are never blocked. The demo has a technical limit of 40 questions per character and 1,200 characters per question; study budgets are not implemented.
 
-A session can carry two `contentHash` values when content was published while it was in progress and later replayed. The `content_published` records in `system.jsonl` (with `by`, `caseId`, `rev`, `contentHash` and `fields`) join them.
+A session can carry two `contentHash` values when content was published while it was in progress and later replayed. The `admin_action` records with `action: "content_published"` in `system.jsonl` (with `by`, `caseId`, `rev`, `contentHash` and `fields`) join them.
 
 ## LLM fallback
 
@@ -191,7 +191,7 @@ curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"teamId":"<team-id>","h
 
 For game makers who change the words of a case, not its structure. Open `http://127.0.0.1:3002/admin/maker.html?case=<caseId>` on the admin port, one link per game (for example `?case=banana-mystery`). Reach it over the same SSH forward as the command centre, over Tailscale, or over a protected hostname; see [DEPLOY](DEPLOY.md#6-run-the-event). The admin port is never on the public player tunnel.
 
-Each maker gets a token of their own. Set `OVERRIDE_MAKER_TOKENS=alice:secret1,bob:secret2`, one `name:secret` pair per maker. A maker token opens the editor page and the `/admin/content` routes only; every other admin route answers 403. The admin token can edit too, and its edits are logged as `admin`.
+Each maker gets a token of their own. Set `OVERRIDE_MAKER_TOKENS=alice:secret1,bob:secret2`, one `name:secret` pair per maker; a name is 1 to 32 characters of `a-z`, `0-9`, `_` or `-`, and names must be unique. A maker token opens the editor page and the `/admin/content` routes only; every other admin route answers 403. The admin token can edit too, and its edits are logged as `admin`.
 
 **Editable:** the setting and the use and avoid word lists; each part's knowledge, label, introduction, quick question and finding; the briefing, intro and report copy; the debrief and the feedback text.
 
@@ -203,7 +203,7 @@ Edits apply to new games only. A game in progress keeps the text it started with
 
 - **Preview** shows the exact prompt the model would receive for the draft. Nothing is sent to the model and nothing is saved.
 - **Try** asks the real model the question you type, with the draft text, and shows the answer and its reasoning. It is live mode only (409 in rehearsal). It uses the players' queue, and the trace row carries `tag: maker_try`.
-- **Publish** saves the draft as a new revision. It names the revision you based it on. If someone else published first, the server answers 409 and the page asks you to reload. The `content_published` record in `system.jsonl` holds the maker, the changed paths and the new `contentHash`, not the text.
+- **Publish** saves the draft as a new revision. It names the revision you based it on. If someone else published first, the server answers 409 and the page asks you to reload. The `content_published` admin action in `system.jsonl` holds the maker, the changed paths and the new `contentHash`, not the text.
 
 Each publish or revert adds a revision: 1, 2, and so on. Rev 0 is the authored text. **Restore** sets an earlier revision as current by adding a new revision that carries its text, so the history is never rewritten. Restore authored returns to rev 0.
 
@@ -220,7 +220,7 @@ curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"edits":{},"characterId
 curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"rev":0}' http://127.0.0.1:3002/admin/content/banana-mystery/revert
 ```
 
-`GET /admin/content` lists every case with its revision, maker and content hash. `GET /admin/content/<caseId>` adds the structure, the authored and current text, and the history (no text). A `PUT` with a stale `baseRev` answers 409; a bad path answers 400 with the `path`.
+`GET /admin/content` lists every case with its revision, maker and content hash. `GET /admin/content/<caseId>` adds the structure, the authored and current text, and the history (no text). A `PUT` with a stale `baseRev` answers 409; a bad path answers 400 with `{error, path}`, and the 409 body is `{error, rev, by}` (the current revision and its maker). Request bodies are limited to 512 KB.
 
 ## Rehearse the command centre
 
