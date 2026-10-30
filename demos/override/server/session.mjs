@@ -88,7 +88,7 @@ class Window {
 // leave memory and are rebuilt from their log on the next request, so progress
 // also survives a restart. Each game plays one registered case.
 export class Investigations {
-  constructor({ dataDir, config, router = null, answer = null, thread = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {}, cases = registry, dev = false, shuffle = shuffleIds }) {
+  constructor({ dataDir, config, router = null, answer = null, thread = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {}, cases = registry, content = null, dev = false, shuffle = shuffleIds }) {
     this.shuffle = shuffle;
     this.paths = dataPaths(dataDir);
     this.config = config;
@@ -98,7 +98,7 @@ export class Investigations {
     this.idleMs = idleMs;
     this.meta = meta;
     this.onEvent = onEvent;
-    this.cases = cases;
+    Object.defineProperty(this, 'cases', { enumerable: true, get: () => (content ? content.list() : cases) });
     this.dev = dev;
     this.games = new Map();
     this.pending = new Set();
@@ -142,11 +142,12 @@ export class Investigations {
       if (!kase) throw new RequestError(400, 'Unknown case.');
     }
     const game = this.find(sessionId) || this.create(null, kase || this.cases[0]);
+    if (action === 'reset' && input.caseId === undefined) kase = this.cases.find(c => c.id === game.kase.id);
     if (action === 'start' && this.paused) throw new RequestError(503, 'New games are paused. Try again shortly.');
     // Only a start or reset that will create a session takes a slot; a repeat start on an active game is a 409 and costs none.
     const makesSession = action === 'reset' || (action === 'start' && !game.session);
     if (makesSession && !this.newGames.take(now)) throw new RequestError(429, 'Too many new games right now. Try again in a moment.');
-    const run = game.mutate(action, input, { kase, assignment: kase ? 'fixed' : 'default', team });
+    const run = game.mutate(action, input, { kase, assignment: input.caseId !== undefined ? 'fixed' : 'default', team });
     this.pending.add(run);
     try {
       const view = await run;

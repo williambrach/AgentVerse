@@ -726,3 +726,56 @@ test('shuffle_uniform: 4000 draws put every id at every index at least 800 times
   for (const row of counts) for (const c of Object.values(row)) assert.ok(c >= 800, `count ${c}`);
   assert.deepEqual(ids, ['planner', 'carrier', 'lookout', 'minder'], 'the input is not mutated');
 });
+
+const edited = (text = 'NEW LEAD') => defineCase({ ...partCase, copy: { ...partCase.copy, intro: { ...partCase.copy.intro, lead: text } } }, { worlds: agentWorlds(3) });
+const swapStore = initial => { const store = { current: initial, list: () => store.current }; return store; };
+
+test('content_new_game_sees_published_text', async t => {
+  const store = swapStore([kase, tower]);
+  const { games, events } = fleet(t, { content: store });
+  const next = edited();
+  store.current = [next, tower];
+  const view = await games.mutate(undefined, 'start', { caseId: 'mini-parts' });
+  assert.equal(view.copy.intro.lead, 'NEW LEAD');
+  assert.equal(events(view.session.id)[0].contentHash, next.contentHash);
+});
+
+test('content_in_flight_game_keeps_its_case', async t => {
+  const store = swapStore([kase, tower]);
+  const { games, act } = fleet(t, { content: store });
+  const id = (await act(undefined, 'start', { caseId: 'mini-parts' })).session.id;
+  store.current = [edited(), tower];
+  const view = await act(id, 'visit', { location: 'report' });
+  assert.equal(view.copy.intro.lead, kase.copy.intro.lead);
+  assert.equal(games.find(id).kase, kase);
+});
+
+test('content_evicted_game_replays_onto_new_case', async t => {
+  const store = swapStore([kase, tower]);
+  const { games, act, events } = fleet(t, { content: store, idleMs: 0 });
+  const id = (await act(undefined, 'start', { caseId: 'mini-parts' })).session.id;
+  const next = edited();
+  store.current = [next, tower];
+  await new Promise(resolve => setTimeout(resolve, 5));
+  const s = games.games.get(id).session; // read without find(): only mutate evicts
+  const view = await games.mutate(id, 'visit', { sessionId: id, revision: s.revision, location: 'report' });
+  assert.equal(view.copy.intro.lead, 'NEW LEAD');
+  const log = events(id);
+  assert.ok(log.every((e, i) => e.sequence === i + 1));
+  assert.notEqual(games.games.get(id).kase, kase);
+  assert.equal(log[0].contentHash, kase.contentHash);
+  assert.equal(log.at(-1).contentHash, next.contentHash);
+  assert.notEqual(kase.contentHash, next.contentHash);
+});
+
+test('reset_without_case_id_uses_current_content', async t => {
+  const store = swapStore([kase, tower]);
+  const { act, events } = fleet(t, { content: store });
+  const id = (await act(undefined, 'start', { caseId: 'mini-parts' })).session.id;
+  store.current = [edited(), tower];
+  const view = await act(id, 'reset');
+  assert.equal(view.copy.intro.lead, 'NEW LEAD');
+  const started = events(view.session.id)[0];
+  assert.equal(started.type, 'session_started');
+  assert.equal(started.assignment, 'default');
+});
