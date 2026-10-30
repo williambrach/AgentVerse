@@ -1,9 +1,42 @@
 .coin-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 700; background: #ffe08a; color: #4a3500; }
 .tool-chip { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 0.8em; background: rgba(0, 0, 0, 0.08); }
 .tool-hint { font-size: 0.85em; opacity: 0.8; }
-.tool-tip { position: relative; }
-.tool-tip::after { content: attr(data-tip); position: absolute; left: 0; bottom: 100%; z-index: 20; width: max-content; max-width: 240px; padding: 6px 8px; border-radius: 6px; background: #222; color: #fff; font-size: 0.8em; opacity: 0; pointer-events: none; transition: opacity 0.12s; }
-.tool-tip:hover::after, .tool-tip:has(:focus-visible)::after { opacity: 1; }
+/* The Arbiter toolbelt under the map. Each tool is a card; its button stretches over the card so the whole card
+   is the click target, and the chip sits outside the button so the button's text stays its label. */
+.toolbelt { display: flex; align-items: stretch; gap: 10px; margin-top: 10px; }
+.toolbelt-label { display: flex; align-items: center; flex: none; width: min-content; font: 700 9px/1.4 var(--mono); letter-spacing: 1.5px; color: #6b56b4; }
+.toolbelt-cards { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+.tool-card { position: relative; display: flex; align-items: center; gap: 9px; min-width: 0; padding: 6px 10px; border: 2px solid #8a6bd1; border-radius: 5px; background: #f7f2ff; color: #3d2f73; box-shadow: inset 0 2px #fff, 0 2px #d4c8f0; }
+.tool-card:hover { background: #eee6ff; }
+.tool-card:has(.tool-button:focus-visible) { outline: 2px solid #3d2f73; outline-offset: 2px; }
+.tool-card.off { border-color: #cdc8d8; background: #f5f3f1; color: #8b8597; box-shadow: none; }
+.tool-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #8a6bd1; color: #fff; }
+.tool-card.off .tool-icon { background: #d5d0de; }
+.tool-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tool-button { padding: 0; border: 0; background: none; color: inherit; font: 700 12px/1.3 var(--mono); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.tool-button::after { content: ''; position: absolute; inset: 0; }
+.tool-button:disabled { cursor: not-allowed; }
+.tool-button:focus-visible { outline: none; }
+.tool-status { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 10px; line-height: 1.5; white-space: nowrap; }
+.tool-status .tool-chip { margin-left: 0; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; }
+.tool-card:not(.off) .tool-chip { background: rgba(138, 107, 209, 0.16); }
+.tool-target { font-weight: 700; }
+.thread-button { position: relative; z-index: 1; flex: none; margin-left: auto; padding: 3px 8px; border: 1px solid #a993de; border-radius: 3px; background: #fff; color: #4f3f8f; font: 600 10px/1.3 var(--mono); }
+.thread-button:hover:not(:disabled) { border-color: #6b56b4; background: #f2ecff; }
+.tool-new { position: absolute; top: -9px; left: 34px; padding: 1px 6px; border-radius: 3px; background: #ffd34d; color: #4a3500; font: 700 8px/1.5 var(--mono); letter-spacing: 1px; pointer-events: none; }
+.tool-card.fresh { animation: tool-glow 1.4s ease-in-out 4; }
+@keyframes tool-glow { 50% { box-shadow: inset 0 2px #fff, 0 0 0 5px rgba(138, 107, 209, 0.35); } }
+.tool-tipbox { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 30; width: max-content; max-width: 260px; padding: 6px 8px; border-radius: 6px; background: #222; color: #fff; font: 11px/1.35 var(--mono); letter-spacing: 0; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.12s; }
+.tool-card:hover .tool-tipbox, .tool-card:focus-within .tool-tipbox { opacity: 1; visibility: visible; }
+/* The briefing's tool list. */
+.tool-guide { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.task-list .tool-guide li { counter-increment: none; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid #c9b8f0; border-radius: 4px; background: #f7f2ff; }
+.task-list .tool-guide li::before { content: none; }
+.task-list .tool-guide .tool-icon { display: grid; width: 26px; height: 26px; color: #fff; }
+.task-list .tool-guide .tool-text { display: flex; }
+.task-list .tool-guide b { margin: 0; color: #3d2f73; }
+.task-list .tool-guide small { display: block; font-size: 10px; line-height: 1.5; color: #6f6688; }
+.tool-guide em { flex: none; margin-left: auto; font: 600 9px var(--mono); font-style: normal; color: #5b4a99; white-space: nowrap; }
 .speech.reasoning { border-left: 4px solid #8a6bd1; background: rgba(138, 107, 209, 0.12); font-style: italic; }
 .speech.reasoning h4 { margin: 0 0 4px; font-style: normal; }
 .thread-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
@@ -16,33 +49,46 @@
 .thread-panel .fine { margin: 0; padding: 0 2px; font-size: 10px; line-height: 1.7; opacity: 0.75; }
 :root[data-theme="tower"] .coin-badge { background: #c9a24a; color: #1b1424; }
 :root[data-theme="tower"] .tool-chip { background: rgba(255, 255, 255, 0.14); }
-:root[data-theme="tower"] .tool-tip::after { background: #efe6d2; color: #1b1424; }
+:root[data-theme="tower"] .tool-tipbox { background: #efe6d2; color: #1b1424; }
+:root[data-theme="tower"] .toolbelt-label { color: #8a6a1f; }
+:root[data-theme="tower"] .tool-card { border-color: #b8902f; background: #fffaf0; color: #4a3500; box-shadow: inset 0 2px #fff, 0 2px #e6d3a2; }
+:root[data-theme="tower"] .tool-card:hover { background: #fbf0d6; }
+:root[data-theme="tower"] .tool-card.off { border-color: #d4cfdc; background: #f7f5fa; color: #8b8597; box-shadow: none; }
+:root[data-theme="tower"] .tool-icon { background: #c9a24a; color: #1b1424; }
+:root[data-theme="tower"] .tool-card.off .tool-icon { background: #ddd8e4; color: #fff; }
+:root[data-theme="tower"] .tool-card:not(.off) .tool-chip { background: rgba(201, 162, 74, 0.2); }
+:root[data-theme="tower"] .thread-button { border-color: #c9a24a; color: #6b4f12; }
+:root[data-theme="tower"] .task-list .tool-guide li { border-color: #e2cf9c; background: #fffaf0; }
+:root[data-theme="tower"] .task-list .tool-guide .tool-icon { color: #1b1424; }
+:root[data-theme="tower"] .task-list .tool-guide b { color: #4a3500; }
+:root[data-theme="tower"] .tool-guide em { color: #8a6a1f; }
 :root[data-theme="tower"] .speech.reasoning { border-left-color: #b79af0; background: rgba(183, 154, 240, 0.16); }
 :root[data-theme="tower"] .thread-post { background: rgba(255, 255, 255, 0.08); }
 .station-bottomline { flex-wrap: nowrap; white-space: nowrap; gap: 8px; }
 #movement-hint { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-#tools-line { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; }
-#tools-line:empty { display: none; }
-#tools-line .tool-tip { display: flex; align-items: center; gap: 6px; }
-#tools-line .tool-tip::after { left: auto; right: 0; max-width: 260px; white-space: normal; text-align: left; letter-spacing: 0; line-height: 1.35; }
 .coin-badge[hidden], .coin-wrap:has(> .coin-badge[hidden]) { display: none; }
 .coin-wrap { position: relative; display: inline-block; }
 .coin-tip { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: max-content; max-width: 240px; padding: 6px 8px; border-radius: 6px; background: #222; color: #fff; font: 11px/1.3 var(--mono); letter-spacing: 0; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.12s; }
 .coin-wrap:hover .coin-tip, .coin-wrap:focus-within .coin-tip { opacity: 1; visibility: visible; }
 :root[data-theme="tower"] .coin-tip { background: #efe6d2; color: #1b1424; }
-@media (max-width: 560px) { #tools-line .secondary-button { font-size: 9px; padding: 4px 6px; } #tools-line .tool-chip { margin-left: 0; font-size: 8px; } }
-@media (prefers-reduced-motion: reduce) { .tool-tip::after, .coin-tip { transition: none; } }
-/* The bottom line keeps its base height so the canvas keeps its size: the tool controls are compact and the
-   #tools-line box has no height of its own, so the buttons sit centred in the line's padding instead of growing it. */
-#tools-line { height: 0; overflow: visible; }
-#tools-line .secondary-button { display: inline-flex; gap: 4px; padding: 2px 8px; font-size: 9px; line-height: 1.3; }
-#tools-line .tool-chip { padding: 0 6px; line-height: 1.3; }
+@media (max-width: 560px) {
+  .toolbelt { flex-direction: column; gap: 6px; }
+  .toolbelt-label { width: auto; }
+  .toolbelt-cards { grid-template-columns: minmax(0, 1fr); }
+}
+/* One-screen desktop (fit.css): the toolbelt has a fixed height, counted in the workspace's --chrome. */
+@media (min-width: 901px) and (min-height: 600px) { .toolbelt { flex: none; height: 46px; } }
+@media (min-width: 901px) and (min-height: 600px) and (max-height: 760px) {
+  .toolbelt { height: 38px; margin-top: 8px; }
+  .tool-card { padding: 4px 9px; }
+  .tool-icon { width: 26px; height: 26px; }
+}
+@media (prefers-reduced-motion: reduce) { .tool-tipbox, .coin-tip { transition: none; } .tool-card.fresh { animation: none; box-shadow: inset 0 2px #fff, 0 0 0 4px rgba(138, 107, 209, 0.3); } }
 .tool-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 8px; }
 .tool-row .tool-chip { margin-left: 0; }
 /* Short notebook: the hints become tooltips (still the buttons' aria-describedby) so the compose area fits. */
 @media (min-width: 901px) and (max-height: 850px) {
   .tool-row { position: relative; margin-top: 6px; }
-  .tool-row .secondary-button { display: inline-flex; padding: 4px 10px; font-size: 11px; }
   .tool-row .tool-hint { position: absolute; left: 0; bottom: calc(100% + 4px); z-index: 20; width: max-content; max-width: 240px; padding: 6px 8px; border-radius: 6px; background: #222; color: #fff; font-size: 11px; line-height: 1.3; opacity: 0; visibility: hidden; pointer-events: none; }
   .tool-row:hover .tool-hint, .tool-row:focus-within .tool-hint,
   #interview-form:has(.compose-bottom .primary-button:is(:hover, :focus-visible)) #tip-ask { opacity: 1; visibility: visible; }

@@ -9,7 +9,7 @@ import './roles.css';
 import './tools.css';
 import './bubbles.css';
 import './team.css';
-import { HINTS, coinLabel, toolChip, toolBlock, toolsBlock, reasoningBlock, threadPanel, pluralise } from './tools';
+import { HINTS, coinLabel, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, reasoningBlock, threadPanel, pluralise } from './tools';
 import { teamGate, teamNameError, leaderboardPanel, type GateView } from './team';
 import { renderNotebook } from './notebook';
 import { createStation, type Station } from './station';
@@ -124,7 +124,8 @@ function shell() {
     <main class="workspace">
       <section class="world-column" id="world-column">
         <div class="world-heading"><div><span class="eyebrow" id="case-eyebrow"></span><h1 id="case-headline">${escape(state.copy.headline)}</h1></div><span class="case-status" id="case-status">AWAITING INVESTIGATOR</span></div>
-        <div class="station-frame"><div class="station-topline"><span><i class="live-dot"></i> <span id="case-topline">${escape(state.title.toUpperCase())}</span> / <span id="case-day"></span></span><span id="elapsed">00:00</span></div><div id="station"></div><div class="station-bottomline"><span id="movement-hint">WASD / ARROWS to walk · E to interact</span><span id="tools-line"></span><span class="floor-label">2–3 MINUTE MYSTERY</span></div></div>
+        <div class="station-frame"><div class="station-topline"><span><i class="live-dot"></i> <span id="case-topline">${escape(state.title.toUpperCase())}</span> / <span id="case-day"></span></span><span id="elapsed">00:00</span></div><div id="station"></div><div class="station-bottomline"><span id="movement-hint">WASD / ARROWS to walk · E to interact</span><span class="floor-label">2–3 MINUTE MYSTERY</span></div></div>
+        <div class="toolbelt" id="toolbelt" role="group" aria-label="Arbiter tools"><span class="toolbelt-label" aria-hidden="true">ARBITER TOOLS</span><div class="toolbelt-cards" id="toolbelt-cards"></div></div>
         <nav class="room-nav" id="room-nav"></nav>
         <div class="world-footer"><span><span id="quick-progress"></span></span></div>
       </section>
@@ -358,7 +359,7 @@ function briefingPanel() {
   const copy = state.copy;
   return `${heading('THE CASE / 2–3 MINUTES', escape(copy.briefing.title), escape(copy.briefing.description))}
     <div class="notebook-content"><div class="briefing-note"><span class="eyebrow">YOUR QUESTION</span><p>${escape(copy.briefing.question)}</p><small>${escape(copy.briefing.hint)}</small></div>
-    <ol class="task-list"><li><b>Ask ${state.characters.length} ${escape(world().text.many)}</b><span>One quick question each.</span></li><li><b>Make your guess</b><span>Pick a role for each ${escape(world().text.one)}. Then see what happened.</span></li></ol>
+    <ol class="task-list"><li><b>Ask ${state.characters.length} ${escape(world().text.many)}</b><span>One quick question each.</span></li><li class="tool-step"><b>Use your Arbiter tools</b><span>Optional. They cost coins and sit under the map.</span>${state.session ? toolGuide(state.session.economy) : ''}</li><li><b>Make your guess</b><span>Pick a role for each ${escape(world().text.one)}. Then see what happened.</span></li></ol>
     <button class="primary-button" data-go="${escape(state.characters[0]?.id)}">Ask ${escape(state.characters[0]?.name)} ${icon('arrow')}</button>
     <div class="subtle-note">Walk with WASD or the arrow keys and press E next to ${escape(world().text.oneWithArticle)} to talk. The buttons under the map open a page straight away.</div></div>`;
 }
@@ -370,9 +371,6 @@ function interviewPanel(characterId: string) {
   const next = state.characters.find(c => c.id !== characterId && !state.session?.interviews[c.id].length);
   const economy = state.session?.economy;
   const askBlock = economy ? toolsBlock(economy, ['ask'], reserveFor(characterId)) : { enabled: true, reason: null };
-  const inspectBlock = economy ? toolBlock(economy, 'inspect', reserveFor(null)) : { enabled: true, reason: null };
-  const canInspect = turns.length > 0 && inspectBlock.enabled;
-  const inspectNote = !turns.length ? `${escape(character.name)} has not spoken yet` : inspectBlock.reason ? escape(inspectBlock.reason) : economy ? escape(toolChip(economy, 'inspect')) : '';
   const items = [
     ...turns.map((turn, i) => ({ at: turn.timestamp, order: 0, html: `<div class="speech investigator" data-motion-key="question-${i}"><span>YOU</span><p>${escape(turn.question)}</p></div><div class="speech character" data-motion-key="answer-${i}"><span>${escape(character.name.toUpperCase())}</span><p>${escape(turn.answer)}</p></div>` })),
     ...(state.session?.inspections || []).filter(n => n.character === characterId).map(n => ({ at: n.timestamp, order: 1, html: reasoningBlock(n, character.name) })),
@@ -385,8 +383,7 @@ function interviewPanel(characterId: string) {
     ${!turns.length ? `<button class="quick-question" type="button" data-quick-question="${escape(character.quickQuestion)}" ${busy ? 'disabled' : ''}><small>QUICK QUESTION · TAP TO ASK</small><span>${escape(character.quickQuestion)} ${icon('arrow')}</span></button>` : ''}
     <label class="sr-only" for="question">Your question for ${escape(character.name)}</label><textarea id="question" name="question" rows="2" minlength="3" maxlength="1200" placeholder="${turns.length ? 'Ask a follow-up…' : 'Or type your own question…'}" required ${busy ? 'disabled' : ''}>${escape(drafts[characterId])}</textarea>
     <div class="compose-bottom"><small>Short answers. Curious ${escape(world().text.many)}.</small><button type="submit" class="primary-button" ${economy ? 'aria-describedby="tip-ask"' : ''} ${busy || !askBlock.enabled ? 'disabled' : ''}>${busy ? 'Thinking…' : 'Ask question'} ${icon('arrow')}</button></div>
-    ${economy ? `<div class="tool-row"><span class="tool-chip" data-tool="ask">${escape(askBlock.reason || toolChip(economy, 'ask'))}</span> <span class="tool-hint" id="tip-ask">${escape(HINTS.ask)}</span></div>
-    <div class="tool-row"><button class="secondary-button" id="inspect-button" type="button" aria-describedby="tip-inspect" ${busy || !canInspect ? 'disabled' : ''}>Inspect reasoning</button> <span class="tool-chip" data-tool="inspect">${inspectNote}</span> <span class="tool-hint" id="tip-inspect">${escape(HINTS.inspect)}</span></div>` : ''}
+    ${economy ? `<div class="tool-row"><span class="tool-chip" data-tool="ask">${escape(askBlock.reason || toolChip(economy, 'ask'))}</span> <span class="tool-hint" id="tip-ask">${escape(HINTS.ask)}</span></div>` : ''}
     ${turns.length ? `<button class="secondary-button next-monkey" type="button" data-go="${escape(next?.id || 'report')}" ${busy ? 'disabled' : ''}>${next ? `Next: ask ${escape(next.name)}` : 'Ready to make your guess?'} ${icon('arrow')}</button>` : ''}</form>`}`;
 }
 
@@ -448,17 +445,29 @@ function renderTools() {
   const active = Boolean(session && !introVisible);
   counter.hidden = !active;
   if (session) counter.textContent = coinLabel(session.economy);
-  document.querySelectorAll<HTMLElement>('.floor-label').forEach(el => { el.hidden = active; });
   let markup = '';
   if (session && active) {
     const { economy, chatter } = session;
+    const open = session.status === 'active';
+    // Inspect acts on the character whose chat is open, once they have spoken.
+    const character = state.characters.find(c => c.id === panel);
+    const spoken = Boolean(character && session.interviews[character.id].length);
+    const inspect = toolBlock(economy, 'inspect', reserveFor(null));
+    const inspectOff = inspect.reason || (!character ? `Open ${world().text.oneWithArticle}’s chat` : !spoken ? `${character.name} has not spoken yet` : null);
     const block = toolBlock(economy, 'continue', reserveFor(null));
-    const can = session.status === 'active' && (chatter.pending > 0 || block.enabled);
-    const label = talking ? 'Listening…' : chatter.pending > 0 ? `Keep listening (${chatter.pending})` : 'Let them talk';
-    const chip = chatter.pending > 0 ? 'free' : block.reason || toolChip(economy, 'continue');
-    markup = `<span class="tool-tip" data-tip="${escape(HINTS.continue)}"><button class="secondary-button" id="read-thread" type="button" ${busy ? 'disabled' : ''}>Read thread</button> <button class="secondary-button" id="continue-button" type="button" aria-describedby="tip-continue" ${busy || talking || !can ? 'disabled' : ''}>${label}</button> <span class="tool-chip" data-tool="continue">${escape(chip)}</span><span class="tool-hint sr-only" id="tip-continue" role="tooltip">${escape(HINTS.continue)}</span></span>`;
+    const can = open && (chatter.pending > 0 || block.enabled);
+    const heardAll = ids().every(id => session.interviews[id].length);
+    markup = toolCard({
+      tool: 'inspect', id: 'inspect-button', label: 'Inspect reasoning', target: inspectOff ? '' : character!.name,
+      chip: inspectOff || toolChip(economy, 'inspect'), enabled: open && !inspectOff, busy, fresh: open && !inspectOff && !session.inspections.length,
+    }) + toolCard({
+      tool: 'continue', id: 'continue-button', label: talking ? 'Listening…' : chatter.pending > 0 ? `Keep listening (${chatter.pending})` : 'Let them talk', target: '',
+      chip: chatter.pending > 0 ? 'free' : block.reason || toolChip(economy, 'continue'), enabled: can, busy: busy || talking,
+      fresh: can && !talking && heardAll && chatter.pending === 0 && economy.charges.continue.used === 0,
+      extra: `<button class="thread-button" id="read-thread" type="button" ${busy ? 'disabled' : ''}>Read thread</button>`,
+    });
   }
-  if (markup !== toolsMarkup) { toolsMarkup = markup; document.querySelector('#tools-line')!.innerHTML = markup; }
+  if (markup !== toolsMarkup) { toolsMarkup = markup; document.querySelector('#toolbelt-cards')!.innerHTML = markup; }
 }
 
 function stopTalking() {

@@ -6,7 +6,7 @@
   /* --chrome is the measured height of everything around the canvas, so --grove-w is the column width at which the
      480×340 canvas fills its frame without side bands. The notebook takes the rest, up to 540px. */
   .workspace {
-    --chrome: 331px;
+    --chrome: 387px;
     --grove-w: calc((100dvh - var(--chrome)) * 480 / 340 + 8px);
     flex: 1; min-height: 0; width: 100%; max-width: calc(var(--grove-w) + 618px);
     padding: 16px 28px 10px; gap: 22px; grid-template-columns: minmax(0, var(--grove-w)) minmax(340px, 1fr);
@@ -30,7 +30,7 @@
   }
 }
 @media (min-width: 901px) and (min-height: 600px) and (max-height: 760px) {
-  .workspace { --chrome: 285px; }
+  .workspace { --chrome: 331px; }
   .world-heading .eyebrow { display: none; }
   .world-heading h1 { margin-top: 0; font-size: 20px; }
   .world-heading { margin-bottom: 9px; }
