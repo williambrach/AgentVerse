@@ -16,9 +16,9 @@ export default defineConfig({
   // A missing baseline fails instead of being written, so a test can never pass against its own fresh screenshot.
   updateSnapshots: 'none',
   projects: [
-    { name: 'default', testIgnore: ['tower.spec.mjs', 'admin.spec.mjs', 'coins.spec.mjs'] },
+    { name: 'default', testIgnore: ['tower.spec.mjs', 'admin.spec.mjs', 'maker.spec.mjs', 'coins.spec.mjs'] },
     { name: 'tower', testMatch: 'tower.spec.mjs', use: { baseURL: 'http://127.0.0.1:4318' } },
-    { name: 'admin', testMatch: 'admin.spec.mjs', use: { baseURL: 'http://127.0.0.1:4320' } },
+    { name: 'admin', testMatch: ['admin.spec.mjs', 'maker.spec.mjs'], use: { baseURL: 'http://127.0.0.1:4320' } },
     { name: 'coins', testMatch: 'coins.spec.mjs', use: { baseURL: 'http://127.0.0.1:4321' } },
   ],
   fullyParallel: false,
@@ -50,7 +50,7 @@ export default defineConfig({
       command: 'node server/index.mjs',
       url: 'http://127.0.0.1:4320/admin',
       reuseExistingServer: false,
-      env: { PORT: '4319', HOST: '127.0.0.1', OVERRIDE_ADMIN_TOKEN: 'admin-e2e', OVERRIDE_ADMIN_PORT: '4320', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: dataDir('sessions-admin') },
+      env: { PORT: '4319', HOST: '127.0.0.1', OVERRIDE_ADMIN_TOKEN: 'admin-e2e', OVERRIDE_ADMIN_PORT: '4320', OVERRIDE_MAKER_TOKENS: 'maker:maker-e2e', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: dataDir('sessions-admin') },
     },
     {
       // Rehearsal with a 15-coin budget. Only the coins project talks to this server.
