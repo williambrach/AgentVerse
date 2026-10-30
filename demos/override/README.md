@@ -2,6 +2,8 @@
 
 A short, 2–3 minute detective game for AgentVerse: **The Banana Mystery**. The keeper said to wait for the bell, but the picnic bananas went missing. Four monkeys (Momo, Pip, Nori and Kiki) wait in a small jungle clearing; a second case puts three apprentices in a wizard tower. Each game deals the characters into the case's parts at random, so a job label such as “The planner” moves between characters from game to game. Ask each character a quick question, then pick a role for each of them. Clues were removed on 2026-10-29: a game is the briefing, the interviews, a verdict, and a debrief. The live cases are `banana-authored-v3.0.0` and `tower-echo-bell-v3.0.0`, prompted as `interview-v5`. Kiki is a recoloured monkey until real art exists.
 
+The UI is a full-screen world with a HUD on top of it: a top bar, a left rail with the cast and the Arbiter tools, and dialogue, verdict and debrief panels over the world. The design source is the artifact "The Override · UI redesign". A rival Arbiter is deliberately not built, because no code plays the cases.
+
 The fast path needs one one-click interview question per character and one role pick for each. Answers are prompted to stay around 15–40 words. Confidence has three choices; a written explanation is optional. Free-text follow-ups remain available. The intended 2–3 minute duration includes reading; live model latency and extra questions can make a run longer.
 
 **This is an authored demonstration, not a validated research case or a recorded agent run.** Every browser gets its own independent game (an HttpOnly `override_session` cookie), so about 200 people can play at once on one server, and a game resumes after a page reload or a server restart. Choose a case on the intro screen, or open `?case=<id>` to go straight to one.
@@ -51,14 +53,14 @@ The game is English only: the UI is written in English, and both prompts tell ch
 
 Each live request includes that character’s knowledge and that character’s previous questions and answers. Characters do not receive each other’s interview histories. The incident, knowledge, and hidden explanation are authored on the server; model outputs are fallible testimony, not changes to the ground truth. Prompt instructions limit invented facts and prompt injection, but cannot guarantee that a model will follow them. Validate live behavior before collecting research data.
 
-Provider reasoning (`reasoning_content` or `reasoning`) is kept only in server memory, for each character’s last line. It is shown only when a team pays to inspect it, and it is never written to traces. After a restart it is gone; inspecting it then is refused with a message and nothing is spent. Thread lines use their own prompt (`thread-v2`), which gives the speaker only their own knowledge.
+Provider reasoning (`reasoning_content` or `reasoning`) is kept only in server memory, for each character’s last line. It is shown only when a team pays to inspect it, and it is never written to traces. After a restart it is gone; inspecting it then is refused with a message and nothing is spent. Thread lines use their own prompt (`thread-v3`), which gives the speaker only their own knowledge.
 
 ## Play
 
 1. Check in with a team name (see *Teams and the leaderboard* below).
 2. Pick a case on the intro screen (or use `?case=<id>`), and read the briefing.
 3. Ask each character in turn (Momo, Pip, Nori and Kiki in the grove; three apprentices in the tower). **Quick question** submits immediately; **Next: ask…** takes you to the next one. You can also type a question.
-4. Pick a role for each character: Villain, Collaborator, Honest but fooled, or Honest (there is no Nobody or Not sure). Set confidence and see the debrief, which shows the true role next to each pick. Every correct role scores; the debrief gives the score out of the number of characters. Written reasoning is optional.
+4. **Make your verdict**: pick a role for each character on a four-stop scale: Villain, Collaborator, Honest but fooled, or Honest (there is no Nobody or Not sure). Set confidence (Guessing, Fairly sure or Certain) and see the debrief, which shows the true role next to each pick. Every correct role scores; the debrief gives the score out of the number of characters. Written reasoning is optional.
 5. Use **Play again** for the next colleague. The reset dialog has a case select, so the next game can be a different case. Previous research logs remain on disk.
 
 **Coins and tools.** A game can have a coin budget (see `OVERRIDE_COIN_BUDGET` below). Three tools cost coins:
@@ -69,7 +71,11 @@ Provider reasoning (`reasoning_content` or `reasoning`) is kept only in server m
 | Inspect reasoning | 5 coins | 1 per game (2 with `OVERRIDE_REASONING_CHARGES=2`) |
 | Let them talk | 1 coin per round of 3 lines | 3 rounds |
 
-Inspect reasoning and Let them talk are the **Arbiter tools**. They sit in a toolbelt under the map, and the briefing lists them with their prices. Each card shows its price and uses left, or why it is off. A card glows with a NEW tag the first time it is worth using: Inspect once the open chat's character has answered, Let them talk once everyone has been asked. Inspect reasoning acts on the character whose chat is open and shows how they reasoned about their last line. Let them talk is available from the start; it makes the characters post in a forum-style thread. They see each other's earlier lines but never your questions. Their lines appear as speech bubbles over the speaker and in the thread panel. Walking, the verdict and reset are free. Failed answers cost nothing. With a budget, the game keeps enough coins to ask each character you have not asked once. The coin counter is in the top bar; the debrief shows the total.
+Inspect reasoning and Let them talk are the **Arbiter tools**. They sit in the left rail, and the briefing lists them with their prices. Each card shows its price and uses left, or why it is off. A card glows with a NEW tag the first time it is worth using: Inspect once the open chat's character has answered, Let them talk once everyone has been asked. Inspect reasoning acts on the character whose chat is open and shows how they reasoned about their last line. Let them talk is available from the start; it makes the characters post in a forum-style thread. They see each other's earlier lines but never your questions. Their lines appear as speech bubbles over the speaker and in the thread panel. Walking, the verdict and reset are free. Failed answers cost nothing. With a budget, the game keeps enough coins to ask each character you have not asked once. The top bar shows the coins you have left; the debrief shows the total.
+
+### Big screen
+
+`/?view=board` shows the leaderboard full screen for a projector. It is behind the access code, polls every 10 seconds, and is not counted as a player (no heartbeat, no check-in).
 
 ### Teams and the leaderboard
 
@@ -79,7 +85,7 @@ Inspect reasoning and Let them talk are the **Arbiter tools**. They sit in a too
 - **Without a check-in.** Old browsers and scripts that never join a team play as before but are not on the board.
 - **One data directory per event.** Team names persist in `teams.jsonl` and stay taken. Use a fresh `OVERRIDE_ENV` (data directory) for each event.
 
-Walk with WASD or the arrow keys, and press E or Space next to a monkey, the signpost or the start marker. Clicking the map does not move the investigator; the destination buttons open a conversation or your guess straight away. A basket of bananas sits on the picnic blanket. The characters blink and make small gestures on separate idle cycles, and react when you approach. Reduced-motion preferences disable these animations. The notebook retains its page turns; reduced-motion preferences disable those effects.
+Walk with WASD or the arrow keys, and press E or Space next to a monkey, the signpost or the start marker. Walking closes the dialogue box, and E opens it again. Clicking the world does not move the investigator; the destination buttons open a conversation or your verdict straight away. A basket of bananas sits on the picnic blanket. The characters blink and make small gestures on separate idle cycles, and react when you approach. Reduced-motion preferences disable these animations. Page turns keep drafts and the reading position; reduced-motion preferences disable those effects.
 
 ## Writing a case
 
@@ -265,14 +271,18 @@ If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:e
 - `server/roles.mjs` and `server/worlds.mjs`: the four roles, and the worlds with their agent counts.
 - `server/interviews.mjs`: endpoint configuration, the shared short-answer prompt template (`interview-v5`, `thread-v3`), and the hand-off to each case’s scripted rehearsal replies.
 - `server/index.mjs`: API, optional shared access code, and production static serving.
-- `client/station.ts`: a compact original jungle clearing, collision-aware click navigation, and nearby interactions.
+- `client/station.ts`: the Phaser world (grove and tower), nearby interactions, and speech bubbles. `client/stage-layout.ts` sizes the game to the window and places the 480x340 world in it; `client/bubble-layout.ts` places a bubble above its speaker.
 - `client/detective-walk.ts`: distance-driven walking with four facing directions and support for high-refresh displays.
 - `client/monkey-idle.ts`: independent NPC blinks, idle gestures, and approach reactions with fixed collision positions.
 - `client/heartbeat.ts`: the visible-tab heartbeat behind the online count.
-- `client/main.ts`: briefing, live interviews, quick verdict, and debrief.
-- `client/notebook.ts` / `notebook.css`: page transitions and preserved drafts/reading position.
+- `client/main.ts`: wiring for briefing, live interviews, verdict and debrief.
+- `client/hud.ts`: the HUD shell (top bar, cast cards, Arbiter tools); `client/tools.ts`: tool cards and prices.
+- `client/dialogue.ts`: the briefing and interview panels; `client/notebook.ts`: page transitions and preserved drafts and reading position.
+- `client/lineup.ts`: the verdict scale; `client/debrief.ts`: the debrief page.
+- `client/team.ts` and `client/board.ts`: check-in and the leaderboard / big screen.
+- `client/style.css` and `client/stage.css`: the token base and the stage; `hud.css`, `dialogue.css`, `lineup.css`, `team.css`, `board.css`, `bubbles.css`, `case-board.css` and `banana.css` style their modules.
 - `public/assets/banana/`: original generated transparent character and prop atlases. `ARTWORK.md` contains provenance and the full image-generation prompts. Phaser uses atlas frames without changing the source PNGs. No Pokémon art is loaded by this demo.
 
-Fonts have local fallbacks if Google Fonts is unavailable.
+The font is Atkinson Hyperlegible Next, bundled in `client/fonts` under the SIL Open Font License, so the game makes no third-party requests and looks the same on a closed network.
 
 For a research study, add controlled case assignment, configurable budgets, validated cases (including no-misalignment cases), and debrief timing controls. Those features are deliberately outside this demo.

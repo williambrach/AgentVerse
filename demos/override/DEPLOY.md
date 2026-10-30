@@ -210,6 +210,7 @@ OVERRIDE_TRUST_PROXY=1
 - `OVERRIDE_SECRET` keeps sign-ins valid across restarts. Without it, every restart signs all players out.
 - `OVERRIDE_ADMIN_TOKEN` starts the admin listener on `127.0.0.1:3002`. Without it, there is no admin page and no `/metrics`.
 - `HOST=127.0.0.1` with `OVERRIDE_TRUST_PROXY=1` is for a Cloudflare Tunnel: the login limiter then sees each player's own address. On a closed LAN, set `HOST=0.0.0.0` and leave `OVERRIDE_TRUST_PROXY` empty.
+- `OVERRIDE_PUBLIC_URL` (optional) is the public address of the game, for example `https://override.example.org`. The command centre uses it for its big-screen link (`/?view=board`).
 - `OVERRIDE_APP_COMMIT` is recorded in every `session_started`. Update it after each pull.
 
 For the model, choose one:
@@ -246,7 +247,7 @@ From a machine outside, `curl --fail https://<your-host>/api/health` must return
 
 ### 6. Run the event
 
-The admin page is `http://127.0.0.1:3002/admin`; paste the admin token into it. From another machine, open an SSH tunnel first with `ssh -L 3002:127.0.0.1:3002 user@mac`. Never expose the admin port through the Cloudflare Tunnel. The page is the command centre: players, tiles, message log, funnel and rounds (see [README](README.md#the-command-centre)). Prometheus scrapes `/metrics` on the same port with the token ([ops/prometheus.yml](ops/prometheus.yml)).
+The admin page is `http://127.0.0.1:3002/admin`; paste the admin token into it. From another machine, open an SSH tunnel first with `ssh -L 3002:127.0.0.1:3002 user@mac`. Never expose the admin port through the Cloudflare Tunnel. The page is the command centre, with a failover banner and a big-screen link: players, tiles, message log, funnel and rounds (see [README](README.md#the-command-centre)). Prometheus scrapes `/metrics` on the same port with the token ([ops/prometheus.yml](ops/prometheus.yml)).
 
 One hour before:
 - Start the server and confirm `/admin/health` is green.
