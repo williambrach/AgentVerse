@@ -5,10 +5,16 @@ import { extname, join } from 'node:path';
 import { RequestError } from './session.mjs';
 import { readJsonBody, safeEqual, sendJson } from './http-util.mjs';
 import { diskFreeBytes } from './monitor-sources.mjs';
+import { ContentError } from './content.mjs';
+import { InterviewProviderError } from './errors.mjs';
+import { castCharacters, identityCast, publicView } from './cases.mjs';
+import { buildMessages } from './interviews.mjs';
 
 const MAX_BODY = 16 * 1024;
 const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const MAX_CONTENT_BODY = 512 * 1024;
+const CONTENT_ROUTE = /^\/admin\/content(?:\/([a-z0-9-]{3,40})(?:\/(preview|try|revert))?)?$/;
 const MAX_STREAMS = 5;
 const MAX_BUFFERED = 1_000_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -92,6 +98,71 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
     return { ok: true, dataWritable, diskFreeBytes: diskFreeBytes(dataDir), router: router ? router.snapshot() : null, sessions: investigations.stats(), recentSystem: readSystem().slice(-20) };
   };
 
+  const nonNegInt = (v, what) => { if (!Number.isInteger(v) || v < 0) throw new RequestError(400, `${what} must be a non-negative integer.`); return v; };
+  const draftOf = (id, body) => {
+    if (!body.edits || typeof body.edits !== 'object' || Array.isArray(body.edits)) throw new RequestError(400, 'edits must be an object.');
+    const kase = content.current(id);
+    const characterId = body.characterId;
+    if (typeof characterId !== 'string' || !kase.characters.some((c) => c.id === characterId)) throw new RequestError(400, 'characterId must be one of the case characters.');
+    let history = [];
+    if (body.history !== undefined) {
+      const h = body.history;
+      if (!Array.isArray(h) || h.length > 20 || h.some((t) => !t || typeof t.question !== 'string' || typeof t.answer !== 'string')) throw new RequestError(400, 'history must be at most 20 question and answer pairs.');
+      history = h.map((t) => ({ question: t.question, answer: t.answer }));
+    }
+    if (body.question !== undefined && (typeof body.question !== 'string' || body.question.length > 2000)) throw new RequestError(400, 'question must be a string of at most 2000 characters.');
+    const draft = content.preview(id, body.edits);
+    const cast = identityCast(draft);
+    const characters = castCharacters(draft, cast);
+    const question = body.question ?? characters.find((c) => c.id === characterId).quickQuestion;
+    const messages = buildMessages(draft, { cast, interviews: { [characterId]: history } }, characterId, question);
+    return { draft, cast, characters, messages, characterId };
+  };
+
+  // /admin/content*: the maker routes. A ContentError keeps its own status and path.
+  const contentRoute = async (req, who, id, sub) => {
+    if (!content) throw new RequestError(409, 'Content editing is off.');
+    const method = req.method;
+    const allowed = !id ? ['GET'] : !sub ? ['GET', 'PUT'] : ['POST'];
+    if (!allowed.includes(method)) throw new RequestError(405, 'Method not allowed.');
+    try {
+      if (!id) return { cases: content.list().map((c) => content.info(c.id)) };
+      const info = content.info(id);
+      if (method === 'GET') return { ...info, mode: router ? 'live' : 'rehearsal', structure: content.structure(id), ...content.fields(id), history: content.history(id) };
+      const body = await readJsonBody(req, MAX_CONTENT_BODY);
+      if (method === 'PUT') {
+        if (!body.edits || typeof body.edits !== 'object' || Array.isArray(body.edits)) throw new RequestError(400, 'edits must be an object.');
+        const baseRev = nonNegInt(body.baseRev, 'baseRev');
+        const out = content.publish(id, body.edits, { by: who.by, baseRev });
+        if (out.fields.length) log('content_published', { by: who.by, caseId: id, rev: out.rev, contentHash: out.contentHash, fields: out.fields });
+        return out;
+      }
+      if (sub === 'revert') {
+        const out = content.revert(id, nonNegInt(body.rev, 'rev'), { by: who.by });
+        log('content_reverted', { by: who.by, caseId: id, rev: out.rev, revertOf: out.revertOf, contentHash: out.contentHash });
+        return out;
+      }
+      const d = draftOf(id, body);
+      if (sub === 'preview') return { contentHash: d.draft.contentHash, messages: d.messages, characters: d.characters, copy: publicView(d.draft, d.cast).copy };
+      if (typeof body.question !== 'string' || !body.question) throw new RequestError(400, 'question is required.');
+      needRouter();
+      try {
+        const r = await router.complete({ messages: d.messages, sessionId: null, questionEventId: null, tag: 'maker_try' });
+        log('content_try', { by: who.by, caseId: id, characterId: d.characterId, ok: true });
+        return { answer: r.content, reasoning: r.reasoning ?? null, provenance: r.provenance };
+      } catch (e) {
+        if (!(e instanceof InterviewProviderError)) throw e;
+        log('content_try', { by: who.by, caseId: id, characterId: d.characterId, ok: false });
+        throw new RequestError(502, e.message);
+      }
+    } catch (e) {
+      if (!(e instanceof ContentError)) throw e;
+      const err = new RequestError(e.status, e.message);
+      if (e.status === 409 && id) { const i = content.info(id); err.extra = { rev: i.rev, by: i.by }; } else if (e.path) err.extra = { path: e.path };
+      throw err;
+    }
+  };
+
   const routes = {
     'GET /admin/health': () => health(),
     'POST /admin/llm/active': async (body) => {
@@ -154,7 +225,7 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
     try {
       if (!hostOk(req.headers.host)) throw new RequestError(403, 'Forbidden host.');
       const path = (req.url || '').split('?')[0];
-      const file = req.method === 'GET' ? pageFiles.get(path) : undefined;
+      const file = req.method === 'GET' ? pageFiles.get(path === '/admin/' ? '/admin' : path) : undefined;
       if (file) {
         const h = { 'Content-Type': file.type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
         if (file.type.startsWith('text/html')) h['Content-Security-Policy'] = CSP;
@@ -181,6 +252,8 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
         if (!rows) throw new RequestError(404, 'No such session.');
         return send(res, 200, { sessionId: sid, rows, coins: monitor.sessionCoins?.(sid) ?? { spent: 0, budget: null } });
       }
+      const cm = CONTENT_ROUTE.exec(path);
+      if (cm) return send(res, 200, await contentRoute(req, who, cm[1], cm[2]));
       const paths = Object.keys(routes).map((k) => k.split(' ')[1]);
       const handler = routes[`${req.method} ${path}`];
       if (!handler) throw new RequestError(paths.includes(path) ? 405 : 404, paths.includes(path) ? 'Method not allowed.' : 'Not found.');
@@ -188,7 +261,7 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
       send(res, 200, await handler(body));
     } catch (e) {
       if (res.headersSent) return res.destroy();
-      if (e instanceof RequestError) return send(res, e.status, { error: e.message });
+      if (e instanceof RequestError) return send(res, e.status, { error: e.message, ...e.extra });
       console.error('admin error:', e?.message);
       send(res, 500, { error: 'Internal error.' });
     }

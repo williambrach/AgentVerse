@@ -198,14 +198,14 @@ export class LlmRouter {
     return record.traceId;
   }
 
-  async complete({ messages, sessionId = null, questionEventId = null, onAttempt = () => {} }) {
+  async complete({ messages, sessionId = null, questionEventId = null, onAttempt = () => {}, tag = null }) {
     this.begin();
     const deadline = new AbortController();
     deadline.endsAt = this.now() + this.deadlineMs;
     const timer = setTimeout(() => deadline.abort(), this.deadlineMs);
     const track = { attempts: 0, traceIds: [], queueMs: 0, durationMs: 0, first: null, last: null, semanticRetry: false };
     try {
-      return await this.run({ messages, sessionId, questionEventId, onAttempt: safe(onAttempt, 'onAttempt') }, { signal: deadline.signal, endsAt: deadline.endsAt }, track);
+      return await this.run({ messages, sessionId, questionEventId, tag, onAttempt: safe(onAttempt, 'onAttempt') }, { signal: deadline.signal, endsAt: deadline.endsAt }, track);
     } finally { clearTimeout(timer); this.end(); }
   }
 
@@ -254,7 +254,7 @@ export class LlmRouter {
       try {
         const semantic = SEMANTIC.has(result.code ?? '');
         track.durationMs += result.durationMs; lastResult = result; lastIdx = idx;
-        track.traceIds.push(this.trace({ sessionId: req.sessionId, questionEventId: req.questionEventId, attempt: n }, idx, budget, req.messages, result, queueMs));
+        track.traceIds.push(this.trace({ sessionId: req.sessionId, questionEventId: req.questionEventId, attempt: n, ...(req.tag ? { tag: req.tag } : {}) }, idx, budget, req.messages, result, queueMs));
         const ep = this.eps[idx];
         req.onAttempt({
           attempt: n, endpoint: ep.name, providerStatus: result.status, finishReason: result.finishReason,

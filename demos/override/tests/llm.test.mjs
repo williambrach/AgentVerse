@@ -481,3 +481,11 @@ test('429_on_last_endpoint_does_not_wrap: a 429 pair on the last endpoint fails 
   await rejects(chain.r.complete({ messages: MSGS }), 'rate_limited');
   assert.deepEqual(chain.calls.map(c => c.name), ['a', 'a', 'b']);
 });
+
+test('trace_carries_tag: a tag lands on the trace record, no tag means no key', async () => {
+  const { r, traces } = router(['a'], {});
+  await r.complete({ messages: MSGS, tag: 'maker_try' });
+  await r.complete({ messages: MSGS });
+  assert.equal(traces[0].tag, 'maker_try');
+  assert.equal('tag' in traces[1], false);
+});
