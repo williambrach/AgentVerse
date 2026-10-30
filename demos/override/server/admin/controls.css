@@ -1,17 +1,15 @@
-#controls { display: grid; gap: 0.75rem; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+#controls { display: grid; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
 #controls .ctl-summary { font-weight: 600; }
-#controls .ctl-endpoints { display: grid; gap: 0.5rem; }
-#controls .ctl-endpoint { border: 1px solid #8884; border-radius: 6px; padding: 0.5rem 0.75rem; display: grid; gap: 0.25rem; }
-#controls .ctl-endpoint-head { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: baseline; }
-#controls .ctl-model, #controls .ctl-host, #controls .ctl-load, #controls .ctl-fail, #controls .ctl-stats { color: #888; font-size: 0.85rem; }
-#controls .ctl-buttons, #controls .ctl-global { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-#controls .ctl-btn { font: inherit; padding: 0.25rem 0.75rem; border: 1px solid #8886; border-radius: 4px; background: Canvas; color: CanvasText; cursor: pointer; }
-#controls .ctl-btn:hover:not(:disabled) { border-color: currentColor; }
-#controls .ctl-btn:disabled { opacity: 0.5; cursor: progress; }
+#controls .ctl-endpoints { display: grid; gap: 0; }
+#controls .ctl-endpoint { border: 0; border-bottom: 1px solid var(--hair); padding: 10px 0; display: grid; gap: 4px; }
+#controls .ctl-endpoint-head { display: flex; gap: 12px; flex-wrap: wrap; align-items: baseline; }
+#controls .ctl-model, #controls .ctl-host, #controls .ctl-load, #controls .ctl-fail, #controls .ctl-stats { color: var(--muted); font-size: 12px; }
+#controls .ctl-buttons, #controls .ctl-global { display: flex; gap: 8px; flex-wrap: wrap; }
+#controls .ctl-btn { min-height: 32px; padding: 0 12px; border: 1px solid var(--edge); border-radius: 4px; background: transparent; color: var(--fg); cursor: pointer; }
+#controls .ctl-btn:hover:not(:disabled) { border-color: var(--fg); }
+#controls .ctl-btn:disabled { opacity: .5; cursor: progress; }
 #controls .ctl-btn[hidden] { display: none; }
-#controls .ctl-result { min-height: 1.25em; font-size: 0.9rem; }
-#controls .ctl-title { margin: 0; font-size: 0.9rem; }
-#controls .ctl-system { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; display: grid; gap: 0.15rem; font-variant-numeric: tabular-nums; }
-@media (prefers-color-scheme: dark) { #controls .ctl-endpoint { border-color: #fff3; } }
-#controls .ctl-paused { color: #d33; font-weight: 600; }
-@media (prefers-color-scheme: dark) { #controls .ctl-paused { color: #ff6b6b; } }
+#controls .ctl-result { min-height: 1.25em; font-size: 12px; }
+#controls .ctl-title { margin: 0; font-size: 13px; font-weight: 600; }
+#controls .ctl-system { list-style: none; margin: 0; padding: 0; font-size: 12px; display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+#controls .ctl-paused { color: var(--bad); font-weight: 600; }

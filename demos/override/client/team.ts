@@ -1,4 +1,7 @@
-import type { Leaderboard, LeaderboardRow } from './types.ts';
+import type { Leaderboard } from './types.ts';
+import { boardRow, clock, EMPTY } from './board.ts';
+
+export { clock };
 
 const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
@@ -13,11 +16,6 @@ export function teamNameError(raw: string): string | null {
   if (!/^[\p{L}\p{N}]/u.test(name)) return NAME_ERROR;
   if (!/^[\p{L}\p{N} '’&.\-!?#]+$/u.test(name)) return NAME_ERROR;
   return null;
-}
-
-export function clock(ms: number): string {
-  const total = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
 export interface GateView { name: string; error: string; taken: string | null; busy: boolean; switching: boolean }
@@ -38,20 +36,13 @@ export function teamGate(view: GateView): string {
     `<div class="team-actions">${cancel}<button type="submit" id="team-submit" class="primary-button"${dis}>Start playing</button></div></form></div>`;
 }
 
-const pts = (n: number) => `${n} ${n === 1 ? 'pt' : 'pts'}`;
-const coinsText = (n: number) => `${n} ${n === 1 ? 'coin' : 'coins'}`;
-
-function row(r: LeaderboardRow): string {
-  return `<tr class="board-row${r.you ? ' you' : ''}"><td class="board-rank">${r.rank == null ? 'Playing' : esc(r.rank)}</td>` +
-    `<td class="board-name">${esc(r.name)}</td><td>${esc(pts(r.points))}</td>` +
-    `<td>${esc(clock(r.timeMs))}</td><td>${esc(coinsText(r.coins))}</td></tr>`;
-}
-
-export function leaderboardPanel(board: Pick<Leaderboard, 'rankBy' | 'teams'>): string {
+export function leaderboardPanel(board: Pick<Leaderboard, 'rankBy' | 'teams' | 'cases'>): string {
   const note = `<p class="fine-print">Each case scores once per team: your first guess counts.</p>`;
-  if (!board.teams.length) return `<p class="board-empty">No team has finished a case yet.</p>${note}`;
+  if (!board.teams.length) return `<p class="board-empty">${EMPTY}</p>${note}`;
   const caption = board.rankBy === 'coins' ? 'Ties by coins' : 'Ties by time';
+  const cases = board.cases || [];
+  const head = cases.length ? `<th>Cases</th>` : '';
   return `<table class="board-table"><caption>${caption}</caption>` +
-    `<thead><tr><th>Rank</th><th>Team</th><th>Points</th><th>Time</th><th>Coins</th></tr></thead>` +
-    `<tbody>${board.teams.map(row).join('')}</tbody></table>${note}`;
+    `<thead><tr><th>Rank</th><th>Team</th>${head}<th>Points</th><th>Time</th><th>Coins</th></tr></thead>` +
+    `<tbody>${board.teams.map(r => boardRow(r, cases, 'Playing')).join('')}</tbody></table>${note}`;
 }

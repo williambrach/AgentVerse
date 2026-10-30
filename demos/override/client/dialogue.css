@@ -1,0 +1,153 @@
+/* Dialogue and notebook pages. Stands alone: it carries the base rules for the page, speech, briefing, thread and tool-list
+   blocks that the retired style.css, banana.css and tools.css used to supply. Colours per the HUD tokens. */
+.notebook-page { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #D9C796 transparent; }
+.panel-heading { flex-shrink: 0; padding: 18px 24px 8px; }
+.panel-heading h2 { margin: 6px 0 8px; font-size: 26px; font-weight: 600; line-height: 1.25; }
+.panel-heading > p { font-size: 15px; line-height: 1.5; color: #55646B; }
+.notebook-content { display: flex; flex-direction: column; gap: 18px; padding: 12px 24px 24px; }
+.briefing-note { padding: 14px 16px; }
+.briefing-note small { display: block; line-height: 1.5; }
+.task-list { margin: 0; padding: 0; list-style: none; counter-reset: steps; }
+.task-list li { position: relative; padding: 0 0 18px 35px; counter-increment: steps; }
+.task-list li::before { content: '0' counter(steps); position: absolute; left: 0; top: 3px; }
+.task-list li:last-child { padding-bottom: 0; }
+.task-list b, .task-list span { display: block; }
+.subtle-note { line-height: 1.5; }
+.subtle-note kbd { padding: 1px 4px; margin: 0 1px; border: 1px solid #D9C796; border-radius: 3px; background: #FFFDF5; font: inherit; }
+.interview-transcript { scrollbar-width: thin; scrollbar-color: #D9C796 transparent; }
+.speech { position: relative; }
+.thinking { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.thinking-dots { display: inline-flex; gap: 4px; }
+.thinking-dots i { display: block; width: 5px; height: 5px; background: #55646B; }
+.interview-compose textarea { line-height: 1.4; }
+.tool-guide { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.task-list .tool-guide li { display: flex; align-items: center; gap: 10px; counter-increment: none; }
+.task-list .tool-guide li::before { content: none; }
+.task-list .tool-guide .tool-icon { display: grid; place-items: center; }
+.task-list .tool-guide .tool-text { display: flex; flex-direction: column; }
+.task-list .tool-guide small { display: block; }
+.tool-guide em { flex: none; margin-left: auto; font-style: normal; white-space: nowrap; }
+.thread-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.thread-panel .notebook-content { flex: 1; min-height: 0; }
+.thread-panel ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.thread-post { padding: 10px 12px; border-radius: 6px; }
+.thread-author { margin: 0 0 4px; }
+.thread-post p { margin: 0; line-height: 1.5; }
+.thread-pending { padding: 4px 12px; opacity: .7; font-style: italic; }
+.thread-panel .fine { margin: 0; padding: 0 2px; line-height: 1.5; }
+.tool-hint { font-size: .85em; }
+.page-turn-shade { display: none; }
+
+.dialogue { position: relative; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 24px; margin: 20px 0 0; padding: 26px 26px 20px; background: #FFF6DE; color: #18252D; border: 4px solid #18252D; border-radius: 10px; box-shadow: inset 0 0 0 3px #FFF6DE, inset 0 0 0 5px #D9C796, 0 6px 0 #0A1217; font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.dialogue .speaker-tag { position: absolute; top: -20px; left: 22px; display: flex; align-items: baseline; gap: 10px; padding: 6px 14px; background: #18252D; color: #FFF6DE; border-radius: 4px; box-shadow: inset 0 -3px 0 var(--accent, #8CC56A); }
+.dialogue .speaker-tag b { font-size: 20px; font-weight: 600; }
+.dialogue .speaker-tag span { font-size: 13px; color: #C9D6DB; }
+.dialogue .dialogue-portrait { width: 132px; height: 144px; flex-shrink: 0; margin: 0; padding: 0; display: flex; align-items: flex-end; justify-content: center; border: 3px solid #18252D; border-radius: 6px; overflow: hidden; background: linear-gradient(var(--sky, #BFE0EE) 0 58%, var(--ground, #A7CF7E) 58%); box-shadow: none; }
+.dialogue .dialogue-portrait .pixel-person { flex-shrink: 0; margin: 0; transform: scale(1.65); transform-origin: center bottom; }
+.dialogue .dialogue-body { flex: 1 1 400px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+/* Transcript: whole history scrolls, newest turn at the bottom. */
+#app .dialogue .interview-transcript { display: flex; flex-direction: column; gap: 10px; min-height: 0 !important; max-height: clamp(96px, 24dvh, 220px); overflow-y: auto; padding: 0 4px 0 0 !important; flex: 1; }
+.dialogue .speech { max-width: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; color: #18252D; align-self: stretch; }
+.dialogue .speech::after { display: none; }
+/* The speaker tag on the box's edge names who talks; the per-line label stays for screen readers only. */
+.dialogue .speech > span { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+.dialogue .speech p { margin: 4px 0 0; font-size: 15px; line-height: 1.5; white-space: pre-wrap; text-wrap: pretty; }
+.dialogue .speech.investigator p { font-size: 14px; color: #55646B; }
+.dialogue .speech.investigator.latest p { color: #18252D; }
+.dialogue .speech.character.latest p { font-size: 22px; line-height: 1.5; }
+.dialogue .speech.character:not(.latest) { padding-bottom: 10px; border-bottom: 2px dashed #D9C796; }
+.dialogue .speech.waiting p { font-size: 22px; font-style: italic; color: #55646B; }
+.dialogue .speech.reasoning { padding: 10px 12px; border: 2px solid #D9C796; border-radius: 6px; background: #FFFDF5; }
+.dialogue .speech.reasoning h4 { margin: 0; font-size: 13px; letter-spacing: .04em; color: #55646B; }
+.dialogue .speech.reasoning p { font-size: 15px; }
+.dialogue .thread-panel, .dialogue .thread-post { color: #18252D; }
+.dialogue .sr-only, .dialogue .tool-hint { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* Compose row */
+#app .dialogue .interview-compose { margin: 0; padding: 12px 0 0 !important; border: 0; border-top: 2px dashed #D9C796; background: none; box-shadow: none; display: flex; flex-direction: column; gap: 10px; }
+#app .dialogue .quick-question { box-sizing: border-box; width: 100%; margin: 0; display: flex; flex-direction: column; gap: 4px; min-height: 44px; padding: 8px 14px; text-align: left; font: inherit; color: #18252D; background: #FFFDF5; border: 2px dashed #18252D; border-radius: 6px; box-shadow: none; }
+.dialogue .quick-question small { font-size: 12px; letter-spacing: .06em; color: #55646B; }
+.dialogue .quick-question span { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 16px; font-weight: 700; }
+.dialogue .compose-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.dialogue .compose-row { margin: 0; padding: 0; }
+.dialogue .compose-row textarea { margin: 0; flex: 1 1 260px; min-width: 0; min-height: 48px; box-sizing: border-box; padding: 12px 14px; resize: none; font: inherit; font-size: 16px; color: #18252D; background: #FFFDF5; border: 2px solid #18252D; border-radius: 6px; }
+.dialogue .ask-button { min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 16px; font: inherit; font-size: 16px; font-weight: 700; color: #FFF6DE; background: #18252D; border: 2px solid #18252D; border-radius: 6px; box-shadow: 0 3px 0 #000; }
+.dialogue .ask-button:hover:not(:disabled) { background: #13232C; }
+.dialogue .coin-price { display: flex; align-items: center; gap: 4px; font-size: 15px; font-weight: 600; color: #F4B740; }
+.dialogue .compose-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0; }
+.dialogue .compose-bottom small { display: none; }
+.dialogue .ask-off { margin: -2px 0 0; font-size: 14px; font-weight: 600; color: #8A3B12; }
+.dialogue .coin-price[hidden] { display: none; }
+.dialogue .ask-button .tool-chip { margin: 0; padding: 0; border-radius: 0; background: none; font-size: inherit; color: inherit; }
+.dialogue .next-monkey { margin: 0 0 0 auto; width: auto; min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 14px; font: inherit; font-size: 15px; font-weight: 700; color: #18252D; background: transparent; border: 2px solid transparent; border-radius: 6px; }
+.dialogue .next-monkey:hover:not(:disabled) { border-color: #18252D; }
+.dialogue .subtle-note { flex: 1 1 100%; font-size: 14px; color: #55646B; }
+.dialogue button:focus-visible, .dialogue textarea:focus-visible { outline: 2px solid #F4B740; outline-offset: 3px; }
+.dialogue .ask-button:focus-visible, .dialogue .next-monkey:focus-visible { outline-color: #F4B740; box-shadow: 0 0 0 2px #18252D; }
+.thinking-dots i { animation: dialogue-dot 1.2s infinite; }
+@keyframes dialogue-dot { 50% { opacity: .25; } }
+
+.notebook-page { animation: dialogue-fade 160ms ease-out; }
+@keyframes dialogue-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .notebook-page, .thinking-dots i { animation: none; }
+}
+@media (max-width: 560px) {
+  .dialogue { padding: 24px 16px 16px; gap: 16px; }
+  .dialogue .dialogue-portrait { width: 96px; height: 104px; }
+  .dialogue .dialogue-portrait .pixel-person { transform: scale(1.2); }
+  .dialogue .speech.character.latest p, .dialogue .speech.waiting p { font-size: 18px; }
+}
+
+/* Pages in the parchment box (briefing, thread, debrief). #app wins over the per-theme notebook colours. */
+#app .dossier { overflow: visible; }
+/* Not in the lineup: there the dossier is the whole screen (hud.css), so these page rules must not match it. */
+#app:not([data-view="lineup"]) .dossier:not(:has(.dialogue)) { margin-top: 20px; max-height: calc(100% - 20px); }
+#app .dossier:not(:has(.dialogue)) #panel { border-radius: 6px; }
+/* The section label is the same dark speaker tag the interview uses, on the box's top edge. */
+#app #notebook-section { position: absolute; top: -20px; left: 22px; z-index: 3; display: block; margin: 0; padding: 6px 14px; background: #18252D; color: #FFF6DE; font: 600 20px/1.2 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif; border-radius: 4px; box-shadow: inset 0 -3px 0 var(--accent, #8CC56A); }
+#app .dossier:has(.dialogue) #notebook-section { display: none; }
+#app .notebook-page .panel-heading { padding: 18px 56px 8px 24px; }
+
+/* Briefing */
+#app .notebook-content .eyebrow, #app .notebook-page .panel-heading .eyebrow { font: 600 13px/1.3 'Atkinson Hyperlegible Next', system-ui, sans-serif; letter-spacing: .06em; color: #55646B; }
+#app .notebook-page .panel-heading > p { font-size: 15px; line-height: 1.5; }
+#app .notebook-content .primary-button { align-self: flex-start; min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 18px; font: inherit; font-size: 16px; font-weight: 700; color: #FFF6DE; background: #18252D; border: 2px solid #18252D; border-radius: 6px; box-shadow: 0 3px 0 #000; }
+#app .notebook-content .primary-button:not(:disabled):hover { background: #13232C; box-shadow: 0 3px 0 #000; }
+#app .notebook-content .primary-button:focus-visible { outline: 2px solid #F4B740; outline-offset: 3px; }
+#app .briefing-note { padding: 14px 16px; background: #FFFDF5; border: 2px dashed #D9C796; border-radius: 6px; box-shadow: none; transform: none; }
+#app .briefing-note p { margin: 6px 0; font-size: 17px; color: #18252D; }
+#app .briefing-note small { font-size: 13px; color: #55646B; }
+#app .task-list b { margin-bottom: 2px; font-size: 16px; color: #18252D; }
+#app .task-list span { font-size: 14px; line-height: 1.5; color: #55646B; }
+#app .task-list li::before { font: 600 13px 'Atkinson Hyperlegible Next', system-ui, sans-serif; color: #55646B; }
+#app .task-list .tool-guide { margin-top: 8px; gap: 6px; }
+#app .task-list .tool-guide li { padding: 7px 10px; background: #FFFDF5; border: 1px solid #D9C796; border-radius: 6px; }
+#app .task-list .tool-guide .tool-icon { width: 28px; height: 28px; background: #18252D; color: #F4B740; }
+#app .task-list .tool-guide b { margin: 0; font-size: 15px; color: #18252D; }
+#app .task-list .tool-guide small { font-size: 13px; line-height: 1.4; color: #55646B; }
+#app .tool-guide em { padding: 2px 8px; border-radius: 999px; background: #18252D; font: 600 13px 'Atkinson Hyperlegible Next', system-ui, sans-serif; color: #F4B740; }
+#app .subtle-note { font-size: 14px; line-height: 1.5; color: #55646B; }
+#app .subtle-note kbd { font-size: 13px; }
+
+/* Thread: no heading text on screen, at most 40dvh tall so bubbles over characters below y=212 stay visible. */
+#app .dossier:has(.thread-panel) { max-height: 40dvh; }
+#app .thread-panel .panel-heading { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+#app .thread-panel .notebook-content { overflow-y: auto; padding-top: 22px; padding-right: 56px; }
+#app .thread-panel .thread-post { color: #18252D; background: #FFFDF5; border: 1px solid #D9C796; }
+#app .thread-panel .thread-author { font: 600 13px/1.3 'Atkinson Hyperlegible Next', system-ui, sans-serif; letter-spacing: .02em; text-transform: none; opacity: 1; color: #55646B; }
+#app .thread-panel .thread-post p { font-size: 15px; }
+#app .thread-panel .fine { font-size: 13px; line-height: 1.5; opacity: 1; color: #55646B; }
+
+/* The dossier-top row on pages: the section tag is positioned against the box, so the row must not become the containing block. */
+#app[data-hud]:not([data-view="lineup"]) .dossier:not(:has(.dialogue)) { position: relative; }
+#app[data-hud] .dossier:not(:has(.dialogue)) .dossier-top { position: static; }
+#app[data-hud] .dossier:not(:has(.dialogue)) .dossier-close { position: absolute; top: 4px; right: 6px; z-index: 4; }
+
+/* The interview box draws its own frame, 20px below the dossier's top edge. Its close sits inside that frame's top right corner,
+   and the first block of the body keeps clear of it. */
+#app[data-hud] .dossier:has(.dialogue) { position: relative; }
+#app[data-hud] .dossier:has(.dialogue) .dossier-top { position: static; }
+#app[data-hud] .dossier:has(.dialogue) .dossier-close { position: absolute; top: 28px; right: 10px; z-index: 4; width: 40px; height: 40px; }
+.dialogue .dialogue-body > :first-child { margin-right: 44px; }

@@ -7,10 +7,10 @@ export const LABEL_CLEARANCE = 7 + 6 + 2;
 
 /**
  * Where a speech bubble sits for a name label centred at (x, y) in game pixels. The bubble's bottom edge is pinned at `bottom`
- * (= y - LABEL_CLEARANCE, so it and its tail clear the label) and it grows upward to fit its text, up to `maxHeight`, so it never leaves the scene. `top` is the legacy 78px box top.
+ * (= y - LABEL_CLEARANCE, so it and its tail clear the label) and it grows upward to fit its text, up to `maxHeight` (the room below `topClear` game pixels from the stage top), so it never leaves the scene. `top` is the legacy 78px box top.
  */
-export function placeBubble(x: number, y: number, width: number): { left: number; top: number; bottom: number; maxHeight: number; tail: number } {
+export function placeBubble(x: number, y: number, width: number, topClear: number = MARGIN): { left: number; top: number; bottom: number; maxHeight: number; tail: number } {
   const left = Math.max(MARGIN, Math.min(GAME_WIDTH - MARGIN - width, x - width / 2));
   const bottom = y - LABEL_CLEARANCE;
-  return { left, top: bottom - 80, bottom, maxHeight: Math.max(0, bottom - MARGIN), tail: x - left };
+  return { left, top: bottom - 80, bottom, maxHeight: Math.max(0, bottom - topClear), tail: x - left };
 }

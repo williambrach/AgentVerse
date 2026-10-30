@@ -1,20 +1,25 @@
+import './fonts.css';
 import './style.css';
-import './pixel.css';
-import './notebook.css';
+import './stage.css';
 import './banana.css';
+import './hud.css';
+import './dialogue.css';
+import './lineup.css';
 import './case-board.css';
-import './fit.css';
-import './tower.css';
-import './roles.css';
-import './tools.css';
-import './bubbles.css';
 import './team.css';
-import { HINTS, coinLabel, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, reasoningBlock, threadPanel, pluralise } from './tools';
+import './board.css';
+import './bubbles.css';
+import { HINTS, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, threadPanel } from './tools';
 import { teamGate, teamNameError, leaderboardPanel, type GateView } from './team';
+import { boardScreen } from './board.ts';
+import { debriefPage } from './debrief.ts';
 import { renderNotebook } from './notebook';
 import { createStation, type Station } from './station';
 import { postHeartbeat, startHeartbeat } from './heartbeat';
 import { worldFor } from './worlds';
+import { hudShell, castCard } from './hud.ts';
+import { interviewPanel, briefingPanel } from './dialogue.ts';
+import { lineupPanel } from './lineup.ts';
 import type { CaseState, Character, LocationId } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -31,6 +36,8 @@ let introVisible = true;
 let errorMessage = '';
 /** The agents' thread shows in the notebook instead of the location panel; `panel` is left alone. */
 let threadOpen = false;
+/** The dialogue box over the world: opened by any visit or the notebook button, closed by walking, Esc or its close button. */
+let dialogueOpen = false;
 /** True while the Let them talk loop runs; any other player action sets it false. */
 let talking = false;
 let wakeTalk: (() => void) | undefined;
@@ -112,31 +119,10 @@ async function action(name: string, payload: object = {}, onSuccess?: () => void
 }
 
 function shell() {
-  app.innerHTML = `
-    <header class="topbar">
-      <a class="wordmark" href="/" aria-label="The Override home"><span class="banana-mark" id="world-icon"></span><span>THE OVERRIDE<small>AGENTVERSE</small></span></a>
-      <div class="top-meta"><span class="authored-label">AUTHORED DEMONSTRATION</span><span id="mode-badge" class="mode-badge"></span><span class="coin-wrap"><span id="coin-counter" class="mode-badge coin-badge" tabindex="0" aria-describedby="coin-tip" hidden></span><span id="coin-tip" class="coin-tip" role="tooltip">${escape(HINTS.coins)}</span></span></div>
-      <button class="quiet-button team-chip" id="team-button" title="Change team">${icon('person')}<span>${escape(teamName)}</span></button>
-      <button class="quiet-button" id="leaderboard-button" title="See how the teams rank">${svg('<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/>')}<span>Leaderboard</span></button>
-      <button class="quiet-button" id="restart-button" title="Start this case over in a fresh session">${icon('reset')}<span>Reset session</span></button>
-      <button class="quiet-button" id="reset-button" title="Choose another case or restart this one">${icon('cases')}<span>Cases</span></button>
-    </header>
-    <main class="workspace">
-      <section class="world-column" id="world-column">
-        <div class="world-heading"><div><span class="eyebrow" id="case-eyebrow"></span><h1 id="case-headline">${escape(state.copy.headline)}</h1></div><span class="case-status" id="case-status">AWAITING INVESTIGATOR</span></div>
-        <div class="station-frame"><div class="station-topline"><span><i class="live-dot"></i> <span id="case-topline">${escape(state.title.toUpperCase())}</span> / <span id="case-day"></span></span><span id="elapsed">00:00</span></div><div id="station"></div><div class="station-bottomline"><span id="movement-hint">WASD / ARROWS to walk · E to interact</span><span class="floor-label">2–3 MINUTE MYSTERY</span></div></div>
-        <div class="toolbelt" id="toolbelt" role="group" aria-label="Arbiter tools"><span class="toolbelt-label" aria-hidden="true">ARBITER TOOLS</span><div class="toolbelt-cards" id="toolbelt-cards"></div></div>
-        <nav class="room-nav" id="room-nav"></nav>
-        <div class="world-footer"><span><span id="quick-progress"></span></span></div>
-      </section>
-      <aside class="dossier" aria-label="Investigation notebook"><div class="dossier-top"><div class="notebook-label"><span class="eyebrow">INVESTIGATOR’S NOTEBOOK</span><span id="notebook-section">Case briefing</span></div><span class="notebook-index" id="notebook-index" aria-hidden="true">01 / 0${2 + state.characters.length}</span><button class="icon-button" data-go="briefing" aria-label="View briefing">${icon('report')}</button></div><div id="panel"></div></aside>
-    </main>
-    <footer class="app-footer"><span>AGENTVERSE <span class="slash">/</span> THE OVERRIDE</span><span>Authored demo · 2–3 minutes · Your own case</span><button id="export-button">Export session ${icon('arrow')}</button></footer>
-    <div id="toast" role="alert" hidden></div>
-    <div id="overlay-root"></div>
-  `;
+  app.innerHTML = hudShell({ teamName, headline: state.copy.headline, topline: '' });
   worldKey = '';
-  station = createStation(location => void visit(location), hint => { document.querySelector('#movement-hint')!.textContent = hint; });
+  app.dataset.hud = 'on';
+  station = createStation(location => void visit(location), hint => { document.querySelector('#movement-hint')!.textContent = hint; }, () => { if (!dialogueOpen) return; dialogueOpen = false; render(); });
   app.addEventListener('click', onClick);
   app.addEventListener('change', event => {
     const input = event.target as HTMLInputElement;
@@ -144,14 +130,26 @@ function shell() {
     selectedCase = input.value;
     renderPreview();
   });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard')) closeOverlay(); });
-  setInterval(() => {
-    const elapsed = document.querySelector('#elapsed');
-    if (!elapsed || !state?.session) return;
-    const end = state.session.verdict?.submittedAt || new Date().toISOString();
-    const seconds = Math.max(0, Math.floor((Date.parse(end) - Date.parse(state.session.startedAt)) / 1000));
-    elapsed.textContent = `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
-  }, 1000);
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    if (document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard')) closeOverlay();
+    else if (dialogueOpen) closeDialogue();
+  });
+  setInterval(tick, 1000);
+}
+
+/** The session clock, in every `#elapsed` and `[data-elapsed]` element. */
+function elapsedText(): string {
+  if (!state?.session) return '0:00';
+  const end = state.session.verdict?.submittedAt || new Date().toISOString();
+  const seconds = Math.max(0, Math.floor((Date.parse(end) - Date.parse(state.session.startedAt)) / 1000));
+  return `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
+}
+
+function tick() {
+  if (!state?.session) return;
+  const text = elapsedText();
+  document.querySelectorAll('#elapsed, [data-elapsed]').forEach(el => { el.textContent = text; });
 }
 
 /** The parts of the page that belong to the case's world. Rebuilt only when the world or the cast changes. */
@@ -161,24 +159,36 @@ function renderWorld() {
   worldKey = key;
   const w = world(), t = w.text;
   app.dataset.world = w.id;
-  document.querySelector('#world-column')!.setAttribute('aria-label', t.place);
+  document.querySelector('#world-name')!.textContent = t.place;
   document.querySelector('#world-icon')!.innerHTML = svg(t.icon);
-  document.querySelector('#case-day')!.textContent = t.day;
   document.querySelector('#room-nav')!.setAttribute('aria-label', `${cap(t.eyebrow)} destinations`);
   document.querySelector<HTMLElement>('#room-nav')!.style.setProperty('--nav-n', String(state.characters.length + 1));
   document.querySelector('#room-nav')!.innerHTML = `
-          ${state.characters.map(c => `<button data-go="${escape(c.id)}"><i class="avatar-dot ${castClass(c.id)}"></i><span>${escape(c.name)}<small>${escape(c.role)}</small></span><span class="interview-check" data-check="${escape(c.id)}"></span></button>`).join('')}
-          <button data-go="report">${icon('report')}<span>Your guess<small>Who’s who?</small></span></button>`;
-  document.querySelector('#notebook-index')!.textContent = `01 / 0${2 + state.characters.length}`;
+          ${state.characters.map(cardFor).join('')}`;
   station?.configure(w, state.characters);
   syncNavText();
 }
 
-/** Part text (job labels) changes when a session deals the cast, so it is refreshed on every render. */
+const cardFor = (c: Character) => {
+  const asked = Boolean(state.session?.interviews[c.id]?.length);
+  const talking = dialogueOpen && panel === c.id;
+  return castCard({ id: c.id, name: c.name, part: c.role, faceClass: castClass(c.id), state: talking ? 'talking' : asked ? 'asked' : 'new', asked });
+};
+
+/** Part text and the talking, asked and new states change with every action, so the cards are updated in place (focus stays). */
 function syncNavText() {
   for (const c of state.characters) {
-    const label = document.querySelector<HTMLElement>(`#room-nav [data-go="${CSS.escape(c.id)}"] small`);
-    if (label && label.textContent !== c.role) label.textContent = c.role;
+    const card = document.querySelector<HTMLElement>(`#room-nav [data-go="${CSS.escape(c.id)}"]`);
+    if (!card) continue;
+    const fresh = document.createElement('div');
+    fresh.innerHTML = cardFor(c);
+    const next = fresh.firstElementChild!;
+    card.className = next.className;
+    if (next.hasAttribute('aria-current')) card.setAttribute('aria-current', 'true'); else card.removeAttribute('aria-current');
+    for (const sel of ['small', '[data-check]']) {
+      const a = card.querySelector(sel), b = next.querySelector(sel);
+      if (a && b && a.innerHTML !== b.innerHTML) a.innerHTML = b.innerHTML;
+    }
   }
 }
 
@@ -186,8 +196,16 @@ async function visit(location: LocationId) {
   if (busy || introVisible) return;
   stopTalking();
   threadOpen = false;
-  if (state.session?.status === 'closed') { panel = location; render(); return; }
-  if (await action('visit', { location })) { panel = location; render(); }
+  if (state.session?.status === 'closed') { panel = location; dialogueOpen = true; render(); return; }
+  if (await action('visit', { location })) { panel = location; dialogueOpen = true; render(); }
+}
+
+/** Hides the conversation and, if focus was inside it, hands focus to the Notebook button so a keyboard user is not stranded on a hidden control. */
+function closeDialogue() {
+  dialogueOpen = false;
+  render();
+  const active = document.activeElement;
+  if (!active || active === document.body || active.closest('.dossier, #panel')) document.querySelector<HTMLButtonElement>('#notebook-button')?.focus({ preventScroll: true });
 }
 
 function go(location: LocationId) {
@@ -201,6 +219,8 @@ async function onClick(event: MouseEvent) {
   const button = (event.target as HTMLElement).closest<HTMLElement>('button');
   if (!button || (button as HTMLButtonElement).disabled) return;
   if (button.id === 'continue-button') { void talk(); return; }
+  if (button.id === 'notebook-button') { stopTalking(); if (state.session && !introVisible) { dialogueOpen = true; render(); } return; }
+  if (button.id === 'dialogue-close' || button.id === 'lineup-back') { closeDialogue(); return; }
   if (button.id === 'read-thread') { stopTalking(); threadOpen = true; render(); return; }
   if (button.id === 'inspect-button') { stopTalking(); if (ids().includes(panel)) await action('inspect', { character: panel }); return; }
   stopTalking();
@@ -217,6 +237,7 @@ async function onClick(event: MouseEvent) {
     introVisible = false;
     panel = state.session?.status === 'closed' ? 'report' : savedPanel();
     threadOpen = false;
+    dialogueOpen = true;
     render();
   }
   if (button.id === 'reset-button' || button.id === 'debrief-reset') showCases();
@@ -245,7 +266,7 @@ async function startCase(caseId: string) {
   const fresh = () => {
     drafts = blankDrafts();
     reportDraft = freshDraft();
-    panel = 'briefing'; threadOpen = false; introVisible = false;
+    panel = 'briefing'; threadOpen = false; introVisible = false; dialogueOpen = true;
   };
   if (!(await action('reset', { caseId }, fresh))) return;
   dropCaseParam();
@@ -258,6 +279,13 @@ function dropCaseParam() {
   if (url.searchParams.has('case')) { url.searchParams.delete('case'); history.replaceState(null, '', url.pathname + url.search + url.hash); }
 }
 
+/** Walking is on only with a session, outside the intro, the lineup and the debrief, and with no overlay open. */
+function syncWalking() {
+  const session = state?.session;
+  const mapView = app.dataset.view !== 'lineup';
+  station?.setEnabled(Boolean(session && !introVisible && !busy && mapView && !document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard')));
+}
+
 function render() {
   if (!state || !document.querySelector('#panel')) return;
   const session = state.session;
@@ -266,18 +294,15 @@ function render() {
   renderWorld();
   document.querySelector('#case-headline')!.textContent = state.copy.headline;
   document.title = `${state.title} · AgentVerse`;
-  document.querySelector('#case-topline')!.textContent = state.title.toUpperCase();
   document.querySelector('#case-eyebrow')!.innerHTML = `CASE ${caseNumber(state.order)} <span class="slash">/</span> ${escape(world().text.eyebrow)}`;
   document.querySelector('#mode-badge')!.textContent = state.mode === 'live' ? 'LIVE INTERVIEWS' : 'SCRIPTED REHEARSAL';
   document.querySelector('#mode-badge')!.classList.toggle('rehearsal', state.mode === 'rehearsal');
-  document.querySelector('#case-status')!.textContent = !session ? 'AWAITING INVESTIGATOR' : session.status === 'closed' ? 'CASE CLOSED' : 'INVESTIGATION OPEN';
   const heard = session ? ids().filter(id => session.interviews[id].length).length : 0;
-  document.querySelector('#quick-progress')!.textContent = session?.status === 'closed' ? 'Mystery solved · Open Cases for the next one' : heard < state.characters.length ? `1. Ask the ${world().text.many} · ${heard} / ${state.characters.length} heard` : '2. Ready to make your guess';
+  document.querySelector('#quick-progress')!.textContent = session?.status === 'closed' ? 'Case closed' : `${heard} of ${state.characters.length} asked · free`;
   document.querySelectorAll<HTMLButtonElement>('[data-go]').forEach(button => {
     button.disabled = busy || !session || introVisible;
     button.classList.toggle('active', button.dataset.go === panel);
   });
-  document.querySelectorAll<HTMLElement>('[data-check]').forEach(el => { el.innerHTML = session?.interviews[el.dataset.check!].length ? icon('check') : ''; });
   renderTools();
   (document.querySelector('#export-button') as HTMLButtonElement).disabled = !session || busy;
   (document.querySelector('#reset-button') as HTMLButtonElement).disabled = !session || busy;
@@ -285,18 +310,26 @@ function render() {
   const toast = document.querySelector<HTMLElement>('#toast')!;
   toast.hidden = !errorMessage;
   toast.textContent = errorMessage;
-  station?.setEnabled(Boolean(session && !introVisible && !busy && !document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard')));
+  const lineup = Boolean(session && session.status === 'active' && panel === 'report' && dialogueOpen && !introVisible && heard === state.characters.length && !threadOpen);
+  const wasOpen = app.dataset.dialogue === 'open';
+  app.dataset.dialogue = dialogueOpen && !introVisible ? 'open' : 'closed';
+  const debrief = Boolean(session?.status === 'closed' && panel === 'report' && !introVisible && !threadOpen);
+  app.dataset.view = lineup || debrief ? 'lineup' : 'world';
+  syncWalking();
   const target = document.querySelector<HTMLElement>('#panel')!;
   const sections: Record<string, string> = { briefing: 'Case briefing', ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
   document.querySelector('#notebook-section')!.textContent = threadOpen ? 'Thread' : sections[panel];
-  document.querySelector('#notebook-index')!.textContent = `0${Object.keys(sections).indexOf(panel) + 1} / 0${Object.keys(sections).length}`;
   let markup: string;
   if (threadOpen && session) markup = threadPanel(session.thread, Object.fromEntries(state.characters.map(c => [c.id, c.name])), session.chatter.pending);
-  else if (session?.status === 'closed' && panel === 'report') markup = debriefPanel();
-  else if (panel === 'briefing') markup = briefingPanel();
+  else if (session?.status === 'closed' && panel === 'report') markup = debriefMarkup();
+  else if (panel === 'briefing') markup = briefingPanel({ copy: state.copy, cast: state.characters.length, many: world().text.many, one: world().text.one, oneWithArticle: world().text.oneWithArticle, firstId: state.characters[0]?.id, firstName: state.characters[0]?.name, guide: state.session ? toolGuide(state.session.economy) : '' });
   else if (panel === 'report') markup = reportPanel();
-  else markup = interviewPanel(panel);
+  else markup = interviewMarkup(panel);
   if (renderNotebook(target, markup, `${session?.id}:${panel}:${session?.status}${threadOpen ? ':thread' : ''}`, panel, Object.keys(sections))) bindForms();
+  // A box that was hidden loses its scroll position: show the newest turn when it opens.
+  const log = target.querySelector<HTMLElement>('#transcript');
+  if (log && dialogueOpen && !wasOpen) log.scrollTop = log.scrollHeight;
+  tick();
   if (introVisible) renderIntro();
   else {
     if (document.querySelector('#intro')) document.querySelector('#overlay-root')!.innerHTML = '';
@@ -355,36 +388,18 @@ function heading(kicker: string, title: string, description: string) {
   return `<div class="panel-heading"><span class="eyebrow">${kicker}</span><h2>${title}</h2><p>${description}</p></div>`;
 }
 
-function briefingPanel() {
-  const copy = state.copy;
-  return `${heading('THE CASE / 2–3 MINUTES', escape(copy.briefing.title), escape(copy.briefing.description))}
-    <div class="notebook-content"><div class="briefing-note"><span class="eyebrow">YOUR QUESTION</span><p>${escape(copy.briefing.question)}</p><small>${escape(copy.briefing.hint)}</small></div>
-    <ol class="task-list"><li><b>Ask ${state.characters.length} ${escape(world().text.many)}</b><span>One quick question each.</span></li><li class="tool-step"><b>Use your Arbiter tools</b><span>Optional. They cost coins and sit under the map.</span>${state.session ? toolGuide(state.session.economy) : ''}</li><li><b>Make your guess</b><span>Pick a role for each ${escape(world().text.one)}. Then see what happened.</span></li></ol>
-    <button class="primary-button" data-go="${escape(state.characters[0]?.id)}">Ask ${escape(state.characters[0]?.name)} ${icon('arrow')}</button>
-    <div class="subtle-note">Walk with WASD or the arrow keys and press E next to ${escape(world().text.oneWithArticle)} to talk. The buttons under the map open a page straight away.</div></div>`;
-}
-
-function interviewPanel(characterId: string) {
+function interviewMarkup(characterId: string) {
   const character = state.characters.find(c => c.id === characterId)!;
-  const turns = state.session?.interviews[characterId] || [];
-  const closed = state.session?.status === 'closed';
-  const next = state.characters.find(c => c.id !== characterId && !state.session?.interviews[c.id].length);
-  const economy = state.session?.economy;
+  const session = state.session;
+  const economy = session?.economy;
   const askBlock = economy ? toolsBlock(economy, ['ask'], reserveFor(characterId)) : { enabled: true, reason: null };
-  const items = [
-    ...turns.map((turn, i) => ({ at: turn.timestamp, order: 0, html: `<div class="speech investigator" data-motion-key="question-${i}"><span>YOU</span><p>${escape(turn.question)}</p></div><div class="speech character" data-motion-key="answer-${i}"><span>${escape(character.name.toUpperCase())}</span><p>${escape(turn.answer)}</p></div>` })),
-    ...(state.session?.inspections || []).filter(n => n.character === characterId).map(n => ({ at: n.timestamp, order: 1, html: reasoningBlock(n, character.name) })),
-  ].sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.order - b.order);
-  return `<div class="interview-heading"><div class="portrait ${castClass(characterId)}"><span class="pixel-person"></span></div><div><span class="eyebrow">${escape(world().text.castLabel)} ${character.room} OF 0${state.characters.length}</span><h2>${escape(character.name)}</h2><p>${escape(character.role)}</p></div><span class="interview-status"><i class="live-dot"></i>${state.mode === 'live' ? 'LIVE' : 'SCRIPTED'}</span></div>
-    <div class="interview-transcript" id="transcript" role="log" aria-label="Interview transcript" aria-live="polite"><div class="speech character" data-motion-key="introduction"><span>${escape(character.name.toUpperCase())}</span><p>${escape(character.introduction)}</p></div>
-    ${items.map(item => item.html).join('')}
-    ${pendingCharacter === characterId && busy ? `<div class="speech investigator" data-motion-key="question-${turns.length}"><span>YOU</span><p>${escape(drafts[characterId])}</p></div><div class="speech character waiting" data-motion-key="waiting"><span>${escape(character.name.toUpperCase())}</span><p class="thinking">Thinking<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></p></div>` : ''}</div>
-    ${closed ? '<div class="subtle-note">This conversation is saved in your session export.</div>' : `<form class="interview-compose" id="interview-form">
-    ${!turns.length ? `<button class="quick-question" type="button" data-quick-question="${escape(character.quickQuestion)}" ${busy ? 'disabled' : ''}><small>QUICK QUESTION · TAP TO ASK</small><span>${escape(character.quickQuestion)} ${icon('arrow')}</span></button>` : ''}
-    <label class="sr-only" for="question">Your question for ${escape(character.name)}</label><textarea id="question" name="question" rows="2" minlength="3" maxlength="1200" placeholder="${turns.length ? 'Ask a follow-up…' : 'Or type your own question…'}" required ${busy ? 'disabled' : ''}>${escape(drafts[characterId])}</textarea>
-    <div class="compose-bottom"><small>Short answers. Curious ${escape(world().text.many)}.</small><button type="submit" class="primary-button" ${economy ? 'aria-describedby="tip-ask"' : ''} ${busy || !askBlock.enabled ? 'disabled' : ''}>${busy ? 'Thinking…' : 'Ask question'} ${icon('arrow')}</button></div>
-    ${economy ? `<div class="tool-row"><span class="tool-chip" data-tool="ask">${escape(askBlock.reason || toolChip(economy, 'ask'))}</span> <span class="tool-hint" id="tip-ask">${escape(HINTS.ask)}</span></div>` : ''}
-    ${turns.length ? `<button class="secondary-button next-monkey" type="button" data-go="${escape(next?.id || 'report')}" ${busy ? 'disabled' : ''}>${next ? `Next: ask ${escape(next.name)}` : 'Ready to make your guess?'} ${icon('arrow')}</button>` : ''}</form>`}`;
+  return interviewPanel({
+    character, turns: session?.interviews[characterId] || [], inspections: (session?.inspections || []).filter(n => n.character === characterId),
+    faceClass: castClass(characterId), closed: session?.status === 'closed', busy, draft: drafts[characterId],
+    waitingOn: pendingCharacter === characterId && busy ? characterId : null,
+    next: state.characters.find(c => c.id !== characterId && !session?.interviews[c.id].length) || null,
+    askLabel: economy ? toolChip(economy, 'ask') : null, askOff: askBlock.reason, hint: HINTS.ask, many: world().text.many,
+  });
 }
 
 /** Empty when every character has a role, else the disabled submit text. */
@@ -398,27 +413,25 @@ function reportPanel() {
   const remaining = state.characters.filter(c => !session.interviews[c.id].length);
   if (remaining.length) return `${heading('YOUR GUESS', 'Hear everyone first.', `One question per ${escape(world().text.one)} is enough. Then make your choice.`)}
     <div class="notebook-content"><div class="requirements">${state.characters.map(c => `<button data-go="${escape(c.id)}"><span>${session.interviews[c.id].length ? icon('check') : icon('person')} Ask ${escape(c.name)}</span>${icon('arrow')}</button>`).join('')}</div></div>`;
-  return `${heading('YOUR GUESS', escape(state.copy.report.title), escape(state.copy.report.description))}
-    <form class="notebook-content report-form" id="report-form">
-    <p class="role-legend">${state.roles.map(r => `<span><b>${escape(r.label)}</b> ${escape(r.hint)}</span>`).join('')}</p>
-    ${state.characters.map(c => `<fieldset class="role-row"><legend class="sr-only">Role for ${escape(c.name)}</legend><div class="role-who"><i class="monkey-face ${castClass(c.id)}" aria-hidden="true"></i><span><b>${escape(c.name)}</b><small>${escape(c.role)}</small></span></div><div class="role-chips">${state.roles.map(r => `<label class="role-chip"><input type="radio" name="role-${escape(c.id)}" value="${escape(r.id)}" ${reportDraft.roles[c.id] === r.id ? 'checked' : ''}><span>${escape(r.label)}</span></label>`).join('')}</div></fieldset>`).join('')}
-    <label for="confidence">How sure are you?</label><select id="confidence"><option value="40" ${reportDraft.confidence === 40 ? 'selected' : ''}>Just a hunch</option><option value="70" ${reportDraft.confidence === 70 ? 'selected' : ''}>Fairly sure</option><option value="95" ${reportDraft.confidence === 95 ? 'selected' : ''}>Very sure</option></select>
-    <label for="explanation">Why? <span>optional · one sentence</span></label><textarea id="explanation" rows="2" maxlength="500" placeholder="What gave it away?">${escape(reportDraft.explanation)}</textarea>
-    <button class="primary-button" id="lock-in" type="submit" ${busy || submitHint() ? 'disabled' : ''}>${busy ? 'Opening the answer…' : escape(submitHint() || 'Lock in roles')} ${icon('arrow')}</button></form>`;
+  return lineupPanel({
+    title: state.title, noun: world().text.one, time: elapsedText(), spent: session.economy.spent, roles: state.roles,
+    cast: state.characters.map(c => ({ id: c.id, name: c.name, part: c.role, faceClass: castClass(c.id) })),
+    picks: reportDraft.roles, confidence: reportDraft.confidence, explanation: reportDraft.explanation, busy, hint: submitHint(),
+  });
 }
 
-function debriefPanel() {
-  const debrief = state.debrief!;
-  const label = (id: string) => state.roles.find(r => r.id === id)?.label || id;
-  const nameOf = (id: string) => state.characters.find(c => c.id === id)?.name || id;
+function debriefMarkup() {
+  const session = state.session!;
+  const { economy } = session;
   const next = nextCase();
-  return `${heading('MYSTERY SOLVED / AUTHORED DEMO', escape(debrief.title), escape(debrief.summary))}
-    <div class="notebook-content"><div class="verdict-summary"><span class="eyebrow">YOUR SCORE · ${debrief.score} / ${debrief.total} ROLES</span><p>${escape(debrief.feedback)}</p></div>
-    ${spendSummary()}
-    ${debrief.findings.map(f => `<section class="finding"><div class="finding-monkey"><i class="monkey-face ${castClass(f.character)}" aria-hidden="true"></i><div><span class="eyebrow">${escape(nameOf(f.character).toUpperCase())}</span><h3>${escape(label(f.role))}</h3><p class="${f.correct ? 'pick-right' : 'pick-wrong'}">You said: ${escape(label(f.picked))} ${f.correct ? '✓' : '✗'}</p></div></div><p class="finding-class">${escape(f.classification)}</p><p>${escape(f.explanation)}</p></section>`).join('')}
-    <div class="briefing-note"><p>${escape(debrief.lesson)}</p></div><p class="fine-print">These ${escape(world().text.many)} represent AI agents. This is an authored demonstration of intent and mistakes, not a validated research case.</p>
-    ${next ? `<button class="primary-button" id="next-case" data-case="${escape(next.id)}">Next case: ${escape(next.title)} ${icon('arrow')}</button>` : ''}
-    <div class="debrief-actions"><button class="${next ? 'secondary' : 'primary'}-button" id="debrief-reset">${next ? 'All cases' : 'Play again'} ${icon(next ? 'cases' : 'reset')}</button><button class="secondary-button" id="debrief-leaderboard">Leaderboard</button><button class="secondary-button" id="debrief-export">Export session ${icon('arrow')}</button></div><p class="fine-print">Each case scores once per team: your first guess counts.</p></div>`;
+  return debriefPage({
+    title: state.title, debrief: state.debrief!, roles: state.roles,
+    cast: state.characters.map(c => ({ id: c.id, name: c.name, part: c.role, faceClass: castClass(c.id) })),
+    time: elapsedText(), spent: economy.spent, budget: economy.budget,
+    questions: Object.values(session.interviews).reduce((sum, turns) => sum + turns.length, 0),
+    inspections: economy.charges.inspect.used, talks: economy.charges.continue.used,
+    next: next ? { id: next.id, title: next.title } : null, many: world().text.many,
+  });
 }
 
 /** Coins to keep back so the player can still ask everyone once, not counting the action's own target. */
@@ -428,15 +441,6 @@ function reserveFor(target: string | null): number {
   return session.economy.costs.ask * state.characters.filter(c => c.id !== target && !session.interviews[c.id].length).length;
 }
 
-function spendSummary(): string {
-  const session = state.session!;
-  const { economy } = session;
-  const questions = Object.values(session.interviews).reduce((sum, turns) => sum + turns.length, 0);
-  const spent = economy.budget == null ? `You spent ${economy.spent} coins` : `You spent ${economy.spent} of ${economy.budget} coins`;
-  const c = economy.charges;
-  return `<div class="briefing-note spend-summary"><span class="eyebrow">COINS</span><p>${escape(spent)}</p><small>${pluralise(questions, 'question')} · ${pluralise(c.inspect.used, 'inspection')} · ${pluralise(c.continue.used, 'conversation')}</small></div>`;
-}
-
 /** The coin counter and the bottom-line controls under the world. Rewritten only when their markup changes. */
 let toolsMarkup = '';
 function renderTools() {
@@ -444,7 +448,10 @@ function renderTools() {
   const counter = document.querySelector<HTMLElement>('#coin-counter')!;
   const active = Boolean(session && !introVisible);
   counter.hidden = !active;
-  if (session) counter.textContent = coinLabel(session.economy);
+  if (session) {
+    const { budget, spent } = session.economy;
+    counter.innerHTML = budget == null ? `<span class="coin-num">${spent}</span><span class="hud-label">COINS SPENT</span>` : `<span class="coin-num">${budget - spent} / ${budget}</span><span class="hud-label">COINS LEFT</span>`;
+  }
   let markup = '';
   if (session && active) {
     const { economy, chatter } = session;
@@ -529,9 +536,11 @@ function bindForms() {
       const hint = submitHint();
       const button = document.querySelector<HTMLButtonElement>('#lock-in')!;
       button.disabled = busy || !!hint;
-      button.firstChild!.textContent = (hint || 'Lock in roles') + ' ';
+      // Same markup lineupPanel renders: the label, plus the count while picks are missing. The hint text never goes in the button.
+      const picked = state.characters.filter(c => reportDraft.roles[c.id]).length;
+      button.innerHTML = `Lock in verdict${hint ? `<small class="lock-count">${picked} of ${state.characters.length} picked</small>` : ''}`;
     }));
-    document.querySelector('#confidence')!.addEventListener('change', event => { reportDraft.confidence = Number((event.target as HTMLSelectElement).value); });
+    document.querySelectorAll<HTMLInputElement>('input[name="confidence"]').forEach(input => input.addEventListener('change', () => { reportDraft.confidence = Number(input.value); }));
     document.querySelector('#explanation')!.addEventListener('input', event => { reportDraft.explanation = (event.target as HTMLTextAreaElement).value; });
     document.querySelector('#report-form')!.addEventListener('submit', async event => { event.preventDefault(); if (!submitHint()) { stopTalking(); await action('verdict', reportDraft); } });
   }
@@ -564,7 +573,7 @@ function closeOverlay() {
     : document.querySelector('#leaderboard') ? leaderboardOpener : '#reset-button';
   stopLeaderboardPoll();
   document.querySelector('#overlay-root')!.innerHTML = '';
-  station.setEnabled(Boolean(state.session));
+  syncWalking();
   applyTheme();
   document.querySelector<HTMLButtonElement>(opener)?.focus({ preventScroll: true });
 }
@@ -666,6 +675,7 @@ async function boot() {
       });
       return;
     }
+    if (new URLSearchParams(location.search).get('view') === 'board') { await bootBoard(); return; }
     stopHeartbeat ??= startHeartbeat(document, postHeartbeat, 30000);
     const mine = (await api('team')).team as { name: string } | null;
     if (!mine) {
@@ -684,6 +694,23 @@ async function boot() {
   } catch {
     app.innerHTML = `<div class="access-screen"><div class="reset-card"><span class="eyebrow">CONNECTION UNAVAILABLE</span><h1>The grove is offline.</h1><p>The case server could not be reached. Start the demo server, then reload this page.</p><button class="primary-button" onclick="location.reload()">Try again</button></div></div>`;
   }
+}
+
+/** The projector screen: no heartbeat, no team. Fetches the standings and refreshes them every 10 s. */
+async function bootBoard() {
+  app.dataset.view = 'board';
+  document.title = 'Leaderboard · AgentVerse';
+  const draw = async () => {
+    try { app.innerHTML = boardScreen(await api('leaderboard')); }
+    catch {
+      const screen = app.querySelector('.board-screen');
+      if (!screen) app.innerHTML = '<div class="board-screen"><p class="board-empty">The leaderboard could not be loaded. Trying again shortly.</p></div>';
+      else if (!screen.querySelector('.board-stale')) screen.insertAdjacentHTML('beforeend', '<p class="board-stale board-empty" role="status">Showing the last standings. Trying again shortly.</p>');
+    }
+  };
+  await draw();
+  const timer = setInterval(() => void draw(), 10000);
+  addEventListener('pagehide', () => clearInterval(timer), { once: true });
 }
 
 void boot();

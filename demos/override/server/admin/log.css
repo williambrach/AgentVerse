@@ -1,14 +1,16 @@
-.log-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
-.log-bar select, .log-bar input, .log-bar button { font: inherit; padding: 3px 8px; }
-.log-chip.on { font-weight: 600; text-decoration: underline; }
-.log-player-chip { padding: 2px 6px; border: 1px solid currentColor; border-radius: 10px; }
+.log-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.log-bar select, .log-bar input, .log-bar button { min-height: 32px; padding: 0 10px; }
+.log-bar input { flex: 0 1 240px; min-width: 0; }
+.log-chip { border-radius: 0; }
+.log-chip.on { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 600; }
+.log-player-chip { padding: 2px 8px; border: 1px solid var(--edge); border-radius: 10px; }
 .log-list { max-height: 60vh; overflow-y: auto; font-size: 13px; }
-.log-row { display: grid; grid-template-columns: 52px minmax(44px, 12ch) 90px 20px 1fr auto; gap: 6px; padding: 2px 0; border-bottom: 1px solid rgba(128, 128, 128, 0.2); }
-.log-player { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; cursor: pointer; text-decoration: underline; font-family: ui-monospace, monospace; }
-.log-time, .log-meta { opacity: 0.65; }
-.log-failure { color: #c0392b; }
+.log-row { display: grid; grid-template-columns: 64px minmax(44px, 12ch) 90px 20px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--hair); }
+.log-player { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; cursor: pointer; color: var(--fg); text-decoration: none; font-family: ui-monospace, monospace; }
+.log-player:hover { text-decoration: underline; }
+.log-time, .log-meta { color: var(--dim); }
+.log-failure { color: var(--bad); }
 .log-text-cell { overflow-wrap: anywhere; }
 .panel-timeline { padding-left: 0; list-style: none; font-size: 13px; }
-.panel-timeline li { display: flex; gap: 8px; padding: 2px 0; }
-.panel-error { color: #c0392b; }
-@media (prefers-color-scheme: dark) { .log-failure, .panel-error { color: #ff7b6b; } }
+.panel-timeline li { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--hair); }
+.panel-error { color: var(--bad); }

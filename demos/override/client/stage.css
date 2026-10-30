@@ -1,0 +1,5 @@
+/* Station labels: HTML over the canvas (Station.labelLayer), so they stay sharp at any scale. --u is one game pixel in CSS pixels. */
+.station-labels { position: absolute; pointer-events: none; --u: 1px; }
+.station-label, .station-prompt { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font: 600 calc(var(--u) * 7) / 1 var(--font, system-ui, sans-serif); letter-spacing: .06em; padding: calc(var(--u) * 3) calc(var(--u) * 4); color: var(--label, #40533c); background: var(--label-bg, #fff6dd); }
+.station-prompt { transform: translateX(-50%); font-size: calc(var(--u) * 8); padding: calc(var(--u) * 3) calc(var(--u) * 5); color: #384d3a; background: #fff5d9; z-index: 1; }
+.station-prompt[hidden] { display: none; }

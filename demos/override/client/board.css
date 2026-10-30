@@ -1,0 +1,42 @@
+/* Leaderboard cells and the projector screen. Stands alone on the tokens. */
+.board-cells { white-space: nowrap; }
+.cell { display: inline-grid; place-items: center; vertical-align: middle; box-sizing: border-box; width: 30px; height: 28px; margin-right: 4px; border: 2px solid #1E3442; border-radius: 4px; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; color: transparent; }
+.cell.perfect { background: #F4B740; border-color: #F4B740; color: #0B151B; }
+.cell.partial { border-color: #F4B740; color: inherit; }
+.cell.zero { border-color: #5A6B72; color: #5A6B72; }
+.cell.playing { border-style: dashed; border-color: #A9BEC6; color: #A9BEC6; }
+
+.board-screen { --gold: #F4B740; --muted: #A9BEC6; --cream: #F4EBD3; --rule: #1E3442; min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; padding: 32px 48px 28px; overflow: auto;
+  background: #0B151B; color: var(--cream); font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.board-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 40px; }
+.board-title { display: flex; flex-direction: column; gap: 6px; }
+.board-screen h1 { margin: 0; font-family: inherit; font-size: 44px; font-weight: 700; line-height: 1; letter-spacing: 1px; }
+.board-sub { font-size: 16px; letter-spacing: 2px; color: var(--muted); }
+.board-counts { display: flex; gap: 36px; }
+.board-counts div { display: flex; flex-direction: column; gap: 4px; }
+.board-counts b { font-size: 36px; font-weight: 600; line-height: 1; }
+.board-counts span { font-size: 13px; letter-spacing: 1px; color: var(--muted); }
+.board-standings { flex: 1 1 auto; }
+.board-screen .board-table { width: 100%; border-collapse: collapse; color: var(--cream); font-size: 19px; }
+.board-screen .board-table th { padding: 0 8px 10px; text-align: left; border-bottom: 2px solid #24404D; font-size: 13px; font-weight: 400; letter-spacing: 1px; color: var(--muted); }
+.board-screen .board-table td { height: 48px; padding: 4px 8px; border-bottom: 1px solid var(--rule); }
+.board-screen .board-table th:nth-last-child(-n+3), .board-screen .board-table td:nth-last-child(-n+3) { text-align: right; }
+.board-screen .board-rank { width: 52px; font-size: 24px; font-weight: 600; color: var(--muted); }
+.board-screen .board-row:nth-child(-n+3) .board-rank { color: var(--gold); }
+.board-screen .board-name { font-size: 22px; font-weight: 700; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-screen .board-points { font-size: 28px; font-weight: 600; }
+.board-screen .board-row.you { background: #13232C; box-shadow: inset 4px 0 var(--gold); }
+.board-screen .cell { width: 40px; height: 34px; font-size: 18px; margin-right: 6px; }
+.cell-num { display: inline-block; width: 40px; margin-right: 6px; text-align: center; font-size: 16px; font-weight: 600; color: var(--cream); }
+.board-screen .board-empty { margin: 0; padding: 24px 0; font-size: 22px; color: var(--muted); }
+.board-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; padding-top: 14px; border-top: 2px solid #24404D; font-size: 15px; color: #C9D6DB; }
+.legend-cases { display: flex; flex-wrap: wrap; gap: 6px 18px; flex: 1 1 auto; }
+.legend-case b { margin-right: 6px; color: var(--cream); font-weight: 600; }
+.legend-key { display: flex; align-items: center; gap: 8px; }
+.key { display: block; box-sizing: border-box; width: 16px; height: 16px; border-radius: 3px; }
+.key.perfect { background: var(--gold); }
+.key.partial { border: 2px solid var(--gold); }
+.key.playing { border: 2px dashed var(--muted); }
+.board-more { color: var(--muted); }
+@media (min-width: 1800px) { .board-screen .board-table { font-size: 24px; } .board-screen .cell { width: 48px; height: 40px; font-size: 22px; } .cell-num { width: 48px; } }
+@media (max-width: 720px) { .board-screen { padding: 20px 16px; } .board-screen h1 { font-size: 32px; } }

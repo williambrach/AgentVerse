@@ -58,7 +58,7 @@ function loadPage(dir) {
   return files;
 }
 
-export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = new URL('./admin/', import.meta.url), router = null, investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {}, leaderboard = null }) {
+export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = new URL('./admin/', import.meta.url), router = null, investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {}, leaderboard = null, boardUrl = '' }) {
   if (typeof token !== 'string' || !token) throw new Error('An admin token is required.');
   const want = digest(token);
   const authed = (req) => {
@@ -151,6 +151,7 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
       onSystem({ type: 'round_started', timestamp: Date.now(), label, reason, startedAt });
       return { label, startedAt };
     },
+    'GET /admin/links': () => ({ board: boardUrl }),
     'GET /admin/leaderboard': () => { needBoard(); return leaderboard.standings(); },
     'POST /admin/leaderboard': async (body) => {
       needBoard();

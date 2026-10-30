@@ -1,0 +1,98 @@
+/* The verdict lineup: a full-screen board over the world. */
+.lineup-board { --ink: #0F1B22; --deep: #0B151B; --panel: #13232C; --edge: #355A6B; --cream: #F4EBD3; --muted: #A9BEC6; --gold: #F4B740; --parch: #FFF6DE;
+  --honest: #6DBE63; --fooled: #A68BE0; --collaborator: #F08A3C; --villain: #EA6A55;
+  min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; padding: 24px 32px 26px; background: var(--ink); color: var(--cream);
+  font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif; font-variant-numeric: tabular-nums; overflow: auto; }
+.lineup-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 28px; }
+.lineup-title { display: flex; flex-direction: column; gap: 8px; flex: 1 1 520px; }
+.lineup-eyebrow { font-size: 13px; letter-spacing: 2px; color: var(--muted); }
+.lineup-board h1 { font-family: inherit; letter-spacing: 0; margin: 0; font-size: clamp(30px, 4vw, 44px); font-weight: 700; line-height: 1.05; }
+.lineup-title p { margin: 0; font-size: 17px; color: #C9D6DB; }
+.lineup-stats { display: flex; gap: 10px; }
+.lineup-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 14px; border: 2px solid var(--edge); border-radius: 6px; }
+.lineup-stat span { font-size: 11px; letter-spacing: 1px; color: var(--muted); }
+.lineup-stat b { font-size: 24px; font-weight: 600; }
+.lineup-board .role-legend b { color: var(--cream); font-weight: 700; }
+.lineup-board .role-legend { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.lineup-board .role-legend li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.lineup-board .role-legend li > span:last-child { color: #C9D6DB; }
+.legend-swatch { display: block; width: 14px; height: 14px; flex-shrink: 0; border: 2px solid var(--deep); border-radius: 2px; background: var(--c, var(--muted)); }
+[data-role="honest"] { --c: var(--honest); } [data-role="fooled"] { --c: var(--fooled); }
+[data-role="collaborator"] { --c: var(--collaborator); } [data-role="villain"] { --c: var(--villain); }
+.lineup-cards { flex: 1 1 auto; align-content: center; width: 100%; max-width: calc(var(--n, 3) * 300px); margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 14px; }
+.lineup-board .role-row { min-width: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--panel); border: 2px solid #24404D; border-radius: 10px; }
+.lineup-board .role-row:has(input:checked) { border-color: var(--ring, var(--muted)); }
+.role-row:has([value="honest"]:checked) { --ring: var(--honest); } .role-row:has([value="fooled"]:checked) { --ring: var(--fooled); }
+.role-row:has([value="collaborator"]:checked) { --ring: var(--collaborator); } .role-row:has([value="villain"]:checked) { --ring: var(--villain); }
+.lineup-board .role-who { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 4px; }
+.lineup-board { --cell: 96px; }
+.lineup-board .role-who .role-name { display: block; font-size: 24px; font-weight: 600; line-height: 1.2; font-family: inherit; text-align: center; color: var(--cream); }
+.lineup-board .role-who .role-part { display: block; margin: 0; font-size: 14px; color: var(--muted); }
+.pick-label { min-height: 22px; text-align: center; font-size: 16px; font-weight: 700; }
+.pick-label .pick-name { display: none; color: var(--c); }
+.pick-none { color: #7F949C; }
+.role-row:has(input:checked) .pick-none { display: none; }
+.role-row:has([value="honest"]:checked) .pick-name[data-role="honest"], .role-row:has([value="fooled"]:checked) .pick-name[data-role="fooled"],
+.role-row:has([value="collaborator"]:checked) .pick-name[data-role="collaborator"], .role-row:has([value="villain"]:checked) .pick-name[data-role="villain"] { display: inline; }
+.role-scale { position: relative; display: flex; justify-content: space-between; height: 44px; }
+.role-scale::before { content: ''; position: absolute; left: 22px; right: 22px; top: 20px; height: 4px; background: #24404D; border-radius: 2px; }
+.role-scale::after { content: ''; position: absolute; left: 22px; top: 20px; height: 4px; border-radius: 2px; background: var(--ring, transparent); width: 0; }
+.role-row:has([value="fooled"]:checked) .role-scale::after { width: calc((100% - 44px) / 3); }
+.role-row:has([value="collaborator"]:checked) .role-scale::after { width: calc((100% - 44px) * 2 / 3); }
+.role-row:has([value="villain"]:checked) .role-scale::after { width: calc(100% - 44px); }
+.lineup-board .role-chip { position: relative; z-index: 1; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
+.lineup-board .role-chip input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.lineup-board .role-chip .role-dot { display: block; box-sizing: border-box; width: 16px; height: 16px; padding: 0; border: 2px solid var(--c); border-radius: 50%; background: var(--ink); box-shadow: none; transition: width .1s, height .1s; }
+.lineup-board .role-chip:has(input:checked) .role-dot { width: 30px; height: 30px; border: 3px solid var(--parch); background: var(--c); }
+.role-chip:has(input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 2px; }
+.scale-ends { display: flex; justify-content: space-between; padding: 0 4px; font-size: 12px; color: var(--muted); }
+.lineup-foot { display: flex; flex-wrap: wrap; align-items: stretch; gap: 16px; }
+.lineup-controls { flex: 1 1 640px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; padding: 14px 16px; background: var(--deep); border: 2px solid #24404D; border-radius: 10px; }
+.confidence { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.confidence > span { font-size: 14px; color: #C9D6DB; margin-right: 4px; }
+.conf-chip { position: relative; min-height: 44px; display: inline-flex; align-items: center; padding: 0 14px; border: 2px solid var(--edge); border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.conf-chip input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.conf-chip:has(input:checked) { background: var(--parch); border-color: var(--parch); color: #18252D; }
+.conf-chip:has(input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 2px; }
+#explanation { flex: 1 1 220px; min-width: 0; min-height: 44px; box-sizing: border-box; padding: 10px 12px; font: inherit; font-size: 15px; color: var(--cream); background: var(--panel); border: 2px solid var(--edge); border-radius: 6px; resize: none; }
+.lock-in { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 22px; font: inherit; font-size: 20px; font-weight: 700; background: var(--gold); color: #18252D; border: 2px solid #18252D; border-radius: 6px; box-shadow: 0 4px 0 #8A5E10; cursor: pointer; }
+.lock-in:disabled { background: #3A3524; color: #D8CBA4; border: 2px dashed #8A7A4E; box-shadow: none; font-size: 15px; cursor: not-allowed; opacity: 1; }
+.lock-in .lock-count { font-size: 13px; font-weight: 400; }
+.lineup-back { align-self: center; min-height: 44px; padding: 0 18px; font: inherit; color: var(--cream); background: transparent; border: 2px solid var(--edge); border-radius: 6px; cursor: pointer; }
+.lineup-board button:focus-visible, .lineup-board textarea:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .role-dot { transition: none; } }
+
+/* The debrief page: same dark look as the lineup, scrolls when tall. */
+.debrief-page { --ink: #0F1B22; --deep: #0B151B; --panel: #13232C; --edge: #355A6B; --cream: #F4EBD3; --muted: #A9BEC6; --gold: #F4B740; --parch: #FFF6DE; --rule: #D9C796;
+  --honest: #6DBE63; --fooled: #A68BE0; --collaborator: #F08A3C; --villain: #EA6A55;
+  min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; padding: 24px 32px 28px; background: var(--ink); color: var(--cream); overflow: auto;
+  font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.debrief-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 28px; }
+.debrief-title { display: flex; flex-direction: column; gap: 8px; flex: 1 1 520px; }
+.debrief-eyebrow { font-size: 13px; letter-spacing: 2px; color: var(--muted); }
+.debrief-page h1 { font-family: inherit; letter-spacing: 0; margin: 0; font-size: clamp(30px, 4vw, 44px); font-weight: 700; line-height: 1.05; }
+.debrief-page h3 { margin: 2px 0 0; font-family: inherit; font-size: 22px; font-weight: 700; color: var(--c, var(--cream)); }
+.verdict-summary p { margin: 4px 0 0; font-size: 17px; color: #C9D6DB; }
+.debrief-stats { display: flex; gap: 10px; }
+.debrief-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 14px; border: 2px solid var(--edge); border-radius: 6px; }
+.debrief-stat span { font-size: 11px; letter-spacing: 1px; color: var(--muted); }
+.debrief-stat b { font-size: 24px; font-weight: 600; }
+.spend-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 10px 14px; background: var(--deep); border: 2px solid #24404D; border-radius: 10px; }
+.spend-summary p { margin: 0; font-size: 17px; font-weight: 700; }
+.spend-summary small { font-size: 14px; color: var(--muted); }
+.findings { width: 100%; max-width: calc(var(--n, 3) * 300px); margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 14px; }
+.finding { min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--panel); border: 2px solid #24404D; border-top: 4px solid var(--c, var(--edge)); border-radius: 10px; }
+.finding-monkey { display: flex; align-items: center; gap: 12px; }
+.finding p { margin: 0; font-size: 15px; color: #C9D6DB; }
+.finding .finding-class { font-weight: 700; color: var(--cream); }
+.finding .pick-right, .finding .pick-wrong { font-size: 15px; font-weight: 700; }
+.finding .pick-right { color: var(--honest); }
+.finding .pick-wrong { color: var(--villain); }
+.debrief-lesson { padding: 16px 20px; background: var(--parch); border: 2px solid var(--rule); border-radius: 6px; color: #18252D; }
+.debrief-lesson p { margin: 0; font-size: 18px; line-height: 1.4; }
+.debrief-fine { margin: 0; font-size: 13px; color: var(--muted); }
+.debrief-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.debrief-primary, .debrief-secondary { min-height: 44px; padding: 0 20px; font: inherit; font-size: 17px; font-weight: 700; border-radius: 6px; cursor: pointer; }
+.debrief-primary { background: var(--gold); color: #18252D; border: 2px solid #18252D; box-shadow: 0 4px 0 #8A5E10; }
+.debrief-secondary { background: transparent; color: var(--cream); border: 2px solid var(--edge); }
+.debrief-page button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }

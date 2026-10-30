@@ -7,6 +7,7 @@ export function createLeaderboard(cases, { startedAt = 0 } = {}) {
   const byId = new Map(cases.map((c) => [c.id, c]));
   let since = startedAt;
   let rankBy = 'time';
+  let round = null;
   const hidden = new Set();
   let teams = new Map(); // teamId -> { name, cases: Map(caseId -> { firstStart, verdict }) }
   const live = new Map(); // sessionId -> its newest session { teamId, caseId, startMs, coins, frozen }
@@ -50,7 +51,8 @@ export function createLeaderboard(cases, { startedAt = 0 } = {}) {
     } catch { /* a bad event never stops the feed */ }
   }
 
-  function reset(at) {
+  function reset(at, label = null) {
+    round = typeof label === 'string' && label ? label : null;
     since = Number.isFinite(at) ? at : Number.isFinite(Date.parse(at)) ? Date.parse(at) : since;
     teams = new Map();
     live.clear();
@@ -73,6 +75,16 @@ export function createLeaderboard(cases, { startedAt = 0 } = {}) {
     }
   }
 
+  function cells(team) {
+    return cases.map((k) => {
+      const c = team.cases.get(k.id);
+      if (!c) return { caseId: k.id, state: 'none', points: 0 };
+      if (!c.verdict) return { caseId: k.id, state: 'playing', points: 0 };
+      const p = c.verdict.points, total = k.characters?.length ?? 0;
+      return { caseId: k.id, state: p <= 0 ? 'zero' : p >= total ? 'perfect' : 'partial', points: p };
+    });
+  }
+
   function row(teamId, team, you) {
     let pts = 0, played = 0, timeMs = 0, coins = 0;
     for (const c of team.cases.values()) {
@@ -82,7 +94,7 @@ export function createLeaderboard(cases, { startedAt = 0 } = {}) {
       timeMs += Math.max(0, c.verdict.ms - c.firstStart);
       for (const s of c.sessions) if (s.startMs <= c.verdict.ms) coins += s.coins;
     }
-    return { rank: null, teamId, name: team.name, points: pts, played, timeMs, coins, hidden: hidden.has(teamId), you: teamId === you };
+    return { rank: null, teamId, name: team.name, points: pts, played, timeMs, coins, hidden: hidden.has(teamId), you: teamId === you, cells: cells(team) };
   }
 
   function standings({ includeHidden = false, you = null } = {}) {
@@ -92,7 +104,7 @@ export function createLeaderboard(cases, { startedAt = 0 } = {}) {
       (b.played > 0) - (a.played > 0) || b.points - a.points || a[m1] - b[m1] || a[m2] - b[m2] || a.name.localeCompare(b.name));
     const ranked = rows.filter((r) => r.played > 0 && !r.hidden);
     for (const r of ranked) r.rank = 1 + ranked.filter((o) => o.points > r.points || (o.points === r.points && (o[m1] < r[m1] || (o[m1] === r[m1] && o[m2] < r[m2])))).length;
-    return { rankBy, startedAt: since, teams: includeHidden ? rows : rows.filter((r) => !r.hidden) };
+    return { rankBy, startedAt: since, round, cases: cases.map((k) => ({ id: k.id, title: k.title, order: k.order, total: k.characters?.length ?? 0 })), teams: includeHidden ? rows : rows.filter((r) => !r.hidden) };
   }
 
   return { observe, reset, setRankBy, setHidden, restore, standings };

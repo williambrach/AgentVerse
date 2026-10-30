@@ -4,6 +4,7 @@ import * as logMod from './log.js';
 import * as round from './round.js';
 import * as controls from './controls.js';
 import { renderBoard } from './board.js';
+import { renderWatch } from './watch.js';
 
 const DELAYS = [1000, 2000, 5000, 10000];
 const STALE_MS = 5000;
@@ -53,6 +54,7 @@ function start() {
     document.title = (worst === 'bad' ? '⚠ ' : '') + baseTitle;
     tiles.renderHistory($('history'), snap);
     renderBoard($('board'), snap, { api });
+    if ($('watch')) renderWatch($('watch'), snap, typeof snap.at === 'number' ? snap.at : Date.now(), { api });
     round.renderFunnel($('funnel'), snap, catalog);
     round.renderTallies($('tallies'), snap, catalog);
     controls.renderControls($('controls'), snap, { api });
@@ -130,8 +132,17 @@ function start() {
     sessionStorage.setItem('adminToken', tokenEl.value.trim());
     attempt = 0;
     connect();
+    loadLinks();
   });
-  if (token()) connect();
+  async function loadLinks() {
+    const link = $('board-link');
+    if (!link) return;
+    try {
+      const { board } = await api('/admin/links');
+      if (typeof board === 'string' && /^https?:\/\//.test(board)) { link.href = board; link.hidden = false; }
+    } catch { /* the link is optional */ }
+  }
+  if (token()) { connect(); loadLinks(); }
 }
 
 if (typeof document !== 'undefined') start();

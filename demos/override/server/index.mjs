@@ -103,7 +103,7 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
         }
         if (url.pathname === '/api/leaderboard' && req.method === 'GET') {
           const board = leaderboard ? leaderboard.standings({ includeHidden: false, you: team?.id ?? null }) : { rankBy: 'time', teams: [] };
-          return json(res, 200, { rankBy: board.rankBy, teams: board.teams.map(r => ({ rank: r.rank, name: r.name, points: r.points, played: r.played, timeMs: r.timeMs, coins: r.coins, you: r.you })) });
+          return json(res, 200, { rankBy: board.rankBy, startedAt: board.startedAt ?? 0, round: board.round ?? null, cases: board.cases ?? [], teams: board.teams.map(r => ({ rank: r.rank, name: r.name, points: r.points, played: r.played, timeMs: r.timeMs, coins: r.coins, you: r.you, cells: r.cells ?? [] })) });
         }
         if (url.pathname === '/api/heartbeat' && req.method === 'POST') {
           if (typeof input.tab !== 'string' || !tabPattern.test(input.tab)) throw new RequestError(400, 'Send a tab id.');
@@ -157,6 +157,18 @@ function devTools(env) {
 const portOf = (value, fallback) => (value === undefined || value === '' ? fallback : Number(value));
 const sleep = ms => new Promise(resolve => { setTimeout(resolve, ms).unref(); });
 
+// The admin page puts this in an href: only an http(s) origin and path survive, never javascript: or credentials.
+export function boardUrlOf(base, port) {
+  const raw = String(base ?? '').trim();
+  if (raw) {
+    let u;
+    try { u = new URL(raw); } catch { throw new Error('OVERRIDE_PUBLIC_URL must be an http or https URL.'); }
+    if ((u.protocol !== 'http:' && u.protocol !== 'https:') || u.username || u.password) throw new Error('OVERRIDE_PUBLIC_URL must be an http or https URL.');
+    return `${u.origin}${u.pathname.replace(/\/+$/, '')}/?view=board`;
+  }
+  return `http://127.0.0.1:${port ?? 3001}/?view=board`;
+}
+
 export async function startServer(env = process.env, { publicDir = resolve(root, 'dist') } = {}) {
   const config = modelConfig(env);
   config.economy = economyRules(env);
@@ -173,7 +185,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
   const onSystem = record => {
     appendJsonl(paths.system, record, 'system');
     feed('observeSystem', record);
-    if (record?.type === 'round_started') { try { board.reset(Number(record.startedAt) || 0); } catch { /* the board must not break a round */ } }
+    if (record?.type === 'round_started') { try { board.reset(Number(record.startedAt) || 0, record.label); } catch { /* the board must not break a round */ } }
   };
   // Traces are admin-only. Probes and anything without a valid session go to one shared file.
   const onTrace = record => appendJsonl(join(paths.traces, !record.probe && sessionIdPattern.test(record.sessionId || '') ? `${record.sessionId}.jsonl` : 'probes.jsonl'), record, 'trace');
@@ -190,7 +202,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
   const round = loadRound(paths.system);
   const events = loadEvents(paths.sessions, round.startedAt);
   board.restore(readJsonl(paths.system));
-  board.reset(round.startedAt);
+  board.reset(round.startedAt, round.label);
   for (const e of events) board.observe(e);
   const teams = createTeams({ file: join(paths.root, 'teams.jsonl') });
 
@@ -246,6 +258,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
       const probeCharacter = probeCase.characters[0];
       const probeQuestion = castCharacters(probeCase, cast)[0].quickQuestion;
       admin = createAdmin({
+        boardUrl: boardUrlOf(env.OVERRIDE_PUBLIC_URL, server.address()?.port),
         token: env.OVERRIDE_ADMIN_TOKEN, monitor, router, investigations, registry, dataDir,
         probeMessages: buildMessages(probeCase, { cast, interviews: Object.fromEntries(probeCase.characters.map(c => [c.id, []])) }, probeCharacter.id, probeQuestion),
         readSystem: () => readJsonl(paths.system).slice(-20), onSystem,

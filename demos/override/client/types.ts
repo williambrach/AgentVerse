@@ -33,5 +33,9 @@ export interface Economy {
 export interface ThreadLine { character: CharacterId; text: string; round: number; timestamp: string }
 export interface Inspection { character: CharacterId; sourceEventId: string; reasoning: string; timestamp: string }
 
-export interface LeaderboardRow { rank: number | null; name: string; points: number; played: number; timeMs: number; coins: number; you: boolean }
-export interface Leaderboard { rankBy: 'time' | 'coins'; startedAt?: number; teams: LeaderboardRow[] }
+export type CellState = 'perfect' | 'partial' | 'zero' | 'playing' | 'none';
+export interface BoardCell { caseId: string; state: CellState; points: number }
+export interface BoardCase { id: string; title: string; order: number; total: number }
+export interface LeaderboardRow { rank: number | null; name: string; points: number; played: number; timeMs: number; coins: number; you: boolean; cells?: BoardCell[] }
+export interface Leaderboard { rankBy: 'time' | 'coins'; startedAt?: number; round?: string | null; cases?: BoardCase[]; teams: LeaderboardRow[] }
+export type Board = Leaderboard;

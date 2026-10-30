@@ -1,17 +1,47 @@
-.team-gate{display:flex;flex-direction:column;gap:6px}.team-gate h2{margin:6px 0 4px}.team-hint{font-size:12px;line-height:1.7;color:var(--muted)}
-.team-form{display:flex;flex-direction:column;gap:8px;margin-top:10px}.team-form label{font-size:11px;color:var(--ink)}
-.team-form input{font:inherit;font-size:14px;padding:11px 12px;border:1px solid var(--line);border-radius:3px;background:var(--paper);color:var(--ink)}
-.team-error{min-height:16px;font-size:11px;color:#a35b4c;margin:0}.team-taken{display:flex;flex-direction:column;gap:8px}.team-taken p{font-size:12px;color:var(--ink)}
-.team-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
-.team-chip{font:9px var(--mono);letter-spacing:.5px;padding:6px 10px;border:1px solid var(--line);border-radius:3px;background:var(--paper);color:var(--green);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.team-chip:hover{border-color:var(--green)}
-.board-table{width:100%;border-collapse:collapse;font-size:12px;color:var(--ink)}.board-table caption{caption-side:top;text-align:left;font:9px var(--mono);letter-spacing:1px;color:var(--muted);padding-bottom:8px;text-transform:uppercase}
-.board-table th{text-align:left;font:8px var(--mono);letter-spacing:1px;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line);text-transform:uppercase}
-.board-table td{padding:9px 8px;border-bottom:1px solid var(--line)}.board-name{font-weight:600;word-break:break-word}.board-rank{font-family:var(--mono)}
-.board-row.you{background:color-mix(in srgb,var(--green) 14%,var(--paper));box-shadow:inset 3px 0 var(--green)}
-.board-empty{font-size:12px;color:var(--muted);padding:14px 0}
-:root[data-theme="tower"] .team-chip{background:#fbf9ff;border-color:#b3abcf;color:#4d4677}
-:root[data-theme="tower"] .board-row.you{background:#e6e0f5}
-.topbar{gap:16px}.topbar .quiet-button{padding-left:16px}.team-chip{flex:0 1 auto;min-width:0}
-@media(max-width:1180px){.topbar .authored-label{display:none}}
-@media(max-width:720px){.topbar{flex-wrap:wrap;height:auto;min-height:58px;padding-top:8px;padding-bottom:8px;row-gap:8px}.top-meta{order:3;flex-basis:100%;margin-left:0;gap:10px;flex-wrap:wrap}.topbar .quiet-button{padding-left:10px}.topbar .quiet-button span,.topbar .team-chip span{display:inline}.team-chip{max-width:120px}}
+/* Team gate, access screen and the leaderboard overlay (frame and compact table). The projector screen's table is in board.css. */
+.team-gate { display: flex; flex-direction: column; gap: 6px; background: var(--panel, #13232C); color: var(--cream, #F4EBD3); border: 2px solid var(--edge, #355A6B); border-radius: 6px; box-shadow: 0 4px 0 #0A1217; }
+.team-gate h2 { margin: 6px 0 4px; }
+.team-hint { font-size: 13px; line-height: 1.6; color: var(--muted, #A9BEC6); }
+.team-form { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.team-form label { font-size: 12px; font-weight: 700; color: var(--cream, #F4EBD3); }
+.team-form input { font: inherit; font-size: 16px; min-height: 44px; padding: 10px 12px; border: 2px solid var(--edge, #355A6B); border-radius: 6px; background: var(--ink, #0F1B22); color: var(--cream, #F4EBD3); }
+.team-form input:focus-visible { outline: 2px solid var(--gold, #F4B740); outline-offset: 2px; }
+#team-error, .team-error { min-height: 18px; font-size: 13px; font-weight: 700; color: var(--error, #F2A093); margin: 0; }
+.team-taken { display: flex; flex-direction: column; gap: 8px; }
+.team-taken p { font-size: 13px; color: var(--cream, #F4EBD3); }
+.team-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+.team-chip { flex: 0 1 auto; min-width: 0; min-height: 44px; font-weight: 700; font-size: 12px; padding: 6px 10px; border: 2px solid var(--edge, #355A6B); border-radius: 6px; background: var(--ink, #0F1B22); color: var(--accent, #8CC56A); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-chip:hover { border-color: var(--gold, #F4B740); }
+.team-chip:focus-visible { outline: 2px solid var(--gold, #F4B740); outline-offset: 2px; }
+
+/* Access screen: a dark panel like the team gate. */
+.access-screen .reset-card { background: var(--panel, #13232C); color: var(--cream, #F4EBD3); border-color: var(--edge, #355A6B); }
+.access-screen .reset-card input { background: var(--ink, #0F1B22); border-color: var(--edge, #355A6B); color: var(--cream, #F4EBD3); }
+.access-screen #access-error { min-height: 18px; font-weight: 700; color: var(--error, #F2A093); }
+.access-screen input { min-height: 44px; }
+
+/* Buttons on the dark panels (team gate, access screen, leaderboard overlay): gold primary, cream-outline secondary, cream-grey eyebrow.
+   style.css turns .reset-card buttons ink for parchment cards; these selectors out-rank that. */
+.reset-card.team-gate .eyebrow, .access-screen .reset-card .eyebrow, .reset-card.board-card .eyebrow { color: #C9D6DB; }
+.reset-card.team-gate .primary-button, .access-screen .reset-card .primary-button, .reset-card.board-card .primary-button { background: var(--gold, #F4B740); border-color: var(--gold, #F4B740); color: #18252D; box-shadow: 0 3px 0 #8A5E10; }
+.reset-card.team-gate .primary-button:not(:disabled):hover, .access-screen .reset-card .primary-button:not(:disabled):hover, .reset-card.board-card .primary-button:not(:disabled):hover { background: var(--gold, #F4B740); filter: brightness(1.06); }
+.reset-card.team-gate .secondary-button, .access-screen .reset-card .secondary-button, .reset-card.board-card .secondary-button { background: transparent; border-color: var(--cream, #F4EBD3); color: var(--cream, #F4EBD3); }
+.reset-card.team-gate .secondary-button:not(:disabled):hover, .access-screen .reset-card .secondary-button:not(:disabled):hover, .reset-card.board-card .secondary-button:not(:disabled):hover { background: #1B3340; border-color: var(--cream, #F4EBD3); }
+
+/* Leaderboard overlay frame */
+.board-card { width: 860px; background: var(--panel, #13232C); color: var(--cream, #F4EBD3); border: 2px solid var(--edge, #355A6B); border-radius: 6px; box-shadow: 0 4px 0 #0A1217; max-width: min(860px, 100%); max-height: calc(100dvh - 50px); overflow-y: auto; }
+
+/* The overlay's table. board.css styles the projector screen's table under .board-screen; this is the compact one. */
+.board-card .eyebrow { display: block; margin-bottom: 12px; }
+.board-card .board-table { width: 100%; border-collapse: collapse; font-size: 15px; color: var(--cream, #F4EBD3); }
+.board-card .board-table caption { padding: 0 0 10px; text-align: left; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #C9D6DB; }
+.board-card .board-table th { padding: 0 8px 8px; text-align: left; border-bottom: 2px solid #24404D; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; color: var(--muted, #A9BEC6); }
+.board-card .board-table td { padding: 8px; border-bottom: 1px solid #1E3442; white-space: nowrap; }
+.board-card .board-table th:nth-last-child(-n+3), .board-card .board-table td:nth-last-child(-n+3) { text-align: right; }
+.board-card .board-rank { width: 64px; font-weight: 600; color: var(--muted, #A9BEC6); }
+.board-card .board-name { max-width: 20ch; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+.board-card .board-points { font-weight: 600; }
+.board-card .board-row.you td { background: #1B3340; }
+.board-card .board-row.you td:first-child { box-shadow: inset 4px 0 var(--gold, #F4B740); }
+.board-card .board-row.you .board-name { color: var(--gold, #F4B740); }
+.board-empty { font-size: 13px; color: var(--muted, #A9BEC6); padding: 14px 0; }

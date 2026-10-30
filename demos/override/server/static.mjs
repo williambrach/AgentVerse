@@ -2,9 +2,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { gzipSync, brotliCompressSync, constants } from 'node:zlib';
 
-const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 const compressible = new Set(['.html', '.js', '.css', '.svg']);
-const hashed = /^\/assets\/.+-[A-Za-z0-9_-]{6,}\.(js|css)$/;
+const hashed = /^\/assets\/.+-[A-Za-z0-9_-]{6,}\.(js|css|woff2)$/;
 
 function walk(dir, prefix, out) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

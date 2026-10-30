@@ -1,16 +1,16 @@
-#players, #tiles, #history { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
-.big { padding: 10px 12px; border: 1px solid var(--line, #8885); border-radius: 8px; }
-.big-n { font-size: 2.2rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.big-l { font-size: 0.8rem; opacity: 0.8; }
-.big-s { font-size: 0.75rem; opacity: 0.65; min-height: 1em; }
-.tile { padding: 8px 10px; border: 1px solid var(--line, #8885); border-left-width: 6px; border-radius: 6px; }
-.tile-l { font-size: 0.75rem; opacity: 0.75; }
-.tile-v { font-size: 1.3rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-.tile[data-level="ok"] { border-left-color: #2e9e5b; }
-.tile[data-level="warn"] { border-left-color: #d9a400; background: #d9a40022; }
-.tile[data-level="bad"] { border-left-color: #d6342c; background: #d6342c26; }
-.spark { padding: 6px 8px; border: 1px solid var(--line, #8885); border-radius: 6px; }
-.spark-l { font-size: 0.75rem; opacity: 0.75; }
+#players, #tiles, #history { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+#players:empty, #tiles:empty, #history:empty { display: none; }
+#players > *, #tiles > *, #history > * { border-right: 1px solid #1A2E39; }
+.big, .tile, .spark { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 0; border-radius: 0; }
+.big-n { font-size: 22px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.big-l, .tile-l, .spark-l { font-size: 12px; color: var(--muted); }
+.big-s { font-size: 11px; color: var(--dim); min-height: 1em; }
+.tile-v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile[data-level="ok"] .tile-v { color: #E8EEF0; }
+.tile[data-level="warn"] { background: #2B241266; }
+.tile[data-level="warn"] .tile-v { color: var(--gold); }
+.tile[data-level="bad"] { background: #EA6A5518; }
+.tile[data-level="bad"] .tile-v { color: var(--bad); }
 .spark-svg { width: 100%; height: 32px; display: block; }
-.spark-line { stroke: currentColor; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-.spark-v { font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.spark-line { stroke: var(--sky); fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.spark-v { font-size: 13px; font-variant-numeric: tabular-nums; }
