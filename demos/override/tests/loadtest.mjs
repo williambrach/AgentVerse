@@ -20,8 +20,8 @@ const scenarioTable = {
   healthy: { modes: {}, strict: true },
   primary_errors: { modes: { a: 'error500' }, failoverTo: 'b', answersFrom: ['b'] },
   primary_hangs: { modes: { a: 'hang' }, failoverTo: 'b', answersFrom: ['b'], hangs: true },
-  // A 429 is retried once on the same endpoint and never triggers failover: a stays active and every question fails clearly.
-  rate_limited: { modes: { a: 'rate429' }, allDown: true, activeStays: 'a' },
+  // A 429 is retried once on the same endpoint, then the question hops to b; it never triggers failover, so a stays active.
+  rate_limited: { modes: { a: 'rate429' }, activeStays: 'a', answersFrom: ['b'] },
   flaky_primary: { modes: { a: 'flaky' }, failoverTo: 'b', aSilentAfterFailover: true },
   silent_failure: { modes: { a: 'empty' }, answersFrom: ['b'], semantic: true },
   small_backup: { modes: { a: 'error500' }, capB: true, idleEndpoints: ['c', 'd'] },

@@ -240,10 +240,10 @@ export class LlmRouter {
 
   async run(req, deadline, track) {
     const initial = this.maxCompletionTokens;
-    let budget = initial; let lastResult = null; let lastIdx = null;
+    let budget = initial; let lastResult = null; let lastIdx = null; let limitedRetry = false;
     let queued = this.now();
     let pending = this.acquire(null, deadline.signal, false);
-    for (let n = 1; n <= 2; n++) {
+    for (let n = 1; n <= 3; n++) {
       let idx;
       try { idx = await pending; } catch { throw this.fail('queue_timeout', track, lastIdx ?? this.activeIdx, null); }
       const queueMs = this.now() - queued;
@@ -269,12 +269,15 @@ export class LlmRouter {
         this.recordFailure(idx, result.code, result.status);
         let target = null; let wait = 0;
         // A timeout bound by the question deadline leaves no time for a second call.
-        if (n === 1 && !deadline.signal.aborted && !(result.code === 'timeout' && result.deadlineBound)) {
+        // The one extra attempt: a 429 on the same-endpoint retry hops to the next endpoint (never a chain).
+        if (n === 2 && limitedRetry && result.code === 'rate_limited' && !deadline.signal.aborted && idx + 1 < this.eps.length) {
+          target = idx + 1; budget = initial;
+        } else if (n === 1 && !deadline.signal.aborted && !(result.code === 'timeout' && result.deadlineBound)) {
           if (result.code === 'completion_limit') {
             const doubled = Math.min(initial * 2, 8192);
             if (doubled !== budget) { target = idx; budget = doubled; }
           } else if (result.code === 'rate_limited' && (wait = this.rateLimitWait(result)) < deadline.endsAt - this.now()) {
-            target = idx;
+            target = idx; limitedRetry = true;
           } else if (idx + 1 < this.eps.length) { target = idx + 1; budget = initial; wait = 0; }
         }
         if (target === null) { held = null; this.release(idx); break; }

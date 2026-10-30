@@ -451,7 +451,7 @@ test('rate limit with no time left for the wait moves to the next endpoint', asy
 
 test('429_does_not_failover: three 429s keep the active endpoint, three 500s flip it', async () => {
   const s = sleeper();
-  const limitedRun = router(['a', 'b'], { a: http(429) }, { sleep: s.sleep, failover: { failures: 3, windowMs: 30000 } });
+  const limitedRun = router(['a', 'b'], { a: http(429), b: http(429) }, { sleep: s.sleep, failover: { failures: 3, windowMs: 30000 } });
   for (let i = 0; i < 3; i++) await rejects(limitedRun.r.complete({ messages: MSGS }), 'rate_limited');
   assert.equal(limitedRun.r.snapshot().active, 'a');
   assert.ok(limitedRun.r.snapshot().endpoints[0].failures5m >= 3);
@@ -459,4 +459,25 @@ test('429_does_not_failover: three 429s keep the active endpoint, three 500s fli
   const failing = router(['a', 'b'], { a: http(500) }, { sleep: s.sleep, failover: { failures: 3, windowMs: 30000 } });
   for (let i = 0; i < 3; i++) await failing.r.complete({ messages: MSGS });
   assert.equal(failing.r.snapshot().active, 'b');
+});
+
+test('429_twice_hops_to_next_endpoint: 429, 429, then the next endpoint answers; active stays', async () => {
+  const s = sleeper();
+  const { r, calls } = router(['a', 'b'], { a: http(429), b: () => ok('from b') }, { sleep: s.sleep });
+  const out = await r.complete({ messages: MSGS });
+  assert.deepEqual(calls.map(c => c.name), ['a', 'a', 'b']);
+  assert.equal(s.waits.length, 1);
+  assert.equal(out.provenance.endpoint, 'b');
+  assert.equal(out.provenance.attempts, 3);
+  assert.equal(r.snapshot().active, 'a');
+});
+
+test('429_on_last_endpoint_does_not_wrap: a 429 pair on the last endpoint fails with no hop', async () => {
+  const s = sleeper();
+  const { r, calls } = router(['a'], { a: http(429) }, { sleep: s.sleep });
+  await rejects(r.complete({ messages: MSGS }), 'rate_limited');
+  assert.deepEqual(calls.map(c => c.name), ['a', 'a']);
+  const chain = router(['a', 'b', 'c'], { a: http(429), b: http(429), c: () => ok('from c') }, { sleep: s.sleep });
+  await rejects(chain.r.complete({ messages: MSGS }), 'rate_limited');
+  assert.deepEqual(chain.calls.map(c => c.name), ['a', 'a', 'b']);
 });
