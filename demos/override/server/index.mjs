@@ -147,7 +147,6 @@ function devTools(env) {
 
 const sleep = ms => new Promise(resolve => { setTimeout(resolve, ms).unref(); });
 
-// The admin page puts this in an href: only an http(s) origin and path survive, never javascript: or credentials.
 // OVERRIDE_MAKER_TOKENS: comma list of name:secret pairs; each maker can edit content and nothing else.
 export function makerTokens(env) {
   const raw = String(env.OVERRIDE_MAKER_TOKENS ?? '').trim();
@@ -171,6 +170,7 @@ export function adminHosts(env) {
   return String(env.OVERRIDE_ADMIN_HOSTS ?? '').split(',').map(h => h.trim().toLowerCase()).filter(Boolean);
 }
 
+// The admin page puts this in an href: only an http(s) origin and path survive, never javascript: or credentials.
 export function boardUrlOf(base, port) {
   const raw = String(base ?? '').trim();
   if (raw) {

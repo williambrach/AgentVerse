@@ -521,3 +521,14 @@ test('maker_tokens_parse', () => {
 test('bad_maker_tokens_fail_startup', async t => {
   await assert.rejects(boot(t, { OVERRIDE_ADMIN_TOKEN: 'ops', OVERRIDE_MAKER_TOKENS: 'alice:' }), /OVERRIDE_MAKER_TOKENS/);
 });
+
+test('content_publish_reaches_probe: the probe prompt is built from the current content at probe time', async t => {
+  const server = await liveServer(t, 5, { OVERRIDE_MAKER_TOKENS: 'alice:s1' });
+  const marker = 'Zebra-probe-marker question?';
+  const put = await fetch(`${server.adminUrl}/admin/content/banana-mystery`, { method: 'PUT', headers: { ...json, ...asAlice }, body: JSON.stringify({ edits: { 'parts.planner.quickQuestion': marker }, baseRev: 0 }) });
+  assert.equal(put.status, 200);
+  const probe = await fetch(`${server.adminUrl}/admin/llm/probe`, { method: 'POST', headers: { ...json, Authorization: 'Bearer admin-token' }, body: JSON.stringify({ endpoint: 'a' }) });
+  assert.equal(probe.status, 200);
+  const traces = readJsonl(join(server.dir, 'test', 'traces', 'probes.jsonl'));
+  assert.ok(traces.some(r => r.probe && JSON.stringify(r.request.messages).includes(marker)), 'the probe request carries the edited question');
+});
