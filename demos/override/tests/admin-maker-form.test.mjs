@@ -123,3 +123,15 @@ test('text_stays_literal', () => {
   const src = readFileSync(new URL('../server/admin/maker-form.js', import.meta.url), 'utf8');
   assert.equal(/innerHTML|outerHTML|insertAdjacentHTML/.test(src), false);
 });
+
+test('set_detail_rebuilds_and_clears_errors', () => {
+  const { root, handle } = mk();
+  type(root, 'copy.headline', 'X');
+  handle.setError('copy.headline', 'bad');
+  handle.setDetail(fixture({ ...authored(), 'copy.headline': 'Y' }));
+  assert.equal(area(root, 'copy.headline').value, 'Y');
+  assert.equal(root.all(e => e.tag === 'textarea').length, Object.keys(authored()).length);
+  assert.equal(root.all(e => e.className === 'field-error' && !e.hidden).length, 0);
+  assert.equal(handle.dirty(), false);
+  assert.deepEqual(handle.overlay(), { 'copy.headline': 'Y' });
+});
