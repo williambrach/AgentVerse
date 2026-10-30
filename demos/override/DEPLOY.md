@@ -249,6 +249,8 @@ From a machine outside, `curl --fail https://<your-host>/api/health` must return
 
 The admin page is `http://127.0.0.1:3002/admin`; paste the admin token into it. From another machine, open an SSH tunnel first with `ssh -L 3002:127.0.0.1:3002 user@mac`. Never expose the admin port through the Cloudflare Tunnel. The page is the command centre, with a failover banner and a big-screen link: players, tiles, message log, funnel and rounds (see [README](README.md#the-command-centre)). Prometheus scrapes `/metrics` on the same port with the token ([ops/prometheus.yml](ops/prometheus.yml)).
 
+Makers get the editor page at `http://127.0.0.1:3002/admin/maker.html?case=<caseId>`. The admin port is never on the public (player) tunnel. Makers reach it either over the same SSH forward as the operator (`ssh -L 3002:127.0.0.1:3002 user@mac`), or over Tailscale, or over a separate hostname that an identity policy protects (for example Cloudflare Access requiring a login) and that points at `http://127.0.0.1:3002`. In the last case set `OVERRIDE_ADMIN_HOSTS=<that hostname>` so the listener accepts the `Host` header. Give each maker their own token in `OVERRIDE_MAKER_TOKENS=name:secret,…` (see [README](README.md#tuning-a-case-from-the-admin-page)).
+
 One hour before:
 - Start the server and confirm `/admin/health` is green.
 - Open the command centre over the SSH forward and check the tiles are green.

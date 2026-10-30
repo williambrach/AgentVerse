@@ -117,6 +117,8 @@ Coin events carry their cost. `session_started` gains `economy`, costed events c
 
 One server process serves every player. Each browser’s game lives in memory while active and is rebuilt from its JSONL log when its player returns, also after a restart or about 30 idle minutes, so progress survives both. Requests carry a session ID and revision to reject stale writes from another tab. A game’s mutations are locked while its live answer is pending; other players are never blocked. The demo has a technical limit of 40 questions per character and 1,200 characters per question; study budgets are not implemented.
 
+A session can carry two `contentHash` values when content was published while it was in progress and later replayed. The `content_published` records in `system.jsonl` (with `by`, `caseId`, `rev`, `contentHash` and `fields`) join them.
+
 ## LLM fallback
 
 For several providers, point `OVERRIDE_ENDPOINTS` at a JSON array (see [ops/endpoints.example.json](ops/endpoints.example.json)). Each entry is `{name, baseUrl, model, keyEnv, maxInFlight=50, tokenParam='max_completion_tokens', timeoutMs=25000, temperature=null}`. `keyEnv` names the environment variable holding that endpoint's key, so keys never live in the file. The endpoint order is the priority order; `a` is used first.
@@ -185,6 +187,41 @@ curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"teamId":"<team-id>","h
 
 `/metrics` is Prometheus text: players (`override_sessions_*`), LLM per endpoint (`override_llm_*`: in flight, queue, failures by reason, failovers, durations), HTTP, log writes (`override_log_write_*`), and process and disk gauges. Labels never hold session IDs or text. [ops/prometheus.yml](ops/prometheus.yml) scrapes it every 5 s and includes example alert rules.
 
+## Tuning a case from the admin page
+
+For game makers who change the words of a case, not its structure. Open `http://127.0.0.1:3002/admin/maker.html?case=<caseId>` on the admin port, one link per game (for example `?case=banana-mystery`). Reach it over the same SSH forward as the command centre, over Tailscale, or over a protected hostname; see [DEPLOY](DEPLOY.md#6-run-the-event). The admin port is never on the public player tunnel.
+
+Each maker gets a token of their own. Set `OVERRIDE_MAKER_TOKENS=alice:secret1,bob:secret2`, one `name:secret` pair per maker. A maker token opens the editor page and the `/admin/content` routes only; every other admin route answers 403. The admin token can edit too, and its edits are logged as `admin`.
+
+**Editable:** the setting and the use and avoid word lists; each part's knowledge, label, introduction, quick question and finding; the briefing, intro and report copy; the debrief and the feedback text.
+
+**Locked:** the case id, version, world, characters, part ids and roles, the rehearsal scripts, and the shared rule template in `server/interviews.mjs`. Structure stays in the case module (see [Writing a case](#writing-a-case)).
+
+Each publish sends the whole set of edits, not a patch. It replaces the previous edits for that case. Entries equal to the authored text are dropped.
+
+Edits apply to new games only. A game in progress keeps the text it started with until it has been idle for 30 minutes or the server restarts. To test an edit in a running game, press **Reset session**.
+
+- **Preview** shows the exact prompt the model would receive for the draft. Nothing is sent to the model and nothing is saved.
+- **Try** asks the real model the question you type, with the draft text, and shows the answer and its reasoning. It is live mode only (409 in rehearsal). It uses the players' queue, and the trace row carries `tag: maker_try`.
+- **Publish** saves the draft as a new revision. It names the revision you based it on. If someone else published first, the server answers 409 and the page asks you to reload. The `content_published` record in `system.jsonl` holds the maker, the changed paths and the new `contentHash`, not the text.
+
+Each publish or revert adds a revision: 1, 2, and so on. Rev 0 is the authored text. **Restore** sets an earlier revision as current by adding a new revision that carries its text, so the history is never rewritten. Restore authored returns to rev 0.
+
+Edits live in `data/<env>/content/<caseId>.jsonl`, one line per revision, append-only. The server replays the file at boot. A revision whose case version no longer matches is skipped, so a new case version starts authored. If a stored text no longer validates against the case, the case stays authored and the page shows it as stale.
+
+```sh
+export TOKEN=...   # a maker token from OVERRIDE_MAKER_TOKENS
+AUTH="Authorization: Bearer $TOKEN"
+curl -H "$AUTH" http://127.0.0.1:3002/admin/content
+curl -H "$AUTH" http://127.0.0.1:3002/admin/content/banana-mystery
+curl -X PUT -H "$AUTH" -H 'Content-Type: application/json' -d '{"edits":{"copy.intro.lead":"New lead"},"baseRev":0}' http://127.0.0.1:3002/admin/content/banana-mystery
+curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"edits":{},"characterId":"momo"}' http://127.0.0.1:3002/admin/content/banana-mystery/preview
+curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"edits":{},"characterId":"momo","question":"What happened?"}' http://127.0.0.1:3002/admin/content/banana-mystery/try
+curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"rev":0}' http://127.0.0.1:3002/admin/content/banana-mystery/revert
+```
+
+`GET /admin/content` lists every case with its revision, maker and content hash. `GET /admin/content/<caseId>` adds the structure, the authored and current text, and the history (no text). A `PUT` with a stale `baseRev` answers 409; a bad path answers 400 with the `path`.
+
 ## Rehearse the command centre
 
 ```sh
@@ -237,6 +274,8 @@ It prints a table per endpoint with review flags (empty, length, a character out
 | `OVERRIDE_TRUST_PROXY` | off | `1` or `true` behind a proxy: client address from `CF-Connecting-IP`, else `X-Forwarded-For`. |
 | `OVERRIDE_ADMIN_TOKEN` | empty | Bearer token; the admin listener stays off while empty. |
 | `OVERRIDE_ADMIN_PORT` | 3002 | Admin listener port (127.0.0.1). |
+| `OVERRIDE_MAKER_TOKENS` | empty | Maker `name:secret` pairs, comma separated. Content editing only: the editor page and `/admin/content`. |
+| `OVERRIDE_ADMIN_HOSTS` | empty | Extra `Host` names the admin listener accepts, comma separated, for a tunnel hostname. |
 | `OVERRIDE_DATA_DIR` | `./data` | Root for research records. |
 | `OVERRIDE_ENV` | `live` | Data subdirectory, e.g. `rehearsal`. |
 | `OVERRIDE_APP_COMMIT` | empty | Recorded in `session_started`. |

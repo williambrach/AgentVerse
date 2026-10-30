@@ -153,7 +153,7 @@ Build these only when the trigger happens. Until then they are not on the list.
 | Playtest seeding (`?reveal=1&asked=…`) with a separate `data/playtest/` folder | Iterating on case 4 or later and tired of clicking through. |
 | "Who knew what" grid and its consistency warnings | Checking many cases at once. |
 | Tiled maps, camera follow, doors between maps | Layouts multiply. |
-| Custom editor | Non-programmers write cases, or more than about 10 cases exist, or placement mistakes keep passing the checks. |
+| Custom editor (built 2026-10-30: text is edited in the admin page at `/admin/maker.html`; structure: ids, roles, characters and versions, still lives in the modules) | Non-programmers write cases, or more than about 10 cases exist, or placement mistakes keep passing the checks. |
 | Story variants per role. Today a part's job label, introduction and quick question always belong to the same role, so tables could still share “the planner did it” | Cross-table sharing is seen at an event. |
 | Hot reload for content files | Never, as long as cases are modules. `node --watch` already handles imports. |
 
