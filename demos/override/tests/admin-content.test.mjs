@@ -175,3 +175,17 @@ test('methods_404_405_409', async () => {
   assert.deepEqual([(await off.call('GET', '/admin/content')).status, (await off.call('GET', '/admin/content')).json.error], [409, 'Content editing is off.']);
   off.close();
 });
+
+test('draft_inputs_validated', async () => {
+  const a = await start();
+  const p = (b) => a.call('POST', `/admin/content/${ID}/preview`, b);
+  assert.equal((await p('[]')).status, 400);
+  assert.equal((await p('null')).status, 400);
+  assert.equal((await p({ edits: {}, characterId: 'nobody' })).status, 400);
+  assert.equal((await p({ edits: {}, characterId: 'pip', question: 'x'.repeat(2001) })).status, 400);
+  const h = (n) => Array.from({ length: n }, () => ({ question: 'q', answer: 'a' }));
+  assert.equal((await p({ edits: {}, characterId: 'pip', history: h(21) })).status, 400);
+  assert.equal((await p({ edits: {}, characterId: 'pip', history: h(20), question: 'x'.repeat(2000) })).status, 200);
+  assert.equal((await a.call('PUT', `/admin/content/${ID}`, 'null')).status, 400);
+  a.close();
+});
