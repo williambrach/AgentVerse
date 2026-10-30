@@ -34,11 +34,14 @@ function loadPage(dir) {
   return files;
 }
 
-export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = new URL('./admin/', import.meta.url), router = null, investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {}, leaderboard = null, boardUrl = '' }) {
+export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = new URL('./admin/', import.meta.url), router = null, content = null, makers = [], investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {}, leaderboard = null, boardUrl = '' }) {
   if (typeof token !== 'string' || !token) throw new Error('An admin token is required.');
-  const authed = (req) => {
+  const actor = (req) => {
     const m = /^bearer (.+)$/i.exec(req.headers.authorization || '');
-    return !!m && safeEqual(m[1], token);
+    if (!m) return null;
+    let found = safeEqual(m[1], token) ? { by: 'admin', scope: 'all' } : null;
+    for (const mk of makers) if (safeEqual(m[1], mk.token) && !found) found = { by: mk.name, scope: 'content' };
+    return found;
   };
   // DNS-rebinding guard: only loopback host names (any port) plus explicit extras.
   const hostOk = (h) => { const n = String(h || '').toLowerCase().replace(/:\d+$/, ''); return ['127.0.0.1', 'localhost', '[::1]'].includes(n) || allowedHosts.includes(n); };
@@ -100,7 +103,7 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
       needRouter();
       const endpoint = str(body.endpoint, 'Endpoint');
       let result;
-      try { result = await router.probe(endpoint, probeMessages); }
+      try { result = await router.probe(endpoint, typeof probeMessages === 'function' ? probeMessages() : probeMessages); }
       catch (e) { throw new RequestError(400, e.message); }
       log('probe', { endpoint, ok: !!result?.ok });
       return result;
@@ -154,13 +157,15 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
       const file = req.method === 'GET' ? pageFiles.get(path) : undefined;
       if (file) {
         const h = { 'Content-Type': file.type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
-        if (path === '/admin') h['Content-Security-Policy'] = CSP;
+        if (file.type.startsWith('text/html')) h['Content-Security-Policy'] = CSP;
         res.writeHead(200, h);
         return res.end(file.body);
       }
       const known = path === '/metrics' || path.startsWith('/admin/');
       if (!known) throw new RequestError(404, 'Not found.');
-      if (!authed(req)) throw new RequestError(401, 'Unauthorized.');
+      const who = actor(req);
+      if (!who) throw new RequestError(401, 'Unauthorized.');
+      if (who.scope === 'content' && !(path === '/admin/content' || path.startsWith('/admin/content/'))) throw new RequestError(403, 'Maker tokens can only edit content.');
       if (path === '/metrics') {
         if (req.method !== 'GET') throw new RequestError(405, 'Method not allowed.');
         return send(res, 200, registry.render(), 'text/plain; version=0.0.4');
