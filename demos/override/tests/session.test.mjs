@@ -213,10 +213,44 @@ test('a sequence gap, a middle-of-file corruption or a foreign case version is n
   assert.equal(new Investigations({ dataDir: dir, config, cases: kases }).view(id).session, null);
 });
 
-test('new_game_rate_limit: 21 starts in one second return 429', async t => {
+test('new_game_rate_limit: 101 starts in one second return 429 on the 101st', async t => {
   const { games } = fleet(t);
-  for (let i = 0; i < 20; i++) await games.mutate(undefined, 'start');
+  for (let i = 0; i < 100; i++) await games.mutate(undefined, 'start');
   await assert.rejects(games.mutate(undefined, 'start'), e => e.status === 429 && /Too many new games/.test(e.message));
+});
+
+test('start_cap_counts_only_new_sessions: 60 concurrent starts on distinct sessions, zero 429', async t => {
+  const { games } = fleet(t);
+  const results = await Promise.allSettled(Array.from({ length: 60 }, () => games.mutate(undefined, 'start')));
+  assert.equal(results.filter(r => r.status === 'rejected').length, 0);
+  assert.equal(new Set(results.map(r => r.value.session.id)).size, 60);
+});
+
+test('repeat_start_takes_no_slot: 30 starts on an active session leave the window untouched', async t => {
+  const { games, act } = fleet(t);
+  const id = (await act(undefined, 'start')).session.id;
+  const taken = games.newGames.hits.length;
+  for (let i = 0; i < 30; i++) await assert.rejects(act(id, 'start'), e => e.status === 409 && /already active/.test(e.message));
+  assert.equal(games.newGames.hits.length, taken);
+  await act(id, 'reset');
+  assert.equal(games.newGames.hits.length, taken + 1);
+});
+
+test('inspect_after_restore: lastSaid is rebuilt from the log and inspect works on a restored session', async t => {
+  const scripted = defineCase({ ...partCase, rehearsalReasoning: p => `R:{${p}}` }, { worlds: agentWorlds(3) });
+  const { games, act, dir, events } = fleet(t, { cases: [scripted] });
+  const id = (await act(undefined, 'start')).session.id;
+  await act(id, 'interview', { character: 'momo', question: 'What happened?' });
+  await act(id, 'interview', { character: 'momo', question: 'And then?' });
+  const last = events(id).filter(e => e.type === 'interview_answer' && e.character === 'momo').at(-1).eventId;
+  assert.equal(games.find(id).lastSaid.get('momo'), last);
+  const again = new Investigations({ dataDir: dir, config, cases: [scripted], shuffle: same });
+  const game = again.find(id);
+  assert.equal(game.lastSaid.get('momo'), last);
+  assert.equal(game.lastSaid.has('pip'), false);
+  const view = await again.mutate(id, 'inspect', { sessionId: id, revision: game.session.revision, character: 'momo' });
+  assert.equal(view.session.inspections[0].sourceEventId, last);
+  await assert.rejects(again.mutate(id, 'inspect', { sessionId: id, revision: game.session.revision, character: 'pip' }), e => e.status === 409 && /has not said anything/.test(e.message));
 });
 
 test('question_rate_limit: the 7th question in a minute is 429 and logs nothing', async t => {
@@ -520,13 +554,8 @@ test('export_redacts_until_verdict: the cast is null while active and back once 
   assert.deepEqual(JSON.parse(games.export(id).split('\n')[0]).cast, { momo: 'bystander', pip: 'helper', nori: 'boss' });
 });
 
-test('legacy_case_throws: a case without parts is refused by name', () => {
-  const legacy = { id: 'old-case', legacy: true };
-  assert.throws(() => new Investigations({ dataDir: tmpdir(), config, cases: [kase, legacy] }), /old-case/);
-});
-
 test('every case keeps its answer, parts and roles off the wire before the verdict', async t => {
-  for (const k of [...kases, five, ...liveCases.filter(c => !c.legacy)]) {
+  for (const k of [...kases, five, ...liveCases]) {
     const { games, act } = fleet(t, { cases: [k], shuffle: reverse });
     const id = (await act(undefined, 'start', { caseId: k.id })).session.id;
     await talkToAll(act, id, k);
@@ -561,7 +590,7 @@ test('logs carry provenance', async t => {
 
 test('archived case ids are rejected at start as unknown', async t => {
   const { act, dir } = fleet(t);
-  for (const caseId of ['banana-control', 'tower-echo-bell']) {
+  for (const caseId of ['retired-case', 'tower-echo-bell']) {
     await assert.rejects(act(undefined, 'start', { caseId }), e => e.status === 400 && e.message === 'Unknown case.');
   }
   assert.deepEqual(readdirSync(join(dir, 'sessions')), []);
@@ -655,7 +684,7 @@ test('prompt_resolved: the part label and resolved knowledge reach the prompt, w
   const other = buildMessages(kase, swapped, 'pip', 'Why?')[0].content;
   assert.ok(other.includes('SECRET boss knowledge, Momo was misled'));
   assert.equal(other.includes('SECRET helper knowledge'), false);
-  for (const k of [...kases, five, ...liveCases.filter(c => !c.legacy)]) {
+  for (const k of [...kases, five, ...liveCases]) {
     const s = { cast: identityCast(k), interviews: Object.fromEntries(k.characters.map(c => [c.id, []])) };
     for (const c of k.characters) assert.equal(buildMessages(k, s, c.id, 'Why?')[0].content.includes('{'), false);
   }

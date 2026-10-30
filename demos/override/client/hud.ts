@@ -1,4 +1,5 @@
 import { HINTS } from './tools.ts';
+import { escape as esc, svg as baseSvg } from './html.ts';
 
 /** One cast member in the rail. `asked` forces the check on the talking card. */
 export interface CastCard {
@@ -9,11 +10,7 @@ export interface CastCard {
   asked?: boolean;
 }
 
-const esc = (value: unknown): string => String(value ?? '').replace(/[&<>"']/g, char =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] as string);
-
-const svg = (path: string, size = 20, width = 2): string =>
-  `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+const svg = (path: string, size = 20, width = 2): string => baseSvg(path, size, width);
 
 const ICONS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',

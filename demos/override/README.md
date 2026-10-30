@@ -93,7 +93,7 @@ A case is one module in `server/cases/`, registered in `server/cases/index.mjs`.
 
 - Set `status: 'draft'` while writing. Draft cases are hidden unless the server runs with `OVERRIDE_DEV_TOOLS=1` (forced off when `NODE_ENV=production`).
 - Run `npm run cases:prompt -- <case> <character> [--part <partId>] [--question "..."]` to print the exact prompt a character receives. It uses the identity cast (the first character plays the first part, and so on); `--part` puts the character in that part by swapping with whoever holds it, and an unknown part exits 1.
-- A case has `agents` characters, where `agents` is set per world in `server/worlds.mjs` (an integer from 3 to 5; today `grove` 4 and `tower` 3). Every case in a world must match its world's number. Character ids match `/^[a-z][a-z0-9]{1,15}$/`. Set `world: 'grove' | 'tower'` (default `grove`) to choose the scene, sprites, cast art and wording. The tower art is described in `public/assets/tower/ARTWORK.md`; missing PNGs fall back to code-drawn placeholders.
+- A case has `agents` characters, where `agents` is set per world in `server/worlds.mjs` (an integer from 3 to 5; today `grove` 4 and `tower` 3). Every case in a world must match its world's number. Character ids match `/^[a-z][a-z0-9]{1,15}$/`. Set `world: 'grove' | 'tower'` (default `grove`) to choose the scene, sprites, cast art and wording. The tower art is described in `art/tower/ARTWORK.md`; missing PNGs fall back to code-drawn placeholders.
 - The live cases are `banana-mystery` (grove; the planner made up the permission) and `tower-echo-bell` (tower). Archived and unregistered: `override-v1`, `banana-control`, `tower-bell-charm`, `tower-missing-yes`. Archived cases are legacy (no `parts`): the game refuses them until they are ported to parts; they are only used by their own tests.
 
 ## Research records
@@ -281,7 +281,7 @@ If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:e
 - `client/lineup.ts`: the verdict scale; `client/debrief.ts`: the debrief page.
 - `client/team.ts` and `client/board.ts`: check-in and the leaderboard / big screen.
 - `client/style.css` and `client/stage.css`: the token base and the stage; `hud.css`, `dialogue.css`, `lineup.css`, `team.css`, `board.css`, `bubbles.css`, `case-board.css` and `banana.css` style their modules.
-- `public/assets/banana/`: original generated transparent character and prop atlases. `ARTWORK.md` contains provenance and the full image-generation prompts. Phaser uses atlas frames without changing the source PNGs. No Pokémon art is loaded by this demo.
+- `public/assets/banana/` and `public/assets/tower/`: original generated transparent character and prop atlases. `art/banana/ARTWORK.md` and `art/tower/ARTWORK.md` contain provenance and the full image-generation prompts; the prompt files are in `art/banana/` and `art/tower/`. Phaser uses atlas frames without changing the source PNGs. No Pokémon art is loaded by this demo.
 
 The font is Atkinson Hyperlegible Next, bundled in `client/fonts` under the SIL Open Font License, so the game makes no third-party requests and looks the same on a closed network.
 

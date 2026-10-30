@@ -47,9 +47,7 @@ test('catalog rows name their world', () => {
 
 test('the tower measures its art; the grove keeps its tuned tables', () => {
   assert.deepEqual(worldFor('tower').heights, { cast: 47, investigator: 45 });
-  assert.equal(worldFor('tower').strideFix, undefined);
   assert.equal(worldFor('grove').heights, undefined);
-  assert.equal(worldFor('grove').strideFix, undefined);
 });
 
 import { worlds as serverWorlds } from '../server/worlds.mjs';

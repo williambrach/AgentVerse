@@ -1,5 +1,6 @@
 // Operator controls: router summary, per-endpoint actions, global cap, pause, session stats, system records.
 // Text only (textContent); no document/window access at import time.
+import { el as mk } from './dom.js';
 
 const toMs = (t) => (typeof t === 'number' ? t : Date.parse(t));
 const defaultFmt = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -23,12 +24,7 @@ export function systemLine(rec, fmt) {
 
 const states = new WeakMap();
 
-function el(doc, tag, className, text) {
-  const e = doc.createElement(tag);
-  if (className) e.className = className;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
+const el = (doc, tag, className, text) => mk(doc, tag, className, { text });
 
 function build(root, opts) {
   const doc = root.ownerDocument;

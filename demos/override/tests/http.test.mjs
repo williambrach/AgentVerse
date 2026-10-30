@@ -5,7 +5,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp, startServer } from '../server/index.mjs';
-import { startMockLlm } from './mock-llm.mjs';
+import { until } from './helpers/until.mjs';
+import { startMockLlm } from '../scripts/mock-llm.mjs';
 import { Investigations } from '../server/session.mjs';
 import { modelConfig, buildMessages } from '../server/interviews.mjs';
 import { castCharacters, identityCast } from '../server/cases.mjs';
@@ -103,7 +104,7 @@ const json = { 'Content-Type': 'application/json' };
 const tmp = t => { const dir = mkdtempSync(join(tmpdir(), 'override-http-')); t.after(() => rmSync(dir, { recursive: true, force: true })); return dir; };
 const boot = async (t, env, opts) => {
   const dir = tmp(t);
-  const running = await startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 'secret-one', ...env }, opts);
+  const running = await startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 'secret-one', ...env }, { publicDir: tmp(t), ...opts });
   t.after(() => running.close());
   return { ...running, dir };
 };
@@ -338,7 +339,7 @@ test('monitor_wired: a played game reaches the admin stream and a heartbeat coun
 test('round_survives_restart: label, round count and recent rows come back from disk', async t => {
   const dir = tmp(t);
   const env = { PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 'secret-one', OVERRIDE_ADMIN_TOKEN: 'admin-token' };
-  const first = await startServer(env);
+  const first = await startServer(env, { publicDir: tmp(t) });
   let closed = false;
   t.after(() => { if (!closed) return first.close(); });
   const set = await fetch(`${first.adminUrl}/admin/round`, { method: 'POST', headers: { ...json, ...adminHeaders }, body: JSON.stringify({ label: 'B' }) });
@@ -348,7 +349,7 @@ test('round_survives_restart: label, round count and recent rows come back from 
   await p.post('interview', { revision: p.revision, character: 'momo', question: 'Did the keeper say yes?' });
   await first.close();
   closed = true;
-  const second = await startServer(env);
+  const second = await startServer(env, { publicDir: tmp(t) });
   t.after(() => second.close());
   const hello = await streamHello(second);
   assert.equal(hello.snapshot.round.label, 'B');
@@ -431,18 +432,18 @@ test('probe_messages_resolved: the admin probe prompt has no unresolved placehol
 test('admin_boot_failure_closes_the_player_listener: a taken admin port rejects and leaves nothing listening', async t => {
   const first = await boot(t, { OVERRIDE_ADMIN_TOKEN: 'admin-token' });
   const port = new URL(first.adminUrl).port;
-  await assert.rejects(startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: port, OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 's', OVERRIDE_ADMIN_TOKEN: 'admin-token' }), /EADDRINUSE/);
+  await assert.rejects(startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: port, OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 's', OVERRIDE_ADMIN_TOKEN: 'admin-token' }, { publicDir: tmp(t) }), /EADDRINUSE/);
 });
 
 test('a taken player port with an admin token rejects (a leaked tick timer would hang this run)', async t => {
   const first = await boot(t, {});
   const port = new URL(first.url).port;
-  await assert.rejects(startServer({ PORT: port, OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 's', OVERRIDE_ADMIN_TOKEN: 'admin-token' }), /EADDRINUSE/);
+  await assert.rejects(startServer({ PORT: port, OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 's', OVERRIDE_ADMIN_TOKEN: 'admin-token' }, { publicDir: tmp(t) }), /EADDRINUSE/);
 });
 
 test('startServer resolves with a working player url, with and without an admin token, and closes cleanly', async t => {
   for (const extra of [{}, { OVERRIDE_ADMIN_TOKEN: 'admin-token', OVERRIDE_ADMIN_PORT: '0' }]) {
-    const running = await startServer({ PORT: '0', HOST: '127.0.0.1', OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 's', ...extra }, { publicDir: tmp(t) });
+    const running = await startServer({ PORT: '0', HOST: '127.0.0.1', OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 's', ...extra }, { publicDir: tmp(t) });
     try {
       assert.match(running.url, /^http:\/\/127\.0\.0\.1:\d+$/);
       assert.equal((await fetch(`${running.url}/api/health`)).status, 200);

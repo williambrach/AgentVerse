@@ -10,9 +10,6 @@
 .team-taken { display: flex; flex-direction: column; gap: 8px; }
 .team-taken p { font-size: 13px; color: var(--cream, #F4EBD3); }
 .team-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
-.team-chip { flex: 0 1 auto; min-width: 0; min-height: 44px; font-weight: 700; font-size: 12px; padding: 6px 10px; border: 2px solid var(--edge, #355A6B); border-radius: 6px; background: var(--ink, #0F1B22); color: var(--accent, #8CC56A); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.team-chip:hover { border-color: var(--gold, #F4B740); }
-.team-chip:focus-visible { outline: 2px solid var(--gold, #F4B740); outline-offset: 2px; }
 
 /* Access screen: a dark panel like the team gate. */
 .access-screen .reset-card { background: var(--panel, #13232C); color: var(--cream, #F4EBD3); border-color: var(--edge, #355A6B); }

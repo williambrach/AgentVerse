@@ -1,10 +1,11 @@
 import http from 'node:http';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createAdmin } from '../server/admin.mjs';
+import { until } from './helpers/until.mjs';
 
 const SNAP = { active: 'a', pinned: false, inFlight: 0, queued: 0, maxInFlight: 200, endpoints: [{ name: 'a', model: 'model-a', apiBaseHost: 'a.test', inFlight: 0, maxInFlight: 50, queued: 0, lastSuccessAt: null, lastFailureAt: null, lastFailureReason: null, failures5m: 0 }] };
 const STATS = { games: 2, waiting: 1, paused: false, byStage: { started: 1, asked: 0, interviewed: 0, verdict: 1 } };
@@ -194,7 +195,8 @@ function openStream(a, { host } = {}) {
     rq.end();
   });
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// A negative assertion has nothing to poll for, so it gets one short, bounded wait.
+const quiet = (ms) => new Promise((r) => setTimeout(r, ms));
 
 test('stream_hello_event_tick', async () => {
   const monitor = fakeMonitor();
@@ -227,8 +229,13 @@ test('stream_cap', async () => {
   assert.equal(six.r.statusCode, 503);
   six.r.resume();
   ss[0].abort();
-  await sleep(100);
-  const again = await openStream(a);
+  let again;
+  await until(async function slotFrees() {
+    const s = await openStream(a);
+    if (s.r.statusCode === 200) { again = s; return true; }
+    s.r.resume();
+    return false;
+  });
   assert.equal(again.r.statusCode, 200);
   again.abort(); ss.forEach((s) => s.abort()); a.close();
 });
@@ -253,10 +260,9 @@ test('stream_cleanup', async () => {
   let calls = 0;
   monitor.snapshot = () => { calls++; return snaps(); };
   s.abort();
-  await sleep(300);
-  assert.equal(monitor.subs.size, 0);
+  await until(function unsubscribed() { return monitor.subs.size === 0; });
   const before = calls;
-  await sleep(100);
+  await quiet(60);
   assert.equal(calls, before);
   a.close();
 });
@@ -372,8 +378,7 @@ test('stream_monitor_throws_on_tick_does_not_crash', async () => {
   const s = await openStream(a);
   await s.next((l) => l.type === 'hello');
   monitor.snapshot = () => { throw new Error('tick boom'); };
-  await sleep(150);
-  assert.equal(monitor.subs.size, 0);
+  await until(function dropped() { return monitor.subs.size === 0; });
   assert.equal((await a.req('/admin/health')).status, 200);
   s.abort(); a.close();
 });
@@ -404,7 +409,7 @@ test('close_ends_streams', async () => {
   await closed;
   assert.equal(monitor.subs?.size ?? monitor.subscribers?.(), 0);
   const n = snaps;
-  await sleep(100);
+  await quiet(60);
   assert.equal(snaps, n);
 });
 
@@ -416,4 +421,66 @@ test('session_drilldown_coins', async () => {
   const old = await boot({ monitor: fakeMonitor() }); // no sessionCoins: old-format session
   assert.deepEqual((await (await old.req(`/admin/sessions/${UID}`)).json()).coins, { spent: 0, budget: null });
   old.close();
+});
+
+// The shipped page files, served for real: static, safe, secret-free.
+const PAGE_DIR = new URL('../server/admin/', import.meta.url);
+const PAGE_FILES = readdirSync(PAGE_DIR);
+const pageText = (f) => readFileSync(new URL(f, PAGE_DIR), 'utf8');
+const pageUrl = (f) => (f === 'index.html' ? '/admin' : `/admin/${f}`);
+
+test('page directory has the expected files', () => {
+  for (const f of ['index.html', 'app.js', 'tiles.js', 'log.js', 'round.js', 'controls.js']) assert.ok(PAGE_FILES.includes(f), f);
+});
+
+test('every served file is safe, static and secret-free', async () => {
+  const token = 'secret-token-9f3a';
+  const router = { snapshot: () => ({ active: 'zeta', pinned: false, inFlight: 0, queued: 0, maxInFlight: 5, endpoints: [{ name: 'zeta', model: 'model-zeta-77', apiBaseHost: 'llm.zeta-host.example' }] }) };
+  const investigations = { stats: () => ({ games: 0, waiting: 0, paused: false, byStage: {} }), setPaused() {} };
+  const server = createAdmin({ token, router, investigations, registry: { render: () => '' }, dataDir: mkdtempSync(join(tmpdir(), 'admin-files-')) });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    let usesTextContent = false;
+    for (const f of PAGE_FILES) {
+      const r1 = await fetch(base + pageUrl(f));
+      assert.equal(r1.status, 200, f);
+      const a = Buffer.from(await r1.arrayBuffer());
+      const b = Buffer.from(await (await fetch(base + pageUrl(f))).arrayBuffer());
+      assert.ok(a.equals(b), `${f} differs between requests`);
+      const text = a.toString('utf8');
+      assert.ok(!/innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/.test(text), `${f} uses a banned API`);
+      for (const secret of [token, 'model-zeta-77', 'zeta-host']) assert.ok(!text.includes(secret), `${f} leaks ${secret}`);
+      if (f.endsWith('.html')) {
+        assert.ok(!/style\s*=/.test(text), 'inline style in html');
+        assert.ok(!/<script(?![^>]*\bsrc=)/.test(text), 'inline script in html');
+        for (const m of text.matchAll(/\b(?:src|href)\s*=\s*"([^"]*)"/g)) assert.ok(m[1].startsWith('/admin/') || m[1].startsWith('#'), `external ref ${m[1]}`);
+      }
+      if (f.endsWith('.css')) assert.ok(!/https?:|@import/.test(text), `${f} references a network origin`);
+      if (f.endsWith('.js') && text.includes('textContent')) usesTextContent = true;
+    }
+    assert.ok(usesTextContent, 'no .js file uses textContent');
+  } finally { await new Promise((r) => { server.close(r); server.closeAllConnections?.(); }); }
+});
+
+test('app.css is dark only on the deep token', () => {
+  const css = pageText('app.css');
+  assert.ok(!css.includes('prefers-color-scheme'));
+  assert.match(css, /--bg:\s*#0B151B/i);
+  assert.ok(!/font-family:[^;]*(Atkinson|googleapis)/.test(css));
+});
+
+test('index.html carries the watch banner, the big-screen link and the command-centre title', () => {
+  const html = pageText('index.html');
+  assert.match(html, /<section id="watch" hidden><\/section>/);
+  assert.match(html, /<a id="board-link"[^>]*target="_blank"[^>]*rel="noreferrer"[^>]*hidden>big-screen ↗<\/a>/);
+  assert.match(html, /<h1>command-centre<\/h1>/);
+  assert.ok(!/<script[^>]*watch\.js/.test(html), 'watch.js loads through app.js');
+});
+
+test('healthy tile values are plain light text, problems keep colour', () => {
+  const css = pageText('tiles.css');
+  assert.match(css, /\[data-level="ok"\] \.tile-v \{ color: #E8EEF0;/);
+  assert.match(css, /\[data-level="warn"\] \.tile-v \{ color: var\(--gold\)/);
+  assert.match(css, /\[data-level="bad"\] \.tile-v \{ color: var\(--bad\)/);
 });

@@ -184,7 +184,8 @@ test('provider errors remain specific and safe', async () => {
     let attempts = 0;
     const router = realRouter(config, async () => { attempts++; return { ok: false, status, json: async () => ({ error: { message: 'Untrusted provider body containing test-key' } }) }; });
     await assert.rejects(answerInterview(config, kase, session(), 'pip', 'Who authorized this?', router), error => error.code === reason && error.diagnostics.providerStatus === status && message.test(error.message) && !error.message.includes('test-key'));
-    assert.equal(attempts, 1, 'a single endpoint has nowhere to retry');
+    // A 429 is retried once on the same endpoint; other failures have nowhere to retry.
+    assert.equal(attempts, status === 429 ? 2 : 1);
   }
 });
 

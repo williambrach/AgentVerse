@@ -3,11 +3,10 @@ type Kind = 'cast' | 'idle' | 'walk' | 'props';
 type Rgb = [number, number, number];
 
 const CELL = 64;
-const BASE = 59; // lowest opaque cell row
 const SKIN: Rgb = [0xf1, 0xc9, 0xa5];
 const NAVY = '#2c3e66';
 const EYE: Rgb = [0x22, 0x22, 0x33];
-const DIMS: Record<Kind, [number, number]> = { cast: [4, 4], idle: [4, 3], walk: [4, 4], props: [2, 2] };
+export const ATLAS_DIMS: Record<Kind, [number, number]> = { cast: [4, 4], idle: [4, 3], walk: [4, 4], props: [2, 2] };
 
 const parse = (hex: string): Rgb => {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
@@ -17,7 +16,7 @@ const parse = (hex: string): Rgb => {
 const darker = ([r, g, b]: Rgb): Rgb => [Math.round(r * 0.65), Math.round(g * 0.65), Math.round(b * 0.65)];
 
 export function placeholderAtlas(kind: 'cast' | 'idle' | 'walk' | 'props', colors: string[]): RgbaAtlas {
-  const [cols, rows] = DIMS[kind];
+  const [cols, rows] = ATLAS_DIMS[kind];
   const width = cols * CELL, height = rows * CELL;
   const data = new Uint8ClampedArray(width * height * 4);
   const palette = (i: number) => parse(colors[i] ?? '#888888');

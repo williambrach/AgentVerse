@@ -1,4 +1,5 @@
 import type { Role } from './types';
+import { escape as esc } from './html.ts';
 
 export interface LineupMember { id: string; name: string; part: string; faceClass: string }
 export interface LineupView {
@@ -9,8 +10,6 @@ export interface LineupView {
 /** Left to right on the scale: from did nothing wrong to knowingly broke the rule. */
 export const ROLE_ORDER = ['honest', 'fooled', 'collaborator', 'villain'];
 const CONFIDENCE: [number, string][] = [[40, 'Guessing'], [70, 'Fairly sure'], [95, 'Certain']];
-
-const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 
 function ordered(roles: Role[]): Role[] {
   const rank = (id: string) => { const i = ROLE_ORDER.indexOf(id); return i < 0 ? ROLE_ORDER.length : i; };

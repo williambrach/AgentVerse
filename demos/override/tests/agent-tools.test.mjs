@@ -7,7 +7,7 @@ import { Investigation, Investigations } from '../server/session.mjs';
 import { economyRules } from '../server/economy.mjs';
 import { cases } from '../server/cases/index.mjs';
 import { findCase } from '../server/cases.mjs';
-import { modelConfig } from '../server/interviews.mjs';
+import { modelConfig, InterviewProviderError } from '../server/interviews.mjs';
 
 const banana = findCase(cases, 'banana-mystery');
 // Tool content is a part template; the session resolves {partId} through its cast (identity here: momo plays the first part).
@@ -246,4 +246,130 @@ test('replay of a v3 log restores economy, cast, thread and inspections', async 
   assert.deepEqual(restored.chatter, { round: 1, pending: 2 });
   assert.deepEqual(restored, g.session);
   assert.deepEqual(again.find(g.session.id).view(), g.view());
+});
+
+// Live-mode tool behaviour (answer and thread stubbed): reasoning stays hidden until inspected.
+// Tool content is a part template; the session resolves {partId} through its cast.
+const liveRehearsal = { ...banana, rehearsalReasoning: partId => `REH:{${partId}}` };
+const liveProv = { attempts: [{ endpoint: 'a' }] };
+
+function liveSetup(t, { answer, thread, kase = banana, mode = 'live' } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'override-live-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const config = { mode, model: 'm', economy: economyRules({ OVERRIDE_COIN_BUDGET: '30' }) };
+  const make = () => new Investigations({ dataDir: dir, config, cases: [kase], answer, thread });
+  const state = { inv: make(), id: null, rev: null };
+  const act = async (action, input = {}) => {
+    const view = await state.inv.mutate(state.id ?? 'x', action, { sessionId: state.id, revision: state.rev, ...input });
+    state.id = view.session.id; state.rev = view.session.revision;
+    return view;
+  };
+  const log = () => state.inv.export(state.id).trim().split('\n').map(JSON.parse);
+  return { state, act, log, restart: () => { state.inv = make(); } };
+}
+async function liveBegun(t, opts) {
+  const x = liveSetup(t, opts);
+  await x.act('start');
+  return x;
+}
+const liveAns = reasoning => async () => ({ answer: 'fine', provenance: liveProv, reasoning });
+const liveAsk = (act, character = 'momo') => act('interview', { character, question: 'What happened?' });
+
+test('live: reasoning_hidden_until_inspected', async t => {
+  const x = await liveBegun(t, { answer: liveAns('R') });
+  const view = await liveAsk(x.act);
+  assert.ok(!JSON.stringify(view).includes('"R"'));
+  assert.ok(!x.log().some(e => JSON.stringify(e).includes('"R"')));
+  const v2 = await x.act('inspect', { character: 'momo' });
+  assert.equal(v2.session.inspections[0].reasoning, 'R');
+  assert.equal(x.log().at(-1).type, 'reasoning_inspected');
+});
+
+test('live: inspectable_follows_the_latest_line', async t => {
+  const lines = ['R', null];
+  const x = await liveBegun(t, { answer: async () => ({ answer: 'fine', provenance: liveProv, reasoning: lines.shift() }) });
+  assert.equal(x.state.inv.find(x.state.id).view().session.inspectable.momo, false);
+  const first = await liveAsk(x.act);
+  assert.deepEqual(first.session.inspectable, { momo: true, pip: false, nori: false, kiki: false });
+  assert.ok(!JSON.stringify(first.session.inspectable).includes('"R"'));
+  const second = await liveAsk(x.act);
+  assert.equal(second.session.inspectable.momo, false);
+  await assert.rejects(() => x.act('inspect', { character: 'momo' }), e => e.status === 409);
+});
+
+test('live: inspectable_is_false_after_restore_and_true_in_rehearsal', async t => {
+  const live = await liveBegun(t, { answer: liveAns('R') });
+  await liveAsk(live.act);
+  live.restart();
+  assert.equal(live.state.inv.find(live.state.id).view().session.inspectable.momo, false);
+  const scripted = await liveBegun(t, { kase: liveRehearsal, mode: 'rehearsal', answer: liveAns(null) });
+  await liveAsk(scripted.act);
+  assert.equal(scripted.state.inv.find(scripted.state.id).view().session.inspectable.momo, true);
+});
+
+test('live: reasoning_lost_on_restore', async t => {
+  const x = await liveBegun(t, { answer: liveAns('R') });
+  await liveAsk(x.act);
+  const spent = x.state.inv.find(x.state.id).session.economy.spent;
+  x.restart();
+  await assert.rejects(() => x.act('inspect', { character: 'momo' }), e => e.status === 409 && e.message === 'Momo did not think.');
+  assert.equal(x.state.inv.find(x.state.id).session.economy.spent, spent);
+});
+
+test('live: stale_reasoning_not_used', async t => {
+  let n = 0;
+  const x = await liveBegun(t, { answer: async () => ({ answer: 'a', provenance: liveProv, reasoning: n++ ? null : 'R' }) });
+  await liveAsk(x.act);
+  await liveAsk(x.act);
+  await assert.rejects(() => x.act('inspect', { character: 'momo' }), e => e.status === 409);
+});
+
+test('live: chatter_failed_costs_nothing', async t => {
+  const x = await liveBegun(t, { answer: liveAns(null), thread: async () => { throw new InterviewProviderError('timeout', 'boom'); } });
+  await liveAsk(x.act);
+  const before = x.state.inv.find(x.state.id).session;
+  const spent = before.economy.spent;
+  await assert.rejects(() => x.act('continue'), e => e.status === 502);
+  const after = x.state.inv.find(x.state.id).session;
+  assert.equal(after.economy.spent, spent);
+  assert.deepEqual(after.chatter, before.chatter);
+  assert.equal(after.thread.length, 0);
+  const failed = x.log().at(-1);
+  assert.equal(failed.type, 'chatter_failed');
+  assert.equal(failed.round, 1);
+  assert.equal(failed.reason, 'timeout');
+  assert.equal(after.revision, failed.sequence);
+});
+
+test('live: chatter_line_provenance', async t => {
+  const x = await liveBegun(t, { answer: liveAns(null), thread: async () => ({ text: 'hello there', reasoning: 'TR', provenance: liveProv }) });
+  await liveAsk(x.act);
+  const view = await x.act('continue');
+  const line = x.log().find(e => e.type === 'chatter_line');
+  assert.deepEqual(line.provenance, liveProv);
+  assert.equal(line.threadPromptVersion, 'thread-v3');
+  assert.ok(!JSON.stringify(view).includes('TR'));
+  const speaker = line.character;
+  const v = await x.act('inspect', { character: speaker });
+  assert.equal(v.session.inspections[0].reasoning, 'TR');
+});
+
+test('live: rehearsal_inspect_uses_rehearsal_reasoning', async t => {
+  const x = await liveBegun(t, { kase: liveRehearsal, mode: 'rehearsal', answer: async () => 'fine' });
+  await liveAsk(x.act);
+  const v = await x.act('inspect', { character: 'momo' });
+  assert.equal(v.session.inspections[0].reasoning, 'REH:Momo');
+});
+
+test('live: reasoning_stale_after_thread_line_without_reasoning', async t => {
+  const x = await liveBegun(t, { answer: liveAns('R'), thread: async () => ({ text: 'chat', reasoning: null, provenance: liveProv }) });
+  await liveAsk(x.act, 'momo');
+  await x.act('continue');
+  const speaker = x.log().at(-1).character;
+  if (speaker !== 'momo') await x.act('continue');
+  await x.act('continue');
+  await x.act('continue');
+  const momoLines = x.log().filter(e => e.character === 'momo' && e.type === 'chatter_line');
+  assert.ok(momoLines.length >= 1);
+  await assert.rejects(() => x.act('inspect', { character: 'momo' }), e => e.status === 409);
 });

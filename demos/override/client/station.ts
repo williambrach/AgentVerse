@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import type { Character, LocationId } from './types';
 import { DetectiveWalk, groveWalk, walkSpec, type WalkDirection, type WalkSpec } from './detective-walk';
 import { MonkeyIdle, groveIdle, idleSpec, reskinIdle, type IdleSpec } from './monkey-idle';
-import { mirrorStride, sliceAtlas, type Frame } from './atlas';
-import { placeholderAtlas } from './placeholder-art';
+import { sliceAtlas, type Frame } from './atlas';
+import { placeholderAtlas, ATLAS_DIMS } from './placeholder-art';
 import { worldFor, type WorldPack } from './worlds';
 import { hueShift, faceSheetPlan, SHEET_CAST } from './recolor';
 import { BUBBLE_WIDTH, placeBubble } from './bubble-layout';
@@ -14,7 +14,6 @@ type Stop = Point & { title: string; label: string };
 type ArtKind = 'cast' | 'idle' | 'walk' | 'props';
 export type ArtSource = 'file' | 'placeholder';
 const artKinds: ArtKind[] = ['cast', 'idle', 'walk', 'props'];
-const atlasDims: Record<ArtKind, [number, number]> = { cast: [4, 4], idle: [4, 3], walk: [4, 4], props: [2, 2] };
 const groveColors = ['#cf7a4a', '#6e9a5c', '#9a85c2'];
 const groveCast: Character[] = ['Momo', 'Pip', 'Nori'].map((name, i) => ({
   id: name.toLowerCase(), name, role: '', room: '', color: groveColors[i], introduction: '', quickQuestion: '',
@@ -37,6 +36,7 @@ const width = WORLD_WIDTH;
 /** CSS pixels from the window top that speech bubbles keep clear: the top bar's bottom (about 84 with a margin). */
 const HUD_CLEAR = 84;
 const height = WORLD_HEIGHT;
+const GROUND_SCALE = 4;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 /** The stage for this window: the bare world when compact, otherwise larger than the world with the world offset inside it. */
 function windowLayout(): StageLayout {
@@ -66,6 +66,7 @@ export class Station extends Phaser.Scene {
   private avatar!: Phaser.GameObjects.Sprite;
   private walk!: DetectiveWalk;
   private shadow!: Phaser.GameObjects.Ellipse;
+  private shadowDepth = NaN;
   private npcs = new Map<string, MonkeyIdle>();
   // Labels and the [E] prompt are HTML over the canvas, so they stay sharp however far the pixel-art canvas is scaled.
   private overlay?: HTMLDivElement;
@@ -94,8 +95,6 @@ export class Station extends Phaser.Scene {
   private created = false;
   private placeholders = new Set<string>();
   private slices = new Map<string, Frame[]>();
-  // The source image each `-stride` texture was rebuilt from; a different image means it is stale.
-  private strideSources = new Map<string, unknown>();
   private towerProps: Record<string, Frame> = {};
   // The source image each recoloured texture was made from; a different image means it is stale.
   private recolorSources = new Map<string, unknown>();
@@ -253,7 +252,7 @@ export class Station extends Phaser.Scene {
     const rgba = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
     const alpha = new Uint8Array(canvas.width * canvas.height);
     for (let i = 0; i < alpha.length; i++) alpha[i] = rgba[i * 4 + 3];
-    const [cols, rows] = atlasDims[kind];
+    const [cols, rows] = ATLAS_DIMS[kind];
     const frames = sliceAtlas(alpha, canvas.width, canvas.height, cols, rows);
     this.slices.set(key, frames);
     return frames;
@@ -276,10 +275,10 @@ export class Station extends Phaser.Scene {
     if (grove) {
       const jungle = this.textures.get('jungle');
       if (!jungle.has('palm')) {
-        jungle.add('palm', 0, 0, 0, 650, 627);
-        jungle.add('basket', 0, 680, 75, 520, 552);
-        jungle.add('board', 0, 60, 640, 590, 570);
-        jungle.add('bell', 0, 680, 650, 560, 560);
+        jungle.add('palm', 0, 0, 0, 325, 313.5);
+        jungle.add('basket', 0, 340, 37.5, 260, 276);
+        jungle.add('board', 0, 30, 320, 295, 285);
+        jungle.add('bell', 0, 340, 325, 280, 280);
       }
       this.drawClearing();
     } else {
@@ -327,6 +326,7 @@ export class Station extends Phaser.Scene {
     this.player = this.physics.add.image(this.stops.briefing.x, this.stops.briefing.y, 'feet').setVisible(false).setCollideWorldBounds(true);
     this.lastX = this.player.x; this.lastY = this.player.y; this.moving = false;
     this.cast.forEach(({ id }) => { const p = this.stops[id]; const feet = this.physics.add.staticImage(p.x, p.y - 12, 'feet').setVisible(false); this.physics.add.collider(this.player, feet); });
+    this.shadowDepth = NaN;
     this.shadow = this.add.ellipse(this.player.x, this.player.y + 1, 22, 6, 0x314c34, .22);
     const walk = grove ? groveWalk : this.measuredWalk(keys.walk);
     this.walk = new DetectiveWalk(this, this.player.x, this.player.y, walk);
@@ -355,43 +355,13 @@ export class Station extends Phaser.Scene {
       if (this.enabled && !this.typing() && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) event.preventDefault();
     });
     this.created = true;
+    if (this.covered) this.scheduleSleep();
     // configure() may have run while this build was loading.
     if (this.builtKey !== keyOf(this.world, this.cast)) this.scene.restart({ world: this.world, cast: this.cast });
   }
 
-  /** The measured walk; with `strideFix`, the listed rows' step 3 comes from a rebuilt copy of the sheet. */
   private measuredWalk(key: string): WalkSpec {
-    const frames = this.framesOf('walk', key);
-    const height = this.world.heights?.investigator ?? 46;
-    const fix = this.world.strideFix;
-    if (!fix || this.placeholders.has(key)) return walkSpec(frames, key, height);
-    const fixedKey = `${key}-stride`;
-    let fixed = this.slices.get(fixedKey);
-    const image = this.textures.get(key).getSourceImage() as CanvasImageSource & { width: number; height: number };
-    if (!fixed || !this.textures.exists(fixedKey) || this.strideSources.get(fixedKey) !== image) {
-      const sources = fix.rows.map(row => frames[row * 4 + 1]);
-      // The original sheet, plus one strip below it holding the rebuilt frames. The PNG is untouched.
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(image.width, sources.reduce((sum, f) => sum + f.w, 0));
-      canvas.height = image.height + Math.max(...sources.map(f => f.h));
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(image, 0, 0);
-      const rgba = ctx.getImageData(0, 0, image.width, image.height).data;
-      const rebuilt = frames.slice();
-      let x = 0;
-      fix.rows.forEach((row, i) => {
-        const source = sources[i];
-        ctx.putImageData(new ImageData(mirrorStride(rgba, image.width, source, fix.band, fix.halfWidth), source.w, source.h), x, image.height);
-        rebuilt[row * 4 + 3] = { ...source, x, y: image.height };
-        x += source.w;
-      });
-      if (this.textures.exists(fixedKey)) this.textures.remove(fixedKey);
-      this.textures.addCanvas(fixedKey, canvas);
-      this.slices.set(fixedKey, rebuilt);
-      this.strideSources.set(fixedKey, image);
-      fixed = rebuilt;
-    }
-    return walkSpec(fixed, fixedKey, height);
+    return walkSpec(this.framesOf('walk', key), key, this.world.heights?.investigator ?? 46);
   }
 
   private prop(key: string, name: string, x: number, y: number, size: number) {
@@ -401,14 +371,24 @@ export class Station extends Phaser.Scene {
     return image.setOrigin(frame.anchorX / frame.w, frame.anchorY / frame.h).setDisplaySize(size * frame.w / frame.h, size);
   }
 
+  // Ground is baked at 4x so nearest-neighbour sampling keeps edges where the live drawing put them.
   private drawClearing() {
     // Beyond the world: ground, speckles and palms, so a wide window shows more grove. Nothing here touches the 480x340 world.
-    const far = this.add.graphics().setDepth(-10);
-    far.fillStyle(0x82a75e).fillRect(-400, -300, 1280, 940);
+    // Drawn once into a texture; the Graphics is destroyed, so Phaser replays no commands per frame.
+    const farKey = `${this.world.id}-far`;
+    const far = this.textures.exists(farKey) ? null : this.add.graphics();
+    far?.fillStyle(0x82a75e).fillRect(0, 0, 1280, 940);
     const outer = new Phaser.Math.RandomDataGenerator(['banana-grove-overscan-v1']);
-    for (let i = 0; i < 3000; i++) far.fillStyle(outer.pick([0x91b568, 0x769e55, 0x9abd75])).fillRect(-400 + outer.between(0, 319) * 4, -300 + outer.between(0, 234) * 4, 4, 2);
+    for (let i = 0; i < 3000; i++) {
+      const color = outer.pick([0x91b568, 0x769e55, 0x9abd75]), x = outer.between(0, 319) * 4, y = outer.between(0, 234) * 4;
+      far?.fillStyle(color).fillRect(x, y, 4, 2);
+    }
+    if (far) { far.generateTexture(farKey, 1280, 940); far.destroy(); }
+    this.add.image(-400, -300, farKey).setOrigin(0, 0).setDepth(-10);
     overscanSpots(outer, 64, 56, 98, 50, true).forEach(([x, y, size]) => this.add.image(x, y, 'jungle', 'palm').setOrigin(.5, 1).setDisplaySize(size, size).setDepth(y));
-    const g = this.add.graphics().setDepth(0);
+    const groundKey = `${this.world.id}-ground`;
+    if (!this.textures.exists(groundKey)) {
+    const g = this.add.graphics().setScale(GROUND_SCALE);
     g.fillStyle(0x82a75e).fillRect(0, 0, width, height);
     // A fixed seed gives every investigator the same little grove.
     const random = new Phaser.Math.RandomDataGenerator(['banana-grove-v1']);
@@ -424,19 +404,31 @@ export class Station extends Phaser.Scene {
     // The stolen bananas ended up at the monkeys' picnic blanket.
     for (let y = 0; y < 3; y++) for (let x = 0; x < 5; x++) g.fillStyle((x + y) % 2 ? 0xe5af88 : 0xf8e3be).fillRect(205 + x * 12, 190 + y * 10, 12, 10);
     g.lineStyle(2, 0xc98c6e).strokeRect(204, 189, 62, 32);
+    g.generateTexture(groundKey, width * GROUND_SCALE, height * GROUND_SCALE);
+    g.destroy();
+    }
+    this.add.image(0, 0, groundKey).setOrigin(0, 0).setDisplaySize(width, height).setDepth(0);
     treeSpots.forEach(([x, y, size]) => this.add.image(x, y, 'jungle', 'palm').setOrigin(.5, 1).setDisplaySize(size, size).setDepth(y < 100 ? 5 : y));
   }
 
   private drawTower() {
     const ground = Phaser.Display.Color.HexStringToColor(this.world.palette.ground).color;
     // Beyond the world: floor, then bookcases in rows, so the margins are never a bare band. Nothing here touches the 480x340 world.
-    const far = this.add.graphics().setDepth(-10);
-    far.fillStyle(ground).fillRect(-400, -300, 1280, 940);
+    const farKey = `${this.world.id}-far`;
+    const far = this.textures.exists(farKey) ? null : this.add.graphics();
+    far?.fillStyle(ground).fillRect(0, 0, 1280, 940);
     const outer = new Phaser.Math.RandomDataGenerator(['wizard-tower-overscan-v1']);
-    for (let i = 0; i < 3000; i++) far.fillStyle(outer.pick([0x655d78, 0x544d63, 0x6a6280])).fillRect(-400 + outer.between(0, 319) * 4, -300 + outer.between(0, 234) * 4, 4, 2);
+    for (let i = 0; i < 3000; i++) {
+      const color = outer.pick([0x655d78, 0x544d63, 0x6a6280]), x = outer.between(0, 319) * 4, y = outer.between(0, 234) * 4;
+      far?.fillStyle(color).fillRect(x, y, 4, 2);
+    }
+    if (far) { far.generateTexture(farKey, 1280, 940); far.destroy(); }
+    this.add.image(-400, -300, farKey).setOrigin(0, 0).setDepth(-10);
     const propsKey = artKeys(this.world).props;
     overscanSpots(outer, 50, 50, 70, 50, false).forEach(([x, y, size]) => this.prop(propsKey, 'bookshelf', x, y, size).setDepth(y));
-    const g = this.add.graphics().setDepth(0);
+    const groundKey = `${this.world.id}-ground`;
+    if (!this.textures.exists(groundKey)) {
+    const g = this.add.graphics().setScale(GROUND_SCALE);
     g.fillStyle(ground).fillRect(0, 0, width, height);
     const random = new Phaser.Math.RandomDataGenerator(['wizard-tower-v1']);
     for (let i = 0; i < 700; i++) {
@@ -453,6 +445,10 @@ export class Station extends Phaser.Scene {
     g.fillStyle(0x6f5a99).fillEllipse(235, 205, 86, 54);
     g.fillStyle(0xb9a3dc).fillEllipse(235, 205, 76, 44);
     g.lineStyle(2, 0x8d74b8).strokeEllipse(235, 205, 52, 28);
+    g.generateTexture(groundKey, width * GROUND_SCALE, height * GROUND_SCALE);
+    g.destroy();
+    }
+    this.add.image(0, 0, groundKey).setOrigin(0, 0).setDisplaySize(width, height).setDepth(0);
     shelfSpots.forEach(([x, y, size]) => this.prop(artKeys(this.world).props, 'bookshelf', x, y, size).setDepth(y < 100 ? 5 : y));
   }
 
@@ -538,6 +534,34 @@ export class Station extends Phaser.Scene {
   }
   private typing() { return Boolean(document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')); }
   setEnabled(enabled: boolean) { this.enabled = enabled; }
+  /** True while a cover (intro, overlay, lineup) hides the stage: poses snap to 0 and the render loop sleeps after one more frame. */
+  setCovered(covered: boolean): void {
+    this.covered = covered;
+    if (covered) {
+      if (!this.created) return; // create() applies it after its first render
+      this.npcs.forEach(npc => npc.reset());
+      if (this.player) this.walk.reset(this.player.x, this.player.y);
+      this.scheduleSleep();
+    } else {
+      this.cancelSleep();
+      this.game?.loop.wake();
+    }
+  }
+  private sleepAfterRender?: () => void;
+  private covered = false;
+  private scheduleSleep() {
+    if (this.sleepAfterRender) return;
+    this.sleepAfterRender = () => {
+      this.sleepAfterRender = undefined;
+      if (this.covered && this.created) this.game.loop.sleep();
+    };
+    this.game.events.once(Phaser.Core.Events.POST_RENDER, this.sleepAfterRender);
+  }
+  private cancelSleep() {
+    if (!this.sleepAfterRender) return;
+    this.game.events.off(Phaser.Core.Events.POST_RENDER, this.sleepAfterRender);
+    this.sleepAfterRender = undefined;
+  }
   resetPosition() {
     this.npcs.forEach(npc => npc.reset());
     if (this.player) {
@@ -564,7 +588,8 @@ export class Station extends Phaser.Scene {
     this.walk.update(this.player.x, this.player.y, this.direction, Boolean(dx || dy), reducedMotion.matches, delta);
     this.npcs.forEach(npc => npc.update(delta, this.enabled, reducedMotion.matches,
       Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 54));
-    this.shadow.setPosition(this.player.x, this.player.y + 1).setDepth(this.player.y - 1);
+    this.shadow.setPosition(this.player.x, this.player.y + 1);
+    if (this.shadowDepth !== this.player.y - 1) this.shadow.setDepth(this.shadowDepth = this.player.y - 1);
     const near = Object.entries(this.stops).find(([, p]) => Phaser.Math.Distance.Between(this.player.x, this.player.y, p.x, p.y) < 18);
     const hint = near ? `E / SPACE · ${near[1].title}` : this.world.text.hint;
     if (hint !== this.currentHint) { this.currentHint = hint; this.onHint(hint); }

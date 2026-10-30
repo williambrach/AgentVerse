@@ -1,4 +1,5 @@
 // Round control, answer funnel and verdict tallies. Text via textContent only.
+import { isNum, pad2, mmss } from './dom.js';
 const STEPS = [
   ['started', 'Started'],
   ['asked', 'First question'],
@@ -6,8 +7,8 @@ const STEPS = [
   ['verdict', 'Verdict'],
   ['debrief', 'Debrief'],
 ];
-const num = (v) => typeof v === 'number' && Number.isFinite(v);
-const pad = (n) => String(n).padStart(2, '0');
+const num = isNum;
+const pad = pad2;
 const pct = (n, d) => (d > 0 && num(n) ? Math.round((n / d) * 100) : 0);
 
 export function funnelRows(snap, catalog) {
@@ -26,11 +27,7 @@ export function funnelRows(snap, catalog) {
   });
 }
 
-function minutes(ms) {
-  if (!num(ms)) return '–';
-  const s = Math.round(ms / 1000);
-  return `${Math.floor(s / 60)}:${pad(s % 60)}`;
-}
+const minutes = (ms) => (isNum(ms) ? mmss(ms) : '–');
 
 // Mirrors ROLES in server/roles.mjs (ids and labels); this page runs in the
 // browser and cannot import server modules.

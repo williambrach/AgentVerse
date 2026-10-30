@@ -6,7 +6,7 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer } from '../server/index.mjs';
 import { ROLE_IDS } from '../server/roles.mjs';
-import { startMockLlm } from './mock-llm.mjs';
+import { startMockLlm } from '../scripts/mock-llm.mjs';
 
 // Fault-injection load test: the real server against four mock endpoints (spec A2).
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -20,7 +20,8 @@ const scenarioTable = {
   healthy: { modes: {}, strict: true },
   primary_errors: { modes: { a: 'error500' }, failoverTo: 'b', answersFrom: ['b'] },
   primary_hangs: { modes: { a: 'hang' }, failoverTo: 'b', answersFrom: ['b'], hangs: true },
-  rate_limited: { modes: { a: 'rate429' }, failoverTo: 'b', answersFrom: ['b'], aSilentAfterFailover: true },
+  // A 429 is retried once on the same endpoint and never triggers failover: a stays active and every question fails clearly.
+  rate_limited: { modes: { a: 'rate429' }, allDown: true, activeStays: 'a' },
   flaky_primary: { modes: { a: 'flaky' }, failoverTo: 'b', aSilentAfterFailover: true },
   silent_failure: { modes: { a: 'empty' }, answersFrom: ['b'], semantic: true },
   small_backup: { modes: { a: 'error500' }, capB: true, idleEndpoints: ['c', 'd'] },
@@ -235,6 +236,7 @@ export async function runScenario(name, { players = 200, rampMs = 10_000, deadli
       if (activeAfter !== spec.failoverTo) failures.push(`active is ${activeAfter}, expected ${spec.failoverTo}`);
       if (watch.failoverAt === null || watch.failoverAt > 30_000) failures.push(`failover at ${watch.failoverAt} ms`);
     }
+    if (spec.activeStays && activeAfter !== spec.activeStays) failures.push(`active is ${activeAfter}, expected it to stay ${spec.activeStays}`);
     if (spec.aSilentAfterFailover) {
       if (watch.aAtFailover === null) failures.push('no failover observed');
       else if (mocks.a.stats.requests !== watch.aAtFailover) failures.push(`endpoint a got ${mocks.a.stats.requests - watch.aAtFailover} requests after failover`);

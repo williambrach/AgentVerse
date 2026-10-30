@@ -1,5 +1,6 @@
 import { test, expect } from './team.mjs';
 
+test.skip(process.platform !== 'darwin', 'baseline is darwin only');
 test.use({ reducedMotion: 'reduce', viewport: { width: 1440, height: 1000 } });
 
 test('grove canvas matches the start commit', async ({ page }) => {

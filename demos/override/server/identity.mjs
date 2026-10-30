@@ -1,4 +1,5 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac } from 'node:crypto';
+import { safeEqual } from './http-util.mjs';
 
 // Domain-separated so the same secret can't forge MACs for other uses.
 const mac = (secret, text) => createHmac('sha256', secret).update(`override-session-v1:${text}`).digest('hex');
@@ -13,9 +14,7 @@ export function verifyToken(secret, token, now) {
   if (dot < 1) return false;
   const exp = token.slice(0, dot);
   if (!/^\d+$/.test(exp)) return false;
-  const given = Buffer.from(token.slice(dot + 1));
-  const want = Buffer.from(mac(secret, exp));
-  if (given.length !== want.length || !timingSafeEqual(given, want)) return false;
+  if (!safeEqual(token.slice(dot + 1), mac(secret, exp))) return false;
   return Number(exp) > now;
 }
 

@@ -1,5 +1,5 @@
 import { test, expect } from './team.mjs';
-import { castOf, truthOf, sessionIdOf as sessionId, pickRole as pick, PART_LABEL as LABEL } from './cast.mjs';
+import { castOf, truthOf, sessionIdOf as sessionId, pickRole as pick, PART_LABEL as LABEL, interviewAll, lockIn } from './cast.mjs';
 
 const NAMES = ['Momo', 'Pip', 'Nori', 'Kiki'];
 const IDS = ['momo', 'pip', 'nori', 'kiki'];
@@ -21,13 +21,6 @@ async function go(page, location) {
   } else {
     await page.locator(`nav [data-go="${location}"]`).click();
     await expect(page.locator('.dialogue .speaker-tag b')).toBeVisible({ timeout: 12_000 });
-  }
-}
-async function interviewAll(page) {
-  for (const [i, id] of IDS.entries()) {
-    await go(page, id);
-    await page.locator('[data-quick-question]').click();
-    await expect(page.locator('.speech.investigator')).toHaveCount(1, { timeout: 12_000 });
   }
 }
 
@@ -93,9 +86,7 @@ test('perfect_score', async ({ page }) => {
   await fresh(page);
   await interviewAll(page);
   const truth = truthOf(castOf(await sessionId(page)));
-  await go(page, 'report');
-  for (const id of IDS) await pick(page, id, truth[id]);
-  await page.locator('#lock-in').click();
+  await lockIn(page, Object.fromEntries(IDS.map(id => [id, truth[id]])));
   await expect(page.locator('.verdict-summary')).toContainText('4 / 4');
   await expect(page.locator('.verdict-summary')).toContainText('Every role right');
   await expect(page.locator('.pick-right')).toHaveCount(4);
@@ -109,9 +100,7 @@ test('one_wrong', async ({ page }) => {
   await interviewAll(page);
   const truth = truthOf(castOf(await sessionId(page)));
   truth.momo = truth.momo === 'honest' ? 'villain' : 'honest';
-  await go(page, 'report');
-  for (const id of IDS) await pick(page, id, truth[id]);
-  await page.locator('#lock-in').click();
+  await lockIn(page, Object.fromEntries(IDS.map(id => [id, truth[id]])));
   await expect(page.locator('.verdict-summary')).toContainText('3 / 4');
   await expect(page.locator('.pick-wrong')).toHaveCount(1);
   await expect(page.locator('.pick-right')).toHaveCount(3);

@@ -1,4 +1,9 @@
 import { readdirSync, statSync, statfsSync } from 'node:fs';
+
+// Free bytes under dir, or null when it cannot be read.
+export function diskFreeBytes(dir) {
+  try { const s = statfsSync(dir); return Number(s.bavail) * Number(s.bsize); } catch { return null; }
+}
 import { resolve } from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { readJsonl } from './dataset.mjs';
@@ -59,8 +64,6 @@ export function createTrafficSampler({ registry, dataDir, now }) {
 
       const p99 = loop.percentile(99) / 1e6;
       loop.reset();
-      let diskFreeBytes = null;
-      try { const fs = statfsSync(dataDir); diskFreeBytes = fs.bavail * fs.bsize; } catch { /* unreadable: no figure */ }
       return {
         reqPerSec: elapsed > 0 ? reqs / elapsed : 0,
         reqs,
@@ -69,7 +72,7 @@ export function createTrafficSampler({ registry, dataDir, now }) {
         share429: share('r429'),
         loopP99Ms: Number.isFinite(p99) && p99 >= 0 && p99 < 1e9 ? p99 : 0,
         rssBytes: process.memoryUsage().rss,
-        diskFreeBytes,
+        diskFreeBytes: diskFreeBytes(dataDir),
         writeFailures5m: delta('writeFailures', failBase),
         credentialsRejected5m: delta('credentials', failBase),
       };

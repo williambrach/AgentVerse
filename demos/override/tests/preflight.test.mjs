@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { startMockLlm } from './mock-llm.mjs';
+import { startMockLlm } from '../scripts/mock-llm.mjs';
 import { runPreflight } from '../scripts/preflight.mjs';
 import { flagsFor } from '../scripts/preflight.mjs';
 import { cases } from '../server/cases/index.mjs';

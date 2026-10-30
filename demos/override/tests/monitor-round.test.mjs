@@ -72,8 +72,8 @@ test('empty and unregistered cases', () => {
   const r = createRoundStats(cases);
   assert.deepEqual(r.tallies()[B], NO_TALLY);
   assert.deepEqual(r.funnel()[T], { started: 0, asked: 0, interviewed: 0, verdict: 0, debrief: 0 });
-  r.observe(ev('x', 'banana-control', 'session_started'));
-  r.observe(verdict('x', 'banana-control'));
+  r.observe(ev('x', 'retired-case', 'session_started'));
+  r.observe(verdict('x', 'retired-case'));
   assert.deepEqual(r.players(), { round: 0, finished: 0 });
   assert.deepEqual(Object.keys(r.funnel()), [B, T]);
 });

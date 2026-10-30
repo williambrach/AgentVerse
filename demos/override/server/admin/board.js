@@ -1,18 +1,14 @@
 // Leaderboard section: rank toggle, per-team hide/show. Text only (textContent); built once, updated in place.
-const num = (v) => typeof v === 'number' && Number.isFinite(v);
+import { el as mk, isNum, mmss } from './dom.js';
 
-function minutes(ms) {
-  if (!num(ms)) return '–';
-  const s = Math.round(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
+const minutes = (ms) => (isNum(ms) ? mmss(ms) : '–');
 
 export function boardRows(snap) {
   const teams = (snap && snap.leaderboard && snap.leaderboard.teams) || [];
   return teams.map((t) => ({
     teamId: t.teamId,
     name: t.name,
-    rank: num(t.rank) ? String(t.rank) : '–',
+    rank: isNum(t.rank) ? String(t.rank) : '–',
     points: `${t.points} ${t.points === 1 ? 'pt' : 'pts'}`,
     played: t.played,
     time: minutes(t.timeMs),
@@ -23,12 +19,7 @@ export function boardRows(snap) {
 
 const states = new WeakMap();
 
-function el(doc, tag, className, text) {
-  const e = doc.createElement(tag);
-  if (className) e.className = className;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
+const el = (doc, tag, className, text) => mk(doc, tag, className, { text });
 
 function build(root, opts) {
   const doc = root.ownerDocument;

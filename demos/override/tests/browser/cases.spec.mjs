@@ -1,5 +1,5 @@
 import { test, expect } from './team.mjs';
-import { castOf, truthOf, sessionIdOf, pickRole, rehearsalReply, quickQuestionFor } from './cast.mjs';
+import { castOf, truthOf, sessionIdOf, lockIn, rehearsalReply, quickQuestionFor } from './cast.mjs';
 
 const radio = (page, id) => page.locator(`.case-option input[name="case"][value="${id}"]`);
 
@@ -38,19 +38,23 @@ test('deep link is dropped after start and ids are not injected', async ({ page 
   expect(new URL(page.url()).search).toBe('');
 });
 
-// Picks the true role for every character from the server-side cast, then locks in.
-async function lockPerfect(page, ids) {
-  const truth = truthOf(castOf(await sessionIdOf(page)));
-  await page.locator('.verdict-button').click();
-  await expect(page.locator('fieldset.role-row')).toHaveCount(ids.length);
-  for (const id of ids) await pickRole(page, id, truth[id]);
-  await page.locator('#lock-in').click();
+// The cast size of the running session, read from the server (the tower has three, the grove four).
+async function castSize(page) {
+  const read = async () => (await (await page.request.get('/api/state')).json());
+  await expect.poll(async () => (await read()).session !== null).toBe(true);
+  return (await read()).characters.length;
 }
+
+// Picks the true role for every character from the server-side cast, then locks in.
+const lockPerfect = async (page, ids) => {
+  const truth = truthOf(castOf(await sessionIdOf(page)));
+  await lockIn(page, Object.fromEntries(ids.map(id => [id, truth[id]])));
+};
 
 test('everyone honest but fooled scores 3 of 3', async ({ page }) => {
   await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
-  await expect(page.locator('nav [data-go]')).toHaveCount(4);
+  await expect(page.locator('nav [data-go]')).toHaveCount(await castSize(page));
   await expect(page.locator('#reveal-button, .evidence-card, #present-evidence')).toHaveCount(0);
   const cast = castOf(await sessionIdOf(page));
   for (const id of ['wren', 'basil', 'juniper']) {
@@ -88,7 +92,7 @@ test('reset switches case', async ({ page }) => {
 test('reset session starts the current case over', async ({ page }) => {
   await page.goto('/?case=tower-echo-bell');
   await page.locator('#begin-button').click();
-  await expect(page.locator('nav [data-go]')).toHaveCount(4);
+  await expect(page.locator('nav [data-go]')).toHaveCount(await castSize(page));
   await expect(page.locator('#reveal-button, .evidence-card, #present-evidence')).toHaveCount(0);
   const before = (await (await page.request.get('/api/state')).json()).session;
   await page.locator('#restart-button').click();
@@ -185,6 +189,7 @@ for (const [width, height] of [[1280, 720], [1366, 768], [1440, 900], [1920, 108
 test('phone width keeps the picker single column', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
+  await expect(page.locator('.case-option')).toHaveCount(2);
   const boxes = await page.locator('.case-option').evaluateAll(els => els.map(e => e.getBoundingClientRect().left));
   expect(new Set(boxes).size).toBe(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth === innerWidth)).toBe(true);

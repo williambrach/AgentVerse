@@ -1,4 +1,12 @@
 import { defineConfig } from '@playwright/test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+// Fresh data per run, computed once (workers re-load this file, so the folder is inherited through the environment).
+// Leftover teams and sessions from an earlier run can then never leak into the replay or leaderboard tests.
+const runDir = process.env.OVERRIDE_E2E_DATA ??= mkdtempSync(join(tmpdir(), 'override-e2e-'));
+const dataDir = name => join(runDir, name);
 
 export default defineConfig({
   testDir: './tests/browser',
@@ -28,28 +36,28 @@ export default defineConfig({
       command: 'node server/index.mjs',
       url: 'http://127.0.0.1:4317/api/access',
       reuseExistingServer: false,
-      env: { PORT: '4317', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: './test-results/sessions' },
+      env: { PORT: '4317', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: dataDir('sessions') },
     },
     {
       // Dev tools on, as in local development. Only the tower project talks to this server.
       command: 'node server/index.mjs',
       url: 'http://127.0.0.1:4318/api/access',
       reuseExistingServer: false,
-      env: { PORT: '4318', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DEV_TOOLS: '1', OVERRIDE_DATA_DIR: './test-results/sessions-tower' },
+      env: { PORT: '4318', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DEV_TOOLS: '1', OVERRIDE_DATA_DIR: dataDir('sessions-tower') },
     },
     {
       // The real server with the admin listener on. Only the admin project talks to it; players are driven over the game port.
       command: 'node server/index.mjs',
       url: 'http://127.0.0.1:4320/admin',
       reuseExistingServer: false,
-      env: { PORT: '4319', HOST: '127.0.0.1', OVERRIDE_ADMIN_TOKEN: 'admin-e2e', OVERRIDE_ADMIN_PORT: '4320', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: './test-results/sessions-admin' },
+      env: { PORT: '4319', HOST: '127.0.0.1', OVERRIDE_ADMIN_TOKEN: 'admin-e2e', OVERRIDE_ADMIN_PORT: '4320', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: dataDir('sessions-admin') },
     },
     {
       // Rehearsal with a 15-coin budget. Only the coins project talks to this server.
       command: 'node server/index.mjs',
       url: 'http://127.0.0.1:4321/api/access',
       reuseExistingServer: false,
-      env: { PORT: '4321', HOST: '127.0.0.1', OVERRIDE_COIN_BUDGET: '15', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: './test-results/sessions-coins' },
+      env: { PORT: '4321', HOST: '127.0.0.1', OVERRIDE_COIN_BUDGET: '15', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: dataDir('sessions-coins') },
     },
   ],
 });

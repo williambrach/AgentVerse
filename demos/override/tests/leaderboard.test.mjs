@@ -7,7 +7,8 @@ const iso = (s) => new Date(s * 1000).toISOString();
 const A = { id: 'A', name: 'Banana Squad' };
 const B = { id: 'B', name: 'Owls' };
 const C = { id: 'C', name: 'Lynx' };
-const board = (at = 0) => createLeaderboard(cases, { startedAt: at * 1000 });
+// The clock jumps 2 s per read so the 1 s standings cache never hides a change in these tests.
+const board = (at = 0) => { let t = 0; return createLeaderboard(cases, { startedAt: at * 1000, now: () => (t += 2000) }); };
 const start = (sid, team, caseId, s, extra = {}) => ({ type: 'session_started', sessionId: sid, caseId, timestamp: iso(s), team, ...extra });
 const verdict = (sid, suspect, s, extra = {}) => ({ type: 'verdict_submitted', sessionId: sid, timestamp: iso(s), verdict: { suspect }, ...extra });
 // A role verdict as the game logs it: one role per character, scored against the drawn cast.
@@ -51,7 +52,8 @@ test('first_verdict_counts', () => {
 
 test('nobody_case', () => {
   const lb = board();
-  feed(lb, [start('a', A, 'tower-echo-bell', 0), verdict('a', 'none', 5), start('b', B, 'tower-echo-bell', 0), verdict('b', 'wren', 5)]);
+  // Nobody is guilty here: a role verdict scores its `score`; a verdict without `score` scores 0.
+  feed(lb, [start('a', A, 'tower-echo-bell', 0), roleVerdict('a', 'tower-echo-bell', 1, 5), start('b', B, 'tower-echo-bell', 0), verdict('b', 'none', 5)]);
   const t = Object.fromEntries(lb.standings({}).teams.map((x) => [x.name, x.points]));
   assert.deepEqual(t, { 'Banana Squad': 1, Owls: 0 });
 });
@@ -212,4 +214,46 @@ test('restarted finished case stays scored; reset without a label clears round; 
   assert.equal(cell.state, 'perfect');
   lb.reset(1000 * 500, 'R2');
   assert.deepEqual(lb.standings().teams, []);
+});
+
+test('rank_cache_refreshes_after_1s', () => {
+  // Rows are cached for 1 s; cells depend on the live case list, so editing it probes the cache.
+  const local = cases.map((c) => ({ ...c, characters: [...(c.characters ?? [])] }));
+  const k = local.find((c) => c.id === 'banana-mystery');
+  let t = 1_000_000;
+  const lb = createLeaderboard(local, { startedAt: 0, now: () => t });
+  feed(lb, [start('a', A, 'banana-mystery', 0), roleVerdict('a', 'banana-mystery', k.characters.length, 10)]);
+  const cell = () => lb.standings({}).teams[0].cells.find((x) => x.caseId === 'banana-mystery').state;
+  assert.equal(cell(), 'perfect');
+  k.characters.push({}); // no event: only a recompute can notice
+  t += 500;
+  assert.equal(cell(), 'perfect'); // still cached
+  t += 501;
+  assert.equal(cell(), 'partial'); // 1001 ms after the cache was built
+});
+
+test('you_applies_per_request_through_the_cache', () => {
+  const lb = createLeaderboard(cases, { startedAt: 0, now: () => 5 });
+  feed(lb, [start('a', A, 'banana-mystery', 0), roleVerdict('a', 'banana-mystery', 2, 10), start('b', B, 'banana-mystery', 0), roleVerdict('b', 'banana-mystery', 1, 10)]);
+  assert.deepEqual(lb.standings({ you: 'A' }).teams.map((x) => x.you), [true, false]);
+  assert.deepEqual(lb.standings({ you: 'B' }).teams.map((x) => x.you), [false, true]);
+});
+
+test('ties_keep_rank', () => {
+  const lb = board();
+  feed(lb, [
+    start('a', A, 'banana-mystery', 0), roleVerdict('a', 'banana-mystery', 2, 10),
+    start('b', B, 'banana-mystery', 0), roleVerdict('b', 'banana-mystery', 2, 10),
+    start('c', C, 'banana-mystery', 0), roleVerdict('c', 'banana-mystery', 1, 10),
+  ]);
+  assert.deepEqual(lb.standings({}).teams.map((x) => x.rank), [1, 1, 3]);
+});
+
+test('verdict_visible_immediately', () => {
+  const lb = createLeaderboard(cases, { startedAt: 0, now: () => 5000 });
+  feed(lb, [start('a', A, 'banana-mystery', 0)]);
+  assert.equal(lb.standings({}).teams[0].points, 0);
+  feed(lb, [roleVerdict('a', 'banana-mystery', 3, 10)]);
+  const [t] = lb.standings({}).teams;
+  assert.equal(t.points, 3); assert.equal(t.played, 1);
 });

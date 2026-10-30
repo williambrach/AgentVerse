@@ -1,5 +1,5 @@
 import { test, expect } from './team.mjs';
-import { castOf, truthOf, sessionIdOf, pickRole, pickConfidence, rehearsalReply, quickQuestionFor } from './cast.mjs';
+import { castOf, truthOf, sessionIdOf, lockIn, pickConfidence, rehearsalReply, quickQuestionFor } from './cast.mjs';
 
 async function fresh(page) {
   await page.goto('/');
@@ -60,11 +60,9 @@ test('walk the grove, ask all monkeys, submit a role verdict, export and reset',
   await page.locator('.verdict-button').click();
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
   await expect(page.locator('#panel h1')).toHaveText('Who played which part?', { timeout: 12_000 });
-  await expect(page.locator('fieldset.role-row')).toHaveCount(4);
-  for (const id of ['momo', 'pip', 'nori', 'kiki']) await pickRole(page, id, truth[id]);
   await pickConfidence(page, 95);
   // The fast demo path deliberately leaves the optional explanation empty.
-  await page.locator('#lock-in').click();
+  await lockIn(page, { momo: truth.momo, pip: truth.pip, nori: truth.nori, kiki: truth.kiki });
   const name = { momo: 'Momo', pip: 'Pip', nori: 'Nori', kiki: 'Kiki' }[planner];
   await expect(page.locator('#panel .debrief-head h1')).toHaveText(`${name} made up the permission.`);
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');

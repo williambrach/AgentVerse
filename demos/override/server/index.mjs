@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Investigations, RequestError } from './session.mjs';
@@ -16,6 +16,7 @@ import { Registry, bindCollectors, createGameMetrics, observeGameEvent, observeL
 import { createTeams } from './teams.mjs';
 import { createLeaderboard } from './leaderboard.mjs';
 import { createAdmin } from './admin.mjs';
+import { integerEnv, readJsonBody, safeEqual, sendJson } from './http-util.mjs';
 import { createMonitor } from './monitor.mjs';
 import { createRoundStats } from './monitor-round.mjs';
 import { createPresence, createWindows } from './monitor-window.mjs';
@@ -40,7 +41,7 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
   // Creating teams is the costly act; joining one is free. Only creations count.
   const newTeams = new WindowCounter({ limit: 120, windowMs: 60_000 });
   const validToken = req => !accessCode || verifyToken(secret, cookie(req, 'override_access'), Date.now());
-  const json = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
+  const json = sendJson;
 
   return createServer(async (req, res) => {
     const started = performance.now();
@@ -62,23 +63,12 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
           if (!req.headers['content-type']?.startsWith('application/json')) throw new RequestError(415, 'Send application/json.');
         }
         if (url.pathname === '/api/access' && req.method === 'GET') return json(res, 200, { authorized: Boolean(validToken(req)), protected: Boolean(accessCode) });
-        let input = {};
-        if (req.method === 'POST') {
-          let body = '';
-          for await (const chunk of req) {
-            body += chunk;
-            if (Buffer.byteLength(body) > 16_384) throw new RequestError(413, 'Request is too large.');
-          }
-          try { input = JSON.parse(body || '{}'); } catch { throw new RequestError(400, 'Invalid JSON.'); }
-          if (!input || typeof input !== 'object' || Array.isArray(input)) throw new RequestError(400, 'Send a JSON object.');
-        }
+        const input = req.method === 'POST' ? await readJsonBody(req, 16_384) : {};
         if (url.pathname === '/api/access' && req.method === 'POST') {
           const ip = clientAddress(req, trustProxy);
           const now = Date.now();
           if (!failures.allowed(ip, now)) throw new RequestError(429, 'Too many attempts. Try again in one minute.');
-          const supplied = Buffer.from(typeof input.code === 'string' ? input.code : '');
-          const expected = Buffer.from(accessCode);
-          if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+          if (!safeEqual(typeof input.code === 'string' ? input.code : '', accessCode)) {
             failures.add(ip, now);
             throw new RequestError(401, 'That access code is not correct.');
           }
@@ -154,7 +144,6 @@ function devTools(env) {
   return wanted;
 }
 
-const portOf = (value, fallback) => (value === undefined || value === '' ? fallback : Number(value));
 const sleep = ms => new Promise(resolve => { setTimeout(resolve, ms).unref(); });
 
 // The admin page puts this in an href: only an http(s) origin and path survive, never javascript: or credentials.
@@ -182,8 +171,12 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
   let monitor = null;
   const feed = (method, arg) => { try { monitor?.[method](arg); } catch { /* monitor must not affect games */ } };
   const board = createLeaderboard(cases);
+  // The last 20 system records, seeded once from disk and kept current by onSystem.
+  const systemRing = readJsonl(paths.system).slice(-20);
   const onSystem = record => {
     appendJsonl(paths.system, record, 'system');
+    systemRing.push(record);
+    if (systemRing.length > 20) systemRing.shift();
     feed('observeSystem', record);
     if (record?.type === 'round_started') { try { board.reset(Number(record.startedAt) || 0, record.label); } catch { /* the board must not break a round */ } }
   };
@@ -221,7 +214,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     const extras = () => {
       const at = Date.now();
       if (!cached || at - cachedAt >= 1000 || at < cachedAt) {
-        cached = { router: router?.snapshot() ?? null, sessions: investigations.stats(), system: readJsonl(paths.system).slice(-20), leaderboard: board.standings({ includeHidden: true, you: null }) };
+        cached = { router: router?.snapshot() ?? null, sessions: investigations.stats(), system: [...systemRing], leaderboard: board.standings({ includeHidden: true, you: null }) };
         cachedAt = at;
       }
       return cached;
@@ -248,7 +241,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
   server.headersTimeout = 20_000;
   server.requestTimeout = 40_000;
   server.keepAliveTimeout = 75_000;
-  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(portOf(env.PORT, 3001), host, 1024, resolve); });
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(integerEnv(env.PORT, 3001, 'PORT'), host, 1024, resolve); });
 
   if (env.OVERRIDE_ADMIN_TOKEN) {
     {
@@ -261,14 +254,14 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
         boardUrl: boardUrlOf(env.OVERRIDE_PUBLIC_URL, server.address()?.port),
         token: env.OVERRIDE_ADMIN_TOKEN, monitor, router, investigations, registry, dataDir,
         probeMessages: buildMessages(probeCase, { cast, interviews: Object.fromEntries(probeCase.characters.map(c => [c.id, []])) }, probeCharacter.id, probeQuestion),
-        readSystem: () => readJsonl(paths.system).slice(-20), onSystem,
+        readSystem: () => [...systemRing], onSystem,
         leaderboard: {
           standings: () => board.standings({ includeHidden: true, you: null }),
           setRankBy: mode => { board.setRankBy(mode); onSystem({ type: 'leaderboard_settings', timestamp: Date.now(), rankBy: mode }); },
           setHidden: (teamId, hidden) => { board.setHidden(teamId, hidden); onSystem({ type: 'team_hidden', timestamp: Date.now(), teamId, hidden }); },
         },
       });
-      await new Promise((resolve, reject) => { admin.once('error', reject); admin.listen(portOf(env.OVERRIDE_ADMIN_PORT, 3002), '127.0.0.1', resolve); });
+      await new Promise((resolve, reject) => { admin.once('error', reject); admin.listen(integerEnv(env.OVERRIDE_ADMIN_PORT, 3002, 'OVERRIDE_ADMIN_PORT'), '127.0.0.1', resolve); });
     }
   }
   } catch (error) { abort(error); }

@@ -17,7 +17,7 @@ The committed files were generated in interactive Codex from those prompts on 20
 
 - **Frames:** each cell is cut at the real transparent gutter nearest the even split (the 4×4 sheets have fractional 313.5 px cells and some gutters sit off that line), then trimmed to its sprite. The anchor is the head's centre and the lowest opaque row, so feet stay planted.
 - **Scale:** one scale per sheet, so the cast keeps its drawn proportions. Juniper, the tallest with her hat, is 47 px on the map and the inspector 45 px. `heights` in `client/worlds.ts` sets both.
-- **Walk:** `inspector-walk.png` was corrected on 2026-10-29 using the built-in image generator. The front and back strides alternate boots, and the side rows have distinct leg silhouettes. The tower uses the PNG directly, with `strideFix` disabled, so no runtime splice seam is introduced. The correction prompt is saved as `inspector-walk-fix.prompt.txt`.
+- **Walk:** `inspector-walk.png` was corrected on 2026-10-29 using the built-in image generator. The front and back strides alternate boots, and the side rows have distinct leg silhouettes. The tower uses the PNG directly, and the stride fix was removed from the code, so no runtime splice seam is introduced. The correction prompt is saved as `inspector-walk-fix.prompt.txt`.
 - **Portraits:** row 0 of `apprentices.png` (Wren, Basil, Juniper) supplies the nav, interview, suspect and case-board faces.
 
 ## Replacing a file

@@ -415,3 +415,48 @@ test('effort_sent_only_when_set', async () => {
   assert.deepEqual(h.calls.map(c => c.body.reasoning_effort), ['low', 'low']);
   assert.equal(o2.provenance.samplingParams.reasoning_effort, 'low');
 });
+
+const limited = retryAfter => ({ ok: false, status: 429, headers: { get: name => (name.toLowerCase() === 'retry-after' ? retryAfter : null) }, json: async () => ({}) });
+const sleeper = () => { const waits = []; return { waits, sleep: async ms => { waits.push(ms); } }; };
+
+test('rate_limit_backoff_same_endpoint: 429 then 200 retries the same endpoint after one sleep', async () => {
+  const s = sleeper();
+  let n = 0;
+  const { r, calls } = router(['a', 'b'], { a: () => (++n === 1 ? http(429) : ok('from a')) }, { sleep: s.sleep });
+  const out = await r.complete({ messages: MSGS });
+  assert.deepEqual(calls.map(c => c.name), ['a', 'a']);
+  assert.equal(out.provenance.endpoint, 'a');
+  assert.equal(s.waits.length, 1);
+  assert.ok(s.waits[0] >= 500 && s.waits[0] <= 1500, `jitter ${s.waits[0]}`);
+});
+
+test('rate limit honours Retry-After, capped at 5 s', async () => {
+  for (const [header, expected] of [['2', 2000], ['120', 5000]]) {
+    const s = sleeper();
+    let n = 0;
+    const { r } = router(['a', 'b'], { a: () => (++n === 1 ? limited(header) : ok()) }, { sleep: s.sleep });
+    await r.complete({ messages: MSGS });
+    assert.deepEqual(s.waits, [expected]);
+  }
+});
+
+test('rate limit with no time left for the wait moves to the next endpoint', async () => {
+  const s = sleeper();
+  const { r, calls } = router(['a', 'b'], { a: http(429) }, { sleep: s.sleep, deadlineMs: 400 });
+  const out = await r.complete({ messages: MSGS });
+  assert.deepEqual(calls.map(c => c.name), ['a', 'b']);
+  assert.equal(out.provenance.endpoint, 'b');
+  assert.deepEqual(s.waits, []);
+});
+
+test('429_does_not_failover: three 429s keep the active endpoint, three 500s flip it', async () => {
+  const s = sleeper();
+  const limitedRun = router(['a', 'b'], { a: http(429) }, { sleep: s.sleep, failover: { failures: 3, windowMs: 30000 } });
+  for (let i = 0; i < 3; i++) await rejects(limitedRun.r.complete({ messages: MSGS }), 'rate_limited');
+  assert.equal(limitedRun.r.snapshot().active, 'a');
+  assert.ok(limitedRun.r.snapshot().endpoints[0].failures5m >= 3);
+  assert.equal(limitedRun.r.snapshot().endpoints[0].lastFailureReason, 'rate_limited');
+  const failing = router(['a', 'b'], { a: http(500) }, { sleep: s.sleep, failover: { failures: 3, windowMs: 30000 } });
+  for (let i = 0; i < 3; i++) await failing.r.complete({ messages: MSGS });
+  assert.equal(failing.r.snapshot().active, 'b');
+});

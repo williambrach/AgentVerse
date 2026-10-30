@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { startMockLlm } from './mock-llm.mjs';
+import { startMockLlm } from '../scripts/mock-llm.mjs';
+import { until } from './helpers/until.mjs';
 
 const post = (mock, body = { messages: [] }) => fetch(`${mock.url}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
@@ -38,7 +39,7 @@ test('modes', async () => {
 test('hang mode replies nothing until close', async () => {
   const mock = await startMockLlm({ mode: 'hang' });
   const p = post(mock).then(r => r.status, () => 'closed');
-  const early = await Promise.race([p, new Promise(r => setTimeout(() => r('pending'), 100))]);
+  const early = await Promise.race([p, new Promise(r => setTimeout(() => r('pending'), 30))]);
   assert.equal(early, 'pending');
   await mock.close();
   assert.equal(await p, 'closed');
@@ -79,4 +80,13 @@ test('reasoning option adds reasoning_content to ok replies and can be toggled',
     mock.setReasoning('Later');
     assert.equal((await (await post(mock)).json()).choices[0].message.reasoning_content, 'Later');
   } finally { await mock.close(); }
+});
+
+test('until_rejects_on_timeout', async () => {
+  await assert.rejects(until(() => false, { timeoutMs: 50 }), /timed out/);
+  // A predicate call that never settles is bounded too.
+  await assert.rejects(until(() => new Promise(() => {}), { timeoutMs: 50 }), /timed out/);
+  let n = 0;
+  await until(() => ++n >= 3, { stepMs: 1 });
+  assert.equal(n, 3);
 });

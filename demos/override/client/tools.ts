@@ -1,7 +1,5 @@
 import type { Economy, Inspection, ThreadLine, Tool } from './types.ts';
-
-const esc = (s: unknown): string => String(s).replace(/[&<>"']/g, c =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+import { escape as esc, svg as baseSvg } from './html.ts';
 
 export const HINTS: Record<'coins' | Tool, string> = {
   coins: 'Every question and tool costs coins.',
@@ -18,7 +16,7 @@ export const ARBITER_TOOLS: { tool: ArbiterTool; name: string; icon: string; doe
   { tool: 'continue', name: 'Let them talk', icon: '<path d="M3.5 5h11v8h-7l-4 3.5zM14.5 9h6v8.5l-3-2.5h-6v-2"/>', does: 'They talk among themselves; you read along in the thread.' },
 ];
 
-const svg = (path: string): string => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+const svg = (path: string): string => baseSvg(path, 18, 1.6);
 const toolOf = (tool: ArbiterTool) => ARBITER_TOOLS.find(t => t.tool === tool)!;
 
 /** "1 question", "2 questions". */

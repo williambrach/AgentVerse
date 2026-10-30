@@ -48,7 +48,6 @@ body { font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', syste
 .coin-wrap { position: relative; display: flex; }
 .coin-wrap[hidden], #coin-counter[hidden] { display: none; }
 #app .coin-panel { font-size: 24px; font-weight: 600; line-height: 1; color: #F4EBD3; border-color: #F4B740; }
-#app .coin-panel .coin-icon { color: #F4B740; }
 .coin-tip { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: max-content; max-width: 240px; padding: 8px 10px; border: 2px solid #355A6B; border-radius: 6px; background: #0F1B22; color: #F4EBD3; font-size: 13px; opacity: 0; visibility: hidden; pointer-events: none; }
 .coin-wrap:hover .coin-tip, .coin-wrap:focus-within .coin-tip { opacity: 1; visibility: visible; }
 .notebook-panel { cursor: pointer; font-size: 14px; }
@@ -256,8 +255,6 @@ body { font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', syste
 
 /* Tool cards and coin tooltip (merged from tools.css). Each tool is a card; its button stretches over the card so the
    whole card is the click target, and the chip sits outside the button so the button's text stays its label. */
-.coin-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 700; background: #F4B740; color: #18252D; }
-.coin-badge[hidden], .coin-wrap:has(> .coin-badge[hidden]) { display: none; }
 .tool-chip { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: .8em; background: #1B3340; color: #F4EBD3; }
 .tool-hint { font-size: .85em; opacity: .85; }
 .toolbelt { display: flex; flex-direction: column; }

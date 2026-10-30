@@ -9,12 +9,13 @@ import './case-board.css';
 import './team.css';
 import './board.css';
 import './bubbles.css';
+import { escape, svg, heading, mmss } from './html.ts';
 import { HINTS, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, threadPanel } from './tools';
 import { teamGate, teamNameError, leaderboardPanel, type GateView } from './team';
 import { boardScreen } from './board.ts';
 import { debriefPage } from './debrief.ts';
 import { renderNotebook } from './notebook';
-import { createStation, type Station } from './station';
+import type { Station } from './station';
 import { postHeartbeat, startHeartbeat } from './heartbeat';
 import { worldFor } from './worlds';
 import { hudShell, castCard } from './hud.ts';
@@ -68,8 +69,6 @@ function markSolved(caseId: string) {
 }
 
 const caseNumber = (order: number) => String(order).padStart(3, '0');
-const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
-const svg = (path: string) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
 const icon = (name: string) => {
   const paths: Record<string, string> = {
     arrow: '<path d="M4 12h15m-6-6 6 6-6 6"/>',
@@ -87,10 +86,18 @@ const slotOf = (id: string) => Math.max(0, state.characters.findIndex(c => c.id 
 /** Class and style that let the world's portrait art and the character's colour apply by cast slot. */
 const castClass = (id: string) => `${escape(id)} slot-${slotOf(id)}`;
 
-async function api(path: string, body?: object) {
+const FAILED = 'The server could not complete this request.';
+
+/** One fetch of /api/`path`; the status and the JSON body (null when it is not JSON) come back whatever the status. */
+async function apiRaw(path: string, body?: object): Promise<{ ok: boolean; status: number; data: any }> {
   const response = await fetch(`/api/${path}`, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined);
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'The server could not complete this request.');
+  const data = await response.json().catch(() => null);
+  return { ok: response.ok, status: response.status, data };
+}
+
+async function api(path: string, body?: object) {
+  const { ok, data } = await apiRaw(path, body);
+  if (!ok || data === null) throw new Error(data?.error || FAILED);
   return data;
 }
 
@@ -121,10 +128,11 @@ async function action(name: string, payload: object = {}, onSuccess?: () => void
   } finally { busy = false; render(); }
 }
 
-function shell() {
+async function shell() {
   app.innerHTML = hudShell({ teamName, headline: state.copy.headline, topline: '' });
   worldKey = '';
   app.dataset.hud = 'on';
+  const { createStation } = await import('./station');
   station = createStation(location => void visit(location), hint => { document.querySelector('#movement-hint')!.textContent = hint; }, () => { if (!dialogueOpen) return; dialogueOpen = false; render(); });
   app.addEventListener('click', onClick);
   app.addEventListener('change', event => {
@@ -146,7 +154,7 @@ function elapsedText(): string {
   if (!state?.session) return '0:00';
   const end = state.session.verdict?.submittedAt || new Date().toISOString();
   const seconds = Math.max(0, Math.floor((Date.parse(end) - Date.parse(state.session.startedAt)) / 1000));
-  return `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
+  return mmss(seconds);
 }
 
 function tick() {
@@ -292,7 +300,9 @@ function dropCaseParam() {
 function syncWalking() {
   const session = state?.session;
   const mapView = app.dataset.view !== 'lineup';
-  station?.setEnabled(Boolean(session && !introVisible && !busy && mapView && !document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard')));
+  const overlay = document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard');
+  station?.setEnabled(Boolean(session && !introVisible && !busy && mapView && !overlay));
+  station?.setCovered(!mapView || introVisible || !!document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard'));
 }
 
 function render() {
@@ -391,10 +401,6 @@ function renderIntro() {
   if (document.querySelector('#intro')) { renderPreview(); return; }
   document.querySelector('#overlay-root')!.innerHTML = caseBoard('intro');
   document.querySelector('#case-list input:checked')?.scrollIntoView({ block: 'nearest' });
-}
-
-function heading(kicker: string, title: string, description: string) {
-  return `<div class="panel-heading"><span class="eyebrow">${kicker}</span><h2>${title}</h2><p>${description}</p></div>`;
 }
 
 function interviewMarkup(characterId: string) {
@@ -556,9 +562,9 @@ function bindForms() {
 }
 
 function showCases() {
-  station.setEnabled(false);
   selectedCase = state.caseId;
   document.querySelector('#overlay-root')!.innerHTML = caseBoard('case-switch');
+  syncWalking();
   const current = document.querySelector<HTMLInputElement>('#case-list input:checked');
   current?.scrollIntoView({ block: 'nearest' });
   (current || document.querySelector<HTMLButtonElement>('#cancel-reset'))!.focus({ preventScroll: true });
@@ -568,8 +574,8 @@ function showCases() {
 
 /** Asks before starting the current case over. The old session's records stay on the server. */
 function showRestart() {
-  station.setEnabled(false);
   document.querySelector('#overlay-root')!.innerHTML = `<div class="modal-shade" id="reset-confirm"><section class="reset-card" role="dialog" aria-modal="true" aria-labelledby="reset-title"><span class="eyebrow">RESET SESSION</span><h2 id="reset-title">Start ${escape(state.title)} over?</h2><p>Your chats with the ${escape(world().text.many)} and your guess are cleared, and the case starts again from the briefing. The old session’s records stay on the server.</p><div class="reset-actions"><button class="secondary-button" id="cancel-restart">Keep investigating</button><button class="primary-button" id="confirm-restart">Reset session ${icon('reset')}</button></div></section></div>`;
+  syncWalking();
   document.querySelector<HTMLButtonElement>('#cancel-restart')!.focus({ preventScroll: true });
   document.querySelector('#reset-confirm')!.addEventListener('click', event => { if (event.target === event.currentTarget) closeOverlay(); });
 }
@@ -587,14 +593,20 @@ function closeOverlay() {
   document.querySelector<HTMLButtonElement>(opener)?.focus({ preventScroll: true });
 }
 
+/** Runs `draw` now and every 10 s; returns the timer so the caller can stop it. */
+function pollLeaderboard(draw: () => Promise<void>): ReturnType<typeof setInterval> {
+  void draw();
+  return setInterval(() => void draw(), 10000);
+}
+
 function stopLeaderboardPoll() { if (leaderboardTimer) clearInterval(leaderboardTimer); leaderboardTimer = undefined; }
 
 /** The leaderboard overlay: fetched on open and every 10 s until it closes. */
 function showLeaderboard(opener: string) {
   stopLeaderboardPoll();
   leaderboardOpener = opener;
-  station.setEnabled(false);
   document.querySelector('#overlay-root')!.innerHTML = `<div class="modal-shade" id="leaderboard"><section class="reset-card board-card" role="dialog" aria-modal="true" aria-labelledby="board-title"><span class="eyebrow" id="board-title">LEADERBOARD</span><div id="leaderboard-body"><p class="board-empty">Loading…</p></div><div class="reset-actions"><button class="secondary-button" id="leaderboard-close">Close</button></div></section></div>`;
+  syncWalking();
   const shade = document.querySelector('#leaderboard')!;
   shade.addEventListener('click', event => { if (event.target === event.currentTarget) closeOverlay(); });
   document.querySelector<HTMLButtonElement>('#leaderboard-close')!.focus({ preventScroll: true });
@@ -609,17 +621,16 @@ function showLeaderboard(opener: string) {
       document.querySelector('#leaderboard-body')!.innerHTML = '<p class="board-empty">The leaderboard could not be loaded. Trying again shortly.</p>';
     }
   };
-  void load();
-  leaderboardTimer = setInterval(() => void load(), 10000);
+  leaderboardTimer = pollLeaderboard(load);
 }
 
 /** POST /api/team with the body kept on errors, so a 409 can name the team that is taken. */
 async function postTeam(name: string, join: boolean): Promise<{ ok: true } | { ok: false; error: string; taken: string | null }> {
   try {
-    const response = await fetch('/api/team', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(join ? { name, join: true } : { name }) });
-    const data = await response.json().catch(() => ({}));
-    if (response.ok) return { ok: true };
-    return { ok: false, error: response.status === 409 ? '' : String(data.error || 'The server could not complete this request.'), taken: response.status === 409 && typeof data.taken === 'string' ? data.taken : null };
+    const { ok, status, data: body } = await apiRaw('team', join ? { name, join: true } : { name });
+    if (ok) return { ok: true };
+    const data = body ?? {};
+    return { ok: false, error: status === 409 ? '' : String(data.error || FAILED), taken: status === 409 && typeof data.taken === 'string' ? data.taken : null };
   } catch { return { ok: false, error: 'The server could not be reached.', taken: null }; }
 }
 
@@ -656,9 +667,9 @@ function mountGate(host: HTMLElement, switching: boolean, onDone: () => void, on
 }
 
 function showTeamSwitch() {
-  station.setEnabled(false);
   const root = document.querySelector('#overlay-root')!;
   root.innerHTML = '<div class="modal-shade" id="team-switch"></div>';
+  syncWalking();
   const shade = document.querySelector<HTMLElement>('#team-switch')!;
   shade.addEventListener('click', event => { if (event.target === event.currentTarget) closeOverlay(); });
   mountGate(shade, true, () => location.reload(), () => closeOverlay());
@@ -693,12 +704,13 @@ async function boot() {
       return;
     }
     teamName = mine.name;
-    state = await api('state');
-    try { catalog = ((await api('cases')).cases as CaseRow[]).sort((a, b) => a.order - b.order); } catch { catalog = []; }
+    const [loaded, listed] = await Promise.all([api('state'), api('cases').catch(() => null)]);
+    state = loaded;
+    catalog = Array.isArray(listed?.cases) ? (listed.cases as CaseRow[]).sort((a, b) => a.order - b.order) : [];
     const wanted = new URLSearchParams(location.search).get('case');
     selectedCase = catalog.find(row => row.id === wanted)?.id || (state.session ? state.caseId : catalog[0]?.id) || '';
     drafts = blankDrafts();
-    shell();
+    await shell();
     render();
   } catch {
     app.innerHTML = `<div class="access-screen"><div class="reset-card"><span class="eyebrow">CONNECTION UNAVAILABLE</span><h1>The grove is offline.</h1><p>The case server could not be reached. Start the demo server, then reload this page.</p><button class="primary-button" onclick="location.reload()">Try again</button></div></div>`;
@@ -717,8 +729,7 @@ async function bootBoard() {
       else if (!screen.querySelector('.board-stale')) screen.insertAdjacentHTML('beforeend', '<p class="board-stale board-empty" role="status">Showing the last standings. Trying again shortly.</p>');
     }
   };
-  await draw();
-  const timer = setInterval(() => void draw(), 10000);
+  const timer = pollLeaderboard(draw);
   addEventListener('pagehide', () => clearInterval(timer), { once: true });
 }
 

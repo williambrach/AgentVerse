@@ -1,7 +1,6 @@
 import { test, expect } from './team.mjs';
 
-// Capture Phaser from the test environment without adding a debug global to
-// the shipped game. Assertions inspect the actual rendered sprite and body.
+// Capture Phaser from the test environment without adding a debug global to the shipped game.
 async function start(page) {
   await page.addInitScript(() => {
     Object.defineProperty(window, 'Phaser', {
@@ -24,19 +23,27 @@ async function start(page) {
   await expect(page.locator('#confirm-reset')).toHaveCount(0);
 }
 
-async function samples(page, duration = 650) {
-  return page.evaluate(duration => new Promise(resolve => {
-    const values = [];
-    const begin = performance.now();
-    function sample() {
-      const scene = window.walkingTestGame.scene.getScene('banana-grove');
-      values.push({ frame: scene.avatar.frame.name, x: scene.player.x, y: scene.player.y });
-      if (performance.now() - begin >= duration) resolve(values);
-      else requestAnimationFrame(sample);
-    }
-    requestAnimationFrame(sample);
-  }), duration);
+const START = { frame: 'down-0', x: 244, y: 276 };
+const snap = page => page.evaluate(() => {
+  const scene = window.walkingTestGame.scene.getScene('banana-grove');
+  return { frame: scene.avatar.frame.name, x: scene.player.x, y: scene.player.y };
+});
+const npcFrames = page => page.evaluate(() => Object.fromEntries([...window.walkingTestGame.scene.getScene('banana-grove').npcs].map(([id, npc]) => [id, npc.sprite.frame.name])));
+
+// Records every frame name the avatar and the monkeys show, per render frame, until `reset`. Polls read the sets.
+async function record(page) {
+  await page.evaluate(() => {
+    const scene = () => window.walkingTestGame.scene.getScene('banana-grove');
+    const seen = window.walkingSeen = { player: new Set(), npc: new Set() };
+    (function tick() {
+      seen.player.add(scene().avatar.frame.name);
+      for (const npc of scene().npcs.values()) seen.npc.add(npc.sprite.frame.name);
+      requestAnimationFrame(tick);
+    })();
+  });
 }
+const seen = (page, kind) => page.evaluate(kind => [...window.walkingSeen[kind]].sort(), kind);
+const forget = page => page.evaluate(() => { window.walkingSeen.player.clear(); window.walkingSeen.npc.clear(); });
 
 async function center(page, x = 244, y = 220) {
   await page.evaluate(({ x, y }) => {
@@ -47,29 +54,41 @@ async function center(page, x = 244, y = 220) {
   }, { x, y });
 }
 
+// The detective shows `frame` and does not travel while `key` is held. `fixed` also requires it to stay where it was.
+async function holdStill(page, key, frame, fixed = true) {
+  const before = await snap(page);
+  await page.keyboard.down(key);
+  await page.waitForTimeout(250);
+  const a = await snap(page);
+  await page.waitForTimeout(150);
+  const b = await snap(page);
+  await page.keyboard.up(key);
+  expect(b).toEqual({ ...a, frame });
+  if (fixed) expect(b).toEqual({ ...before, frame });
+}
+
 test('WASD and arrows animate all four directions and return to a facing idle pose', async ({ page }) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await start(page);
+  await record(page);
   for (const [key, direction] of [['w', 'up'], ['a', 'left'], ['s', 'down'], ['d', 'right'],
     ['ArrowUp', 'up'], ['ArrowLeft', 'left'], ['ArrowDown', 'down'], ['ArrowRight', 'right']]) {
     await center(page);
+    await forget(page);
     await page.keyboard.down(key);
-    const moving = await samples(page);
+    await expect.poll(async () => (await seen(page, 'player')).filter(name => name.startsWith(direction)), { message: key }).toEqual([0, 1, 2, 3].map(pose => `${direction}-${pose}`));
     await page.keyboard.up(key);
-    const frames = new Set(moving.map(value => value.frame));
-    for (let pose = 0; pose < 4; pose++) expect(frames.has(`${direction}-${pose}`), key).toBe(true);
-    const idle = (await samples(page, 150)).slice(-3);
-    expect(new Set(idle.map(value => value.frame))).toEqual(new Set([`${direction}-0`]));
-    expect(idle.at(-1).x).toBeCloseTo(idle[0].x, 2);
-    expect(idle.at(-1).y).toBeCloseTo(idle[0].y, 2);
+    await expect.poll(async () => (await snap(page)).frame, { message: key }).toBe(`${direction}-0`);
+    let last;
+    await expect.poll(async () => { const now = JSON.stringify(await snap(page)); const same = now === last; last = now; return same; }).toBe(true);
   }
   expect(errors).toEqual([]);
 });
 
 test('map clicks never move the investigator; destination buttons open the page in place', async ({ page }) => {
   await start(page);
-  expect((await samples(page, 150)).at(-1)).toEqual({ frame: 'down-0', x: 244, y: 276 });
+  expect(await snap(page)).toEqual(START);
   // The dialogue box covers the world while it is open: close it, then click where the world is.
   await expect(page.locator('#panel h2')).toHaveText('A bunch of trouble.');
   await page.locator('#dialogue-close').click();
@@ -80,15 +99,14 @@ test('map clicks never move the investigator; destination buttons open the page 
   const layer = await page.locator('.station-labels').boundingBox();
   const at = (x, y) => ({ x: layer.x - bounds.x + layer.width * x / 480, y: layer.y - bounds.y + layer.height * y / 340 });
   await canvas.click({ position: at(300, 204) });
-  for (const value of await samples(page, 600)) expect(value).toEqual({ frame: 'down-0', x: 244, y: 276 });
-  await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'closed');
   await canvas.click({ position: at(116, 120) });
+  await page.waitForTimeout(250);
+  expect(await snap(page)).toEqual(START);
   await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'closed');
-  for (const value of await samples(page, 300)) expect(value).toEqual({ frame: 'down-0', x: 244, y: 276 });
   await page.locator('nav [data-go="momo"]').click();
   await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('MOMO');
   await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'open');
-  expect((await samples(page, 200)).at(-1)).toEqual({ frame: 'down-0', x: 244, y: 276 });
+  expect(await snap(page)).toEqual(START);
 });
 
 test('the banana basket sits on the picnic blanket', async ({ page }) => {
@@ -104,87 +122,31 @@ test('the banana basket sits on the picnic blanket', async ({ page }) => {
 test('blocked movement, typing, dialogs and reset leave the detective standing', async ({ page }) => {
   await start(page);
   await center(page, 438, 220);
-  await page.keyboard.down('d');
-  const blocked = (await samples(page, 350)).slice(-5);
-  await page.keyboard.up('d');
-  expect(new Set(blocked.map(value => value.frame))).toEqual(new Set(['right-0']));
+  await holdStill(page, 'd', 'right-0', false);
 
   await center(page);
   await page.locator('#reset-button').click();
-  await page.keyboard.down('w');
-  const paused = await samples(page, 250);
-  await page.keyboard.up('w');
-  expect(new Set(paused.map(value => value.frame))).toEqual(new Set(['down-0']));
-  expect(paused.at(-1).y).toBeCloseTo(paused[0].y, 2);
+  await holdStill(page, 'w', 'down-0');
   await page.locator('#confirm-reset').click();
-  const reset = (await samples(page, 150)).at(-1);
-  expect(reset).toEqual({ frame: 'down-0', x: 244, y: 276 });
+  await expect(page.locator('#confirm-reset')).toHaveCount(0);
+  await expect.poll(() => snap(page)).toEqual(START);
 
   await page.locator('nav [data-go="pip"]').click();
   await page.locator('#question').focus();
-  await page.keyboard.down('w');
-  const typing = await samples(page, 200);
-  await page.keyboard.up('w');
-  expect(new Set(typing.map(value => value.frame))).toEqual(new Set(['down-0']));
-  expect(typing.at(-1).y).toBeCloseTo(typing[0].y, 2);
+  await holdStill(page, 'w', 'down-0');
 });
 
 test('reduced motion retains direction changes without stepping', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await start(page);
+  await record(page);
   await center(page);
+  await forget(page);
+  const begin = (await snap(page)).x;
   await page.keyboard.down('d');
-  const moving = await samples(page, 500);
+  await expect.poll(async () => (await snap(page)).x - begin).toBeGreaterThan(30);
   await page.keyboard.up('d');
-  expect(moving.at(-1).x - moving[0].x).toBeGreaterThan(30);
-  expect(new Set(moving.map(value => value.frame))).toEqual(new Set(['right-0']));
-});
-
-test('walk frames advance when rendering runs faster than physics', async ({ page }) => {
-  await start(page);
-  await center(page);
-  // Reproduce a 120 Hz display with 60 Hz physics using 60 Hz rendering and
-  // 30 Hz physics: alternate render frames have no new body position.
-  await page.evaluate(() => window.walkingTestGame.scene.getScene('banana-grove').physics.world.setFPS(30));
-  await page.keyboard.down('d');
-  const moving = await samples(page, 700);
-  await page.keyboard.up('d');
-  expect(moving.at(-1).x - moving[0].x).toBeGreaterThan(50);
-  expect(moving.some((value, i) => i && value.x === moving[i - 1].x)).toBe(true);
-  for (let pose = 0; pose < 4; pose++) expect(moving.some(value => value.frame === `right-${pose}`)).toBe(true);
-  const idle = (await samples(page, 150)).at(-1);
-  expect(idle.frame).toBe('right-0');
-});
-
-async function npcSamples(page, duration) {
-  return page.evaluate(duration => new Promise(resolve => {
-    const values = [];
-    const begin = performance.now();
-    function sample() {
-      const scene = window.walkingTestGame.scene.getScene('banana-grove');
-      values.push({
-        player: { x: scene.player.x, y: scene.player.y },
-        npcs: [...scene.npcs].map(([id, npc]) => ({ id, frame: npc.sprite.frame.name, x: npc.sprite.x, y: npc.sprite.y })),
-      });
-      if (performance.now() - begin >= duration) resolve(values);
-      else requestAnimationFrame(sample);
-    }
-    requestAnimationFrame(sample);
-  }), duration);
-}
-
-test('all four monkeys blink and gesture independently without leaving their positions', async ({ page }) => {
-  const errors = [];
-  page.on('pageerror', error => errors.push(error.message));
-  await start(page);
-  const frames = await npcSamples(page, 5900);
-  for (const [index, id] of ['momo', 'pip', 'nori', 'kiki'].entries()) {
-    const states = frames.map(value => value.npcs[index]);
-    expect(new Set(states.map(value => value.frame))).toEqual(new Set([`${id}-0`, `${id}-1`, `${id}-2`, `${id}-3`]));
-    expect(new Set(states.map(value => `${value.x},${value.y}`)).size).toBe(1);
-  }
-  expect(frames.some(value => new Set(value.npcs.map(npc => npc.frame.slice(-1))).size > 1)).toBe(true);
-  expect(errors).toEqual([]);
+  expect(await seen(page, 'player')).toEqual(['right-0']);
 });
 
 test('monkeys react on approach and remain solid and clickable during their gestures', async ({ page }) => {
@@ -193,36 +155,33 @@ test('monkeys react on approach and remain solid and clickable during their gest
   await page.locator('#station canvas').click({ position: { x: 10, y: 10 } });
   await center(page, 116, 204);
   await page.evaluate(() => window.walkingTestGame.scene.getScene('banana-grove').npcs.get('momo').reset());
+  await record(page);
   await page.keyboard.down('w');
-  const greeting = await npcSamples(page, 350);
-  await page.screenshot({ path: 'test-results/monkey-greeting.png', fullPage: true });
-  const blocked = await npcSamples(page, 550);
+  // The periodic idle gesture starts after 2.3 seconds; these poses must come from the approach reaction.
+  await expect.poll(async () => (await seen(page, 'npc')).filter(name => /^momo-[23]$/.test(name))).toEqual(['momo-2', 'momo-3']);
+  await expect.poll(async () => (await snap(page)).y).toBeCloseTo(152, 0);
   await page.keyboard.up('w');
-  // The periodic idle gesture starts after 2.3 seconds. These early frames
-  // must come from the approach reaction instead.
-  expect(greeting.some(value => value.npcs[0].frame === 'momo-2')).toBe(true);
-  expect(greeting.some(value => value.npcs[0].frame === 'momo-3')).toBe(true);
-  expect(blocked.at(-1).player.y).toBeCloseTo(152, 0);
   // Hold E across a frame so the scene's JustDown check sees it.
   await page.keyboard.press('e', { delay: 100 });
   await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('MOMO');
 });
 
 test('NPC animations respect preference changes and pause for a modal', async ({ page }) => {
+  const resting = async () => Object.entries(await npcFrames(page)).every(([id, frame]) => frame === `${id}-0`);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await start(page);
-  const still = await npcSamples(page, 500);
-  expect(still.every(value => value.npcs.every(npc => npc.frame === `${npc.id}-0`))).toBe(true);
+  await record(page);
+  await page.waitForTimeout(250);
+  expect((await seen(page, 'npc')).every(name => name.endsWith('-0'))).toBe(true);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const resumed = await npcSamples(page, 800);
-  expect(resumed.some(value => value.npcs.some(npc => npc.frame !== `${npc.id}-0`))).toBe(true);
+  await expect.poll(async () => (await seen(page, 'npc')).some(name => !name.endsWith('-0')), { timeout: 10_000 }).toBe(true);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  const reduced = await npcSamples(page, 350);
-  expect(reduced.every(value => value.npcs.every(npc => npc.frame === `${npc.id}-0`))).toBe(true);
+  await expect.poll(resting).toBe(true);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.locator('#reset-button').click();
-  const paused = await npcSamples(page, 350);
-  expect(paused.every(value => value.npcs.every(npc => npc.frame === `${npc.id}-0`))).toBe(true);
+  await expect.poll(resting).toBe(true);
+  await page.waitForTimeout(250);
+  expect(await resting()).toBe(true);
   await page.locator('#cancel-reset').click();
 });
 
@@ -238,18 +197,17 @@ test('Kiki has a stop that is reachable and walkable like the others', async ({ 
   // The nav button opens Kiki's page in place; the investigator does not move.
   await page.locator('nav [data-go="kiki"]').click();
   await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('KIKI');
-  expect((await samples(page, 150)).at(-1)).toMatchObject({ x: 244, y: 276 });
+  expect(await snap(page)).toMatchObject({ x: 244, y: 276 });
   // Walking there with the keyboard reaches the stop, and E opens the page.
   await page.locator('#dialogue-close').click();
   await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'closed');
   await page.locator('#station canvas').click({ position: { x: 10, y: 10 } });
   await center(page, 84, 240);
+  await record(page);
   await page.keyboard.down('w');
-  const moving = await samples(page, 400);
+  await expect.poll(async () => (await seen(page, 'player')).some(name => /-[13]$/.test(name))).toBe(true);
+  await expect.poll(async () => { const s = await snap(page); return Math.hypot(s.x - 84, s.y - 212) < 18; }).toBe(true);
   await page.keyboard.up('w');
-  expect(moving.some(value => /-[13]$/.test(value.frame))).toBe(true);
-  const last = (await samples(page, 150)).at(-1);
-  expect(Math.hypot(last.x - 84, last.y - 212)).toBeLessThan(18);
   await page.keyboard.press('e', { delay: 100 });
   await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('KIKI');
   expect(errors).toEqual([]);

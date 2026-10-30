@@ -27,20 +27,18 @@ button svg { flex-shrink: 0; }
 .board-empty { padding: 14px 0; font-size: 14px; color: var(--muted); }
 
 /* Buttons: gold on dark surfaces, ink on parchment ones. */
-.primary-button, .secondary-button, .quiet-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 18px; border-radius: 6px; font-weight: 600; transition: background .15s, color .15s, border-color .15s; }
+.primary-button, .secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 18px; border-radius: 6px; font-weight: 600; transition: background .15s, color .15s, border-color .15s; }
 .primary-button { background: var(--gold); border: 2px solid var(--text); color: var(--text); box-shadow: 0 3px 0 #8A5E10; }
 .primary-button:not(:disabled):hover { filter: brightness(1.06); }
-:is(.dialogue, .reset-card, .notebook-page, .parchment) .primary-button { background: var(--text); border-color: var(--text); color: var(--parchment); box-shadow: none; }
-:is(.dialogue, .reset-card, .notebook-page, .parchment) .primary-button:not(:disabled):hover { background: var(--panel); filter: none; }
+:is(.dialogue, .reset-card, .notebook-page) .primary-button { background: var(--text); border-color: var(--text); color: var(--parchment); box-shadow: none; }
+:is(.dialogue, .reset-card, .notebook-page) .primary-button:not(:disabled):hover { background: var(--panel); filter: none; }
 .secondary-button { background: transparent; border: 2px solid var(--edge); color: var(--cream); }
 .secondary-button:not(:disabled):hover { border-color: var(--cream); }
-:is(.dialogue, .reset-card, .notebook-page, .parchment) .secondary-button { border-color: var(--text); color: var(--text); }
-.quiet-button { background: none; padding: 8px 12px; color: var(--muted); font-size: 14px; }
-.quiet-button:hover { color: var(--cream); }
+:is(.dialogue, .reset-card, .notebook-page) .secondary-button { border-color: var(--text); color: var(--text); }
 
 /* Form fields */
 input, textarea, select { min-height: 44px; padding: 10px 12px; border: 2px solid var(--edge); border-radius: 6px; background: var(--deep); color: var(--cream); }
-:is(.dialogue, .reset-card, .notebook-page, .parchment) :is(input, textarea, select) { background: #fff; border-color: var(--rule); color: var(--text); }
+:is(.dialogue, .reset-card, .notebook-page) :is(input, textarea, select) { background: #fff; border-color: var(--rule); color: var(--text); }
 label { font-size: 14px; }
 
 /* Overlay shell shared by the case board, team gate, reset confirm and leaderboard */

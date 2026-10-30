@@ -35,11 +35,11 @@ const reasoningLimit = 4000;
 
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-// Rebuild a session from its append-only log. Events keep the legacy clue keys
-// (always null) and replay ignores them. The first event names the case;
+// Rebuild a session from its append-only log. The first event names the case;
 // logs for an unregistered or re-versioned case, logs from another schema,
-// reset sessions, and gaps in the sequence are not restored.
-export function replay(events, cases) {
+// reset sessions, and gaps in the sequence are not restored. When `lastSaid`
+// (a Map) is given it is filled with each character's latest spoken event id.
+export function replay(events, cases, lastSaid = null) {
   const first = events[0];
   const kase = first && cases.find(c => c.id === first.caseId && c.version === first.caseVersion);
   if (!kase) return null;
@@ -61,6 +61,7 @@ export function replay(events, cases) {
       for (const tool of e.spend.tools) if (s.economy.charges[tool]) s.economy.charges[tool].used += 1;
     }
     if (e.type === 'location_visited') s.location = e.location;
+    if (lastSaid && (e.type === 'interview_answer' || e.type === 'chatter_line')) lastSaid.set(e.character, e.eventId);
     if (e.type === 'chatter_line') {
       s.thread.push({ character: e.character, text: e.text, round: e.round, timestamp: e.timestamp });
       s.chatter = { round: e.round, pending: 3 - e.line };
@@ -88,7 +89,6 @@ class Window {
 // also survives a restart. Each game plays one registered case.
 export class Investigations {
   constructor({ dataDir, config, router = null, answer = null, thread = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {}, cases = registry, dev = false, shuffle = shuffleIds }) {
-    for (const c of cases) if (c.legacy) throw new Error(`Case ${c.id} has no parts; roles need a part case.`);
     this.shuffle = shuffle;
     this.paths = dataPaths(dataDir);
     this.config = config;
@@ -103,15 +103,15 @@ export class Investigations {
     this.games = new Map();
     this.pending = new Set();
     this.paused = false;
-    this.newGames = new Window(20, 1000);
+    this.newGames = new Window(100, 1000);
   }
 
   catalog() {
     return listCases(this.cases, { dev: this.dev });
   }
 
-  create(session, kase) {
-    return new Investigation({ dataDir: this.paths.root, config: this.config, answer: this.answer, thread: this.thread, kase, session, shuffle: this.shuffle, meta: this.meta, onEvent: this.onEvent });
+  create(session, kase, lastSaid = null) {
+    return new Investigation({ dataDir: this.paths.root, paths: this.paths, lastSaid, config: this.config, answer: this.answer, thread: this.thread, kase, session, shuffle: this.shuffle, meta: this.meta, onEvent: this.onEvent });
   }
 
   find(sessionId) {
@@ -119,9 +119,10 @@ export class Investigations {
     let game = this.games.get(sessionId);
     if (!game) {
       let session;
-      try { session = replay(readJsonl(resolve(this.paths.sessions, `${sessionId}.jsonl`), { repair: true }), this.cases); } catch { return null; }
+      const lastSaid = new Map();
+      try { session = replay(readJsonl(resolve(this.paths.sessions, `${sessionId}.jsonl`), { repair: true }), this.cases, lastSaid); } catch { return null; }
       if (!session) return null;
-      game = this.create(session, this.cases.find(c => c.id === session.caseId));
+      game = this.create(session, this.cases.find(c => c.id === session.caseId), lastSaid);
       this.games.set(sessionId, game);
     }
     game.touched = Date.now();
@@ -142,7 +143,9 @@ export class Investigations {
     }
     const game = this.find(sessionId) || this.create(null, kase || this.cases[0]);
     if (action === 'start' && this.paused) throw new RequestError(503, 'New games are paused. Try again shortly.');
-    if ((action === 'start' || action === 'reset') && !this.newGames.take(now)) throw new RequestError(429, 'Too many new games right now. Try again in a moment.');
+    // Only a start or reset that will create a session takes a slot; a repeat start on an active game is a 409 and costs none.
+    const makesSession = action === 'reset' || (action === 'start' && !game.session);
+    if (makesSession && !this.newGames.take(now)) throw new RequestError(429, 'Too many new games right now. Try again in a moment.');
     const run = game.mutate(action, input, { kase, assignment: kase ? 'fixed' : 'default', team });
     this.pending.add(run);
     try {
@@ -180,9 +183,11 @@ export class Investigations {
 }
 
 export class Investigation {
-  constructor({ dataDir, config, kase, answer = null, thread = null, session = null, meta = {}, onEvent = () => {}, shuffle = shuffleIds }) {
+  constructor({ dataDir, paths = null, lastSaid = null, config, kase, answer = null, thread = null, session = null, meta = {}, onEvent = () => {}, shuffle = shuffleIds }) {
     this.shuffle = shuffle;
-    this.paths = dataPaths(dataDir);
+    this.paths = paths ?? dataPaths(dataDir);
+    // characterId -> eventId of their latest interview answer or chatter line; mirrors the log.
+    this.lastSaid = lastSaid ?? new Map();
     this.kase = kase;
     this.config = config;
     this.answer = answer || ((cfg, k, s, characterId, question, ctx) => answerInterview(cfg, k, s, characterId, question, null, ctx));
@@ -222,6 +227,7 @@ export class Investigation {
     // Write before acknowledging a mutation. Failed writes must not silently lose data.
     appendJsonl(this.file(state.id), event, 'session');
     this.wrote = state.id;
+    if (type === 'interview_answer' || type === 'chatter_line') this.lastSaid.set(event.character, event.eventId);
     state.revision += 1;
     try { this.onEvent(event); } catch { /* observers must not break the game */ }
     return event;
@@ -311,7 +317,11 @@ export class Investigation {
         // A multi-event action may have written some events before failing; memory
         // must match the log or the next event would repeat a sequence number.
         if (this.wrote) {
-          try { this.session = replay(readJsonl(this.file(this.wrote)), [this.kase]); } catch { this.session = before; }
+          try {
+            const fresh = new Map();
+            this.session = replay(readJsonl(this.file(this.wrote)), [this.kase], fresh);
+            this.lastSaid = fresh;
+          } catch { this.session = before; }
         }
       }
       throw error;
@@ -320,6 +330,7 @@ export class Investigation {
 
   start(assignment = 'default', team = null) {
     this.reasoning.clear();
+    this.lastSaid.clear();
     const rules = this.config.economy ?? economyRules({});
     const ids = this.kase.characters.map(c => c.id);
     const dealt = this.shuffle(this.kase.parts.map(p => p.id));
@@ -367,12 +378,12 @@ export class Investigation {
       if (!answeredLogged) {
         // The answer write itself may have thrown after the line reached the file:
         // then the log already holds the spend, so memory must follow the log.
-        let onDisk = null;
+        let onDisk = null, fresh = null;
         try {
           const events = readJsonl(this.file(s.id));
-          if (events.some(e => e.type === 'interview_answer' && e.questionEventId === asked.eventId)) onDisk = replay(events, [this.kase]);
+          if (events.some(e => e.type === 'interview_answer' && e.questionEventId === asked.eventId)) { fresh = new Map(); onDisk = replay(events, [this.kase], fresh); }
         } catch { /* fall back to the pre-spend wallet */ }
-        if (onDisk) { this.session = onDisk; this.wrote = onDisk.id; } else s.economy = wallet;
+        if (onDisk) { this.session = onDisk; this.lastSaid = fresh; this.wrote = onDisk.id; } else s.economy = wallet;
       }
       const providerError = error?.name === 'InterviewProviderError';
       this.log('interview_failed', { character: character.id, question, questionEventId: asked.eventId, reason: providerError ? error.code : 'provider_or_storage_error', ...(providerError ? error.diagnostics : {}), provenance: error?.provenance ?? null });
@@ -406,10 +417,13 @@ export class Investigation {
     const { characters } = this.kase;
     const character = characters.find(c => c.id === input.character);
     if (!character) throw new RequestError(400, `Choose one of the ${characters.length} ${this.kase.world.cast.many}.`);
-    const said = readJsonl(this.file(s.id)).filter(e => e.character === character.id && (e.type === 'interview_answer' || e.type === 'chatter_line'));
-    if (!said.length) throw new RequestError(409, `${character.name} has not said anything yet.`);
+    let sourceEventId = this.lastSaid.get(character.id);
+    if (!sourceEventId) {
+      const said = readJsonl(this.file(s.id)).filter(e => e.character === character.id && (e.type === 'interview_answer' || e.type === 'chatter_line'));
+      if (!said.length) throw new RequestError(409, `${character.name} has not said anything yet.`);
+      sourceEventId = said[said.length - 1].eventId;
+    }
     const live = this.config.mode === 'live';
-    const sourceEventId = said[said.length - 1].eventId;
     const held = this.reasoning.get(character.id);
     if (live ? !held || held.eventId !== sourceEventId : typeof this.kase.rehearsalReasoning !== 'function') throw new RequestError(409, `${character.name} did not think.`);
     const check = quote(s.economy, ['inspect'], this.reserve());

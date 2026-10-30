@@ -1,5 +1,6 @@
 import type { Role } from './types';
 import type { LineupMember } from './lineup';
+import { escape as esc } from './html.ts';
 
 export interface DebriefFinding { character: string; role: string; picked: string; correct: boolean; classification: string; explanation: string }
 export interface DebriefData { title: string; summary: string; score: number; total: number; feedback: string; lesson: string; findings: DebriefFinding[] }
@@ -8,7 +9,6 @@ export interface DebriefView {
   questions: number; inspections: number; talks: number; next: { id: string; title: string } | null; many: string;
 }
 
-const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 export function spendSummary(v: Pick<DebriefView, 'spent' | 'budget' | 'questions' | 'inspections' | 'talks'>): string {

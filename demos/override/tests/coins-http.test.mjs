@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startServer } from '../server/index.mjs';
-import { startMockLlm } from './mock-llm.mjs';
+import { startMockLlm } from '../scripts/mock-llm.mjs';
 
 const json = { 'Content-Type': 'application/json' };
 
@@ -16,9 +16,9 @@ async function liveGame(t, extra = {}) {
   const endpoints = join(dir, 'endpoints.json');
   writeFileSync(endpoints, JSON.stringify([{ name: 'a', baseUrl: mock.url, model: 'mock-model', keyEnv: 'OVERRIDE_ENDPOINT_A_KEY' }]));
   const server = await startServer({
-    PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: join(dir, 'data'), OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 'secret-one',
+    PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: join(dir, 'data'), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 'secret-one',
     OVERRIDE_ENDPOINTS: endpoints, OVERRIDE_ENDPOINT_A_KEY: 'sk-test-key', ...extra,
-  });
+  }, { publicDir: mkdtempSync(join(tmpdir(), 'override-public-')) });
   t.after(() => server.close());
   const start = await fetch(`${server.url}/api/start`, { method: 'POST', headers: json, body: '{}' });
   let view = await start.json();

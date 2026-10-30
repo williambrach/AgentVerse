@@ -1,11 +1,14 @@
 import { readFileSync } from 'node:fs';
+import { expect } from '@playwright/test';
 
 // Part id -> role id, for the live cases. Banana has four parts, the tower three (all fooled).
 export const PART_ROLE = { planner: 'villain', carrier: 'fooled', lookout: 'collaborator', minder: 'honest' };
 export const PART_LABEL = { planner: 'The planner', carrier: 'The carrier', lookout: 'The lookout', minder: 'The bell-minder', fetcher: 'The fetcher', watcher: 'The bell-watcher' };
 
 // The cast is only in the server-side log: session_started.cast, written under the `live` env folder.
+// The data folders are per run (playwright.config.mjs sets OVERRIDE_E2E_DATA); 'test-results/<name>' maps onto <run>/<name>.
 export function castOf(sessionId, dataDir = 'test-results/sessions') {
+  if (process.env.OVERRIDE_E2E_DATA) dataDir = `${process.env.OVERRIDE_E2E_DATA}/${dataDir.replace(/^test-results\//, '')}`;
   const lines = readFileSync(`${dataDir}/live/sessions/${sessionId}.jsonl`, 'utf8').trim().split('\n').map(l => JSON.parse(l));
   return lines.find(e => e.type === 'session_started').cast;
 }
@@ -74,3 +77,25 @@ export function rehearsalReply(cast, characterId, question) {
   return template.replace(/\{(\w+)\}/g, (_, p) => holder[p]);
 }
 export const quickQuestionFor = (cast, characterId) => (Object.values(cast).includes('fetcher') ? TOWER_QUICK : QUICK)[cast[characterId]];
+
+/** Quick question on every cast member in rail order, waiting for each answer. Returns the ids asked. */
+export async function interviewAll(page) {
+  const buttons = page.locator('#room-nav [data-go]');
+  const ids = (await buttons.evaluateAll(list => list.map(el => el.dataset.go))).filter(id => id !== 'report');
+  for (const id of ids) {
+    await page.locator(`#room-nav [data-go="${id}"]`).click();
+    await page.locator('[data-quick-question]').click();
+    await expect(page.locator('.speech.character.latest')).toBeVisible();
+    await expect(page.locator('#interview-form .ask-button')).toBeEnabled();
+  }
+  return ids;
+}
+
+/** Open the verdict, pick a role for each id in `picks` ({ id: role }) and lock in. */
+export async function lockIn(page, picks) {
+  // Already on the lineup (a test may have checked its heading): the verdict button is covered then.
+  if (await page.locator('#app').getAttribute('data-view') !== 'lineup') await page.locator('.verdict-button').click();
+  await expect(page.locator('fieldset.role-row')).toHaveCount(Object.keys(picks).length);
+  for (const [id, role] of Object.entries(picks)) await pickRole(page, id, role);
+  await page.locator('#lock-in').click();
+}

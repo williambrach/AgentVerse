@@ -1,10 +1,8 @@
 import type { Leaderboard } from './types.ts';
 import { boardRow, clock, EMPTY } from './board.ts';
+import { escape as esc } from './html.ts';
 
 export { clock };
-
-const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, c =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
 
 export const NAME_ERROR = 'Team names are 2 to 24 letters, numbers and spaces.';
 

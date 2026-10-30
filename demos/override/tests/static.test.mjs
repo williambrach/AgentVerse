@@ -124,3 +124,31 @@ test('accept-encoding honours q=0 and wildcard', () => {
   assert.equal(call(files, 'GET', url, { 'accept-encoding': '*' }).headers['content-encoding'], 'br');
   assert.equal(call(files, 'GET', url, { 'accept-encoding': 'identity' }).headers['content-encoding'], undefined);
 });
+
+test('etag_304', () => {
+  const files = loadStatic(fixture());
+  const url = '/assets/index-CpDjbI4y.js';
+  const first = call(files, 'GET', url, { 'accept-encoding': 'br' });
+  const etag = first.headers['etag'];
+  assert.match(etag, /^"[0-9a-f]{40}"$/);
+  assert.equal(call(files, 'GET', url, { 'accept-encoding': 'gzip' }).headers['etag'], etag);
+  assert.equal(call(files, 'GET', url).headers['etag'], etag);
+  const second = call(files, 'GET', url, { 'accept-encoding': 'br', 'if-none-match': etag });
+  assert.equal(second.status, 304);
+  assert.equal(second.body.length, 0);
+  assert.equal(second.n, 0);
+  assert.equal(second.headers['etag'], etag);
+  assert.equal(second.headers['cache-control'], 'public, max-age=31536000, immutable');
+  assert.equal(call(files, 'GET', url, { 'if-none-match': '"other"' }).status, 200);
+});
+
+test('hashed_png_immutable', () => {
+  const dir = fixture();
+  writeFileSync(join(dir, 'assets', 'x-abc123.png'), Buffer.from([1, 2, 3]));
+  writeFileSync(join(dir, 'assets', 'y-abc123.webp'), Buffer.from([1, 2, 3]));
+  const files = loadStatic(dir);
+  assert.equal(call(files, 'GET', '/assets/x-abc123.png').headers['cache-control'], 'public, max-age=31536000, immutable');
+  const webp = call(files, 'GET', '/assets/y-abc123.webp');
+  assert.equal(webp.headers['cache-control'], 'public, max-age=31536000, immutable');
+  assert.equal(webp.headers['content-type'], 'image/webp');
+});

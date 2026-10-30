@@ -1,14 +1,9 @@
 // The failover watch strip: visible for 5 minutes after the router switched endpoints. Text only.
+import { el as mk } from './dom.js';
 const WINDOW_MS = 5 * 60_000;
 const states = new WeakMap();
 
-function el(doc, tag, cls, parent, text) {
-  const e = doc.createElement(tag);
-  if (cls) e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  parent.appendChild(e);
-  return e;
-}
+const el = (doc, tag, cls, parent, text) => mk(doc, tag, cls, { parent, text });
 
 export function renderWatch(root, snapshot, now, opts = {}) {
   const tr = snapshot?.traffic ?? snapshot?.trends ?? {};

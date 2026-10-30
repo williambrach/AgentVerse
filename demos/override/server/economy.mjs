@@ -1,4 +1,5 @@
 import { worlds } from './worlds.mjs';
+import { integerEnv } from './http-util.mjs';
 
 // Coin and charge rules. Pure: no I/O. quote() never mutates; spend() changes only spent and charges.
 
@@ -12,11 +13,11 @@ export function economyRules(env = {}) {
   const rawBudget = String(env.OVERRIDE_COIN_BUDGET ?? '').trim();
   let budget = null;
   if (rawBudget !== '') {
-    const n = Number(rawBudget);
     const min = minimumBudget();
-    if (!/^\d+$/.test(rawBudget) || n < min || n > 999) {
-      throw new Error(`OVERRIDE_COIN_BUDGET must be an integer between ${min} and 999.`);
-    }
+    const range = `OVERRIDE_COIN_BUDGET must be an integer between ${min} and 999.`;
+    let n;
+    try { n = integerEnv(rawBudget, null, 'OVERRIDE_COIN_BUDGET'); } catch { throw new Error(range); }
+    if (!/^\d+$/.test(rawBudget) || n < min || n > 999) throw new Error(range);
     budget = n;
   }
   const rawCharges = String(env.OVERRIDE_REASONING_CHARGES ?? '').trim();

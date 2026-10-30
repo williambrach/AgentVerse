@@ -27,7 +27,6 @@ test('describe', () => {
   assert.equal(log.describe(q, catalog).arrow, '→');
   const v = { ...q, kind: 'verdict', character: null, text: null, verdict: { score: 3, total: 4, confidence: 70 } };
   assert.equal(log.describe(v, catalog).text, '3/4 roles · 70 %');
-  assert.equal(log.describe({ ...v, verdict: { suspect: 'pip', confidence: 70, correct: true } }, catalog).text, 'Verdict (old format)');
   assert.ok(log.describe({ ...a, failedOver: true }, catalog).meta.endsWith(' · failover'));
 });
 
@@ -107,7 +106,7 @@ test('player click opens panel with timeline and verdict; errors shown', async (
   await p.fire('click');
   assert.deepEqual(calls, ['/admin/sessions/s1']);
   assert.ok(panel.textContent.includes('Verdict: 3 of 4 roles right · 70 %'));
-  assert.ok(panel.textContent.includes('01:05'));
+  assert.ok(panel.textContent.includes('1:05'));
   fail = true;
   await p.fire('click');
   assert.ok(panel.textContent.includes('boom'));
@@ -121,7 +120,7 @@ test('list rows show clock, not elapsed', () => {
   const root = mk();
   const l = log.createLog(root, { api: async () => ({}), panel: mk() });
   l.add([row(1, { at: 0, elapsedMs: 65000 })]);
-  assert.ok(!rowsIn(root)[0].textContent.includes('01:05'));
+  assert.ok(!rowsIn(root)[0].textContent.includes('1:05'));
 });
 
 test('panel keeps heading and close on error; Escape closes', async () => {
@@ -155,15 +154,6 @@ test('stale panel response does not overwrite a newer player or a closed panel',
   assert.ok(!panel.textContent.includes('OLDER'));
 });
 
-test('panel shows old-format verdict for a v2 row', async () => {
-  const root = mk(); const panel = mk();
-  const api = async () => ({ rows: [{ ...q, kind: 'verdict', verdict: { suspect: 'pip', confidence: 80, correct: false } }] });
-  const l = log.createLog(root, { api, panel });
-  l.add([row(1)]);
-  await root.find((e) => e.dataset.player === 's1')[0].fire('click');
-  assert.ok(panel.textContent.includes('Verdict (old format)'));
-});
-
 test('describe appends coins', () => {
   const base = { sessionId: 's', caseId: 'banana-mystery', character: 'pip', kind: 'chatter', text: 'hi', endpoint: null };
   assert.equal(log.describe({ ...base, cost: 1 }, []).meta, '1 coin');
@@ -190,4 +180,11 @@ test('team name replaces the short id in rows and the player chip; long names ar
   assert.ok(chip.length >= 1);
   const css = (await import('node:fs')).readFileSync(new URL('../server/admin/log.css', import.meta.url), 'utf8');
   assert.match(css, /\.log-player \{[^}]*text-overflow: ellipsis/);
+});
+
+test('verdict without a score renders a plain label, never "undefined"', () => {
+  const old = { ...q, kind: 'verdict', character: null, text: null, verdict: { suspect: 'pip', confidence: 70 } };
+  const d = log.describe(old, catalog);
+  assert.equal(d.text, 'verdict');
+  assert.ok(!JSON.stringify(d).includes('undefined'));
 });

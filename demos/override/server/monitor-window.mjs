@@ -16,6 +16,7 @@ export function createWindows({ now }) {
   const failures = []; // timestamps, last 5 min
   const buckets = new Map(); // minute -> bucket, insertion order is time order
   let qHead = 0;
+  const closedP95 = new Map(); // minute -> p95, only for buckets that can no longer change
 
   const bucket = () => {
     const at = Math.floor(now() / MINUTE) * MINUTE;
@@ -64,9 +65,16 @@ export function createWindows({ now }) {
     },
     history() {
       const floor = Math.floor(now() / MINUTE) * MINUTE - (HISTORY_MINUTES - 1) * MINUTE;
+      const open = Math.floor(now() / MINUTE) * MINUTE;
+      for (const key of closedP95.keys()) if (!buckets.has(key)) closedP95.delete(key);
       return [...buckets.values()]
         .filter(b => b.at >= floor)
-        .map(b => ({ at: b.at, online: b.online, questions: b.questions, failures: b.failures, p95Ms: p95(b.latencies), reqs: b.reqs }));
+        .map(b => {
+          let p;
+          if (b.at < open && closedP95.has(b.at)) p = closedP95.get(b.at);
+          else { p = p95(b.latencies); if (b.at < open) closedP95.set(b.at, p); }
+          return { at: b.at, online: b.online, questions: b.questions, failures: b.failures, p95Ms: p, reqs: b.reqs };
+        });
     },
   };
 }

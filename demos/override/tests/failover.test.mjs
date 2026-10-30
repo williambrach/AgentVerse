@@ -39,3 +39,11 @@ test('acceptQueueLimit is a positive integer or null and never throws', () => {
   const limit = acceptQueueLimit();
   assert.ok(limit === null || (Number.isInteger(limit) && limit > 0), String(limit));
 });
+
+test('rate_limited keeps endpoint a active, retries it once per question and never reaches b', { timeout: 60_000 }, async () => {
+  const { stats, failures } = await runScenario('rate_limited', reduced);
+  assert.deepEqual(failures, []);
+  assert.equal(stats.activeAfter, 'a');
+  assert.equal(stats.requestsByEndpoint.b, 0);
+  assert.ok(stats.requestsByEndpoint.a >= 2 * stats.questions);
+});

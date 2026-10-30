@@ -1,5 +1,6 @@
 import { test as base } from '@playwright/test';
 import { test, expect, joinTeam } from './team.mjs';
+import { interviewAll, lockIn } from './cast.mjs';
 
 const SIZES = [[1280, 720], [1366, 768], [1440, 900], [1920, 1080]];
 
@@ -12,19 +13,9 @@ async function begin(page, url = '/') {
 
 const castButtons = page => page.locator('#room-nav [data-go]');
 const rect = (page, selector) => page.locator(selector).first().evaluate(el => { const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }; });
+// Lets the page render `n` frames: an observation window that is not a sleep.
+const frames = (page, n) => page.evaluate(n => new Promise(done => { const tick = () => (--n <= 0 ? done() : requestAnimationFrame(tick)); tick(); }), n);
 const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-
-/** Quick question on every cast member, in rail order. */
-async function askAll(page) {
-  const n = await castButtons(page).count();
-  for (let i = 0; i < n; i++) {
-    await castButtons(page).nth(i).click();
-    await page.locator('[data-quick-question]').click();
-    await expect(page.locator('.speech.character.latest')).toBeVisible();
-    await expect(page.locator('#interview-form .ask-button')).toBeEnabled();
-  }
-  return n;
-}
 
 for (const [w, h] of SIZES) {
   test(`stage_fills_window_${w}x${h}`, async ({ page }) => {
@@ -114,7 +105,7 @@ test('escape_with_overlay', async ({ page }) => {
 
 test('verdict_lineup_and_debrief', async ({ page }) => {
   await begin(page);
-  const n = await askAll(page);
+  const n = (await interviewAll(page)).length;
   await page.locator('.hud-rail [data-go="report"]').click();
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
   await expect(page.locator('fieldset.role-row')).toHaveCount(n);
@@ -140,7 +131,7 @@ test('verdict_lineup_and_debrief', async ({ page }) => {
 
 test('lineup_back_returns_to_the_map', async ({ page }) => {
   await begin(page);
-  await askAll(page);
+  await interviewAll(page);
   await page.locator('.hud-rail [data-go="report"]').click();
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
   await page.locator('#lineup-back').click();
@@ -155,7 +146,7 @@ test('tower_lineup_fits_and_theme', async ({ page }) => {
   // The tower stage has no bare ground band: the overscan is filled with bookcases, so the canvas still fills the window.
   const canvas = await rect(page, '#station canvas');
   expect(Math.abs(canvas.width - 1280)).toBeLessThanOrEqual(2);
-  await askAll(page);
+  await interviewAll(page);
   await page.locator('.hud-rail [data-go="report"]').click();
   await expect(page.locator('fieldset.role-row')).toHaveCount(3);
   expect(await page.evaluate(() => document.scrollingElement.scrollWidth <= innerWidth)).toBe(true);
@@ -241,8 +232,7 @@ test('progress_line_and_timer_use_the_design_copy', async ({ page }) => {
   await begin(page);
   await expect(page.locator('#quick-progress')).toHaveText('0 of 4 asked \u00b7 free');
   expect(await page.locator('#quick-progress').evaluate(el => el.getClientRects().length === 1 && el.getBoundingClientRect().height < 20)).toBe(true);
-  await page.waitForTimeout(1200);
-  for (const text of await page.locator('#elapsed, [data-elapsed]').allInnerTexts()) expect(text).toMatch(/^\d+:\d\d$/);
+  await expect.poll(async () => (await page.locator('#elapsed, [data-elapsed]').allInnerTexts()).every(text => /^\d+:\d\d$/.test(text))).toBe(true);
 });
 
 test('speech_bubble_stays_below_the_top_bar', async ({ page }) => {
@@ -256,7 +246,7 @@ test('speech_bubble_stays_below_the_top_bar', async ({ page }) => {
     await route.fulfill({ response: res, json: data });
   });
   await begin(page);
-  await askAll(page);
+  await interviewAll(page);
   await page.locator('#continue-button').click();
   const bubble = page.locator('.station-bubble');
   await expect(bubble).toBeVisible();
@@ -266,7 +256,7 @@ test('speech_bubble_stays_below_the_top_bar', async ({ page }) => {
 
 test('lock_in_button_keeps_its_label_and_count_while_picking', async ({ page }) => {
   await begin(page);
-  await askAll(page);
+  await interviewAll(page);
   await page.locator('.hud-rail [data-go="report"]').click();
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
   const names = await page.locator('fieldset.role-row').evaluateAll(rows => rows.map(r => r.querySelector('input').name));
@@ -293,7 +283,7 @@ const fullWindow = async page => {
 test('lineup_covers_the_viewport_edge_to_edge', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await begin(page);
-  await askAll(page);
+  await interviewAll(page);
   await page.locator('.hud-rail [data-go="report"]').click();
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
   await expect.poll(() => fullWindow(page)).toBe(true);
@@ -303,20 +293,16 @@ test('lineup_covers_the_viewport_edge_to_edge', async ({ page }) => {
 
 test('progress_reads_4_of_4_asked_when_everyone_is_asked', async ({ page }) => {
   await begin(page);
-  await askAll(page);
+  await interviewAll(page);
   await expect(page.locator('#quick-progress')).toHaveText('4 of 4 asked \u00b7 free');
   await expect(page.locator('#quick-progress')).not.toContainText('Ready to make your guess');
 });
 
 test('debrief_is_a_full_page_with_a_finding_per_character', async ({ page }) => {
   await begin(page);
-  const n = await askAll(page);
-  await page.locator('.hud-rail [data-go="report"]').click();
-  for (const name of await page.locator('fieldset.role-row').evaluateAll(rows => rows.map(r => r.querySelector('input').name))) {
-    await page.locator(`input[name="${name}"][value="honest"]`).check({ force: true });
-  }
-  await page.locator('#lock-in').click();
-  await expect(page.locator('.finding')).toHaveCount(n);
+  const ids = await interviewAll(page);
+  await lockIn(page, Object.fromEntries(ids.map(id => [id, 'honest'])));
+  await expect(page.locator('.finding')).toHaveCount(ids.length);
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
   await expect.poll(() => fullWindow(page)).toBe(true);
   await expect(page.locator('#debrief-leaderboard')).toBeVisible();
@@ -337,7 +323,7 @@ test('five_characters_fit_the_lineup_and_the_rail_at_1280x720', async ({ page })
 test('lineup_with_five_rows_has_no_horizontal_overflow', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await begin(page);
-  await askAll(page);
+  await interviewAll(page);
   await page.locator('.hud-rail [data-go="report"]').click();
   await expect(page.locator('fieldset.role-row')).toHaveCount(4);
   await page.locator('.lineup-cards').evaluate(el => { const card = el.querySelector('fieldset.role-row'); el.appendChild(card.cloneNode(true)); el.style.setProperty('--n', '5'); });
@@ -353,15 +339,23 @@ async function finishCase(browser, baseURL, name) {
   await joinTeam(context, name);
   const page = await context.newPage();
   await begin(page);
-  await askAll(page);
-  await page.locator('.hud-rail [data-go="report"]').click();
-  for (const field of await page.locator('fieldset.role-row').evaluateAll(rows => rows.map(r => r.querySelector('input').name))) {
-    await page.locator(`input[name="${field}"][value="honest"]`).check({ force: true });
-  }
-  await page.locator('#lock-in').click();
+  const ids = await interviewAll(page);
+  await lockIn(page, Object.fromEntries(ids.map(id => [id, 'honest'])));
   await expect(page.locator('.finding').first()).toBeVisible();
   await context.close();
 }
+
+test('board_without_phaser', async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL, viewport: { width: 1920, height: 1080 } });
+  const page = await context.newPage();
+  const chunks = [];
+  page.on('request', request => { if (/assets\/station-.*\.js/.test(request.url())) chunks.push(request.url()); });
+  await page.goto('/?view=board');
+  await expect(page.locator('.board-screen')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  expect(chunks).toEqual([]);
+  await context.close();
+});
 
 test('board_no_presence', async ({ browser, baseURL }) => {
   test.setTimeout(120_000);
@@ -468,8 +462,9 @@ test('leaderboard_overlay_table_is_styled_and_a_row_fits_one_line', async ({ pag
   await begin(page);
   await page.locator('#leaderboard-button').click();
   await expect(page.locator('.board-card .board-row.you')).toBeVisible();
+  await expect(page.locator('.board-card .board-table')).toBeVisible();
+  await expect.poll(async () => (await rect(page, '.board-card')).width).toBeGreaterThanOrEqual(800);
   const card = await rect(page, '.board-card');
-  expect(card.width).toBeGreaterThanOrEqual(800);
   const row = await rect(page, '.board-card .board-row');
   expect(row.height).toBeLessThan(60);
   const table = await page.locator('.board-card .board-table').evaluate(el => ({ collapse: getComputedStyle(el).borderCollapse, width: el.getBoundingClientRect().width, caption: getComputedStyle(el.querySelector('caption')).textTransform }));
@@ -558,12 +553,8 @@ test('closing_an_overlay_on_the_debrief_keeps_walking_off', async ({ page }) => 
     });
   });
   await begin(page);
-  await askAll(page);
-  await page.locator('.hud-rail [data-go="report"]').click();
-  for (const field of await page.locator('fieldset.role-row').evaluateAll(rows => rows.map(r => r.querySelector('input').name))) {
-    await page.locator(`input[name="${field}"][value="honest"]`).check({ force: true });
-  }
-  await page.locator('#lock-in').click();
+  const ids = await interviewAll(page);
+  await lockIn(page, Object.fromEntries(ids.map(id => [id, 'honest'])));
   await expect(page.locator('.finding').first()).toBeVisible();
   await page.locator('#debrief-leaderboard').click();
   await page.locator('#leaderboard-close').click();
@@ -600,7 +591,8 @@ test('box_does_not_blink_on_updates', async ({ page }) => {
   await begin(page, '/?case=banana-mystery');
   await castButtons(page).first().click();
   await expect(page.locator('[data-quick-question]')).toBeVisible();
-  await page.waitForTimeout(700); // The page-turn animation belongs to a change of page, and has finished here.
+  // The page-turn animation belongs to a change of page, and has finished here.
+  await expect.poll(() => page.locator('.notebook-page').first().evaluate(el => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.99);
   await page.evaluate(() => {
     window.lowest = 1;
     const tick = () => { window.lowest = Math.min(window.lowest, Number(getComputedStyle(document.querySelector('.notebook-page')).opacity)); requestAnimationFrame(tick); };
@@ -608,6 +600,6 @@ test('box_does_not_blink_on_updates', async ({ page }) => {
   });
   await page.locator('[data-quick-question]').click();
   await expect(page.locator('.speech.character.latest')).toBeVisible();
-  await page.waitForTimeout(500);
+  await frames(page, 30);
   expect(await page.evaluate(() => window.lowest)).toBeGreaterThan(0.99);
 });

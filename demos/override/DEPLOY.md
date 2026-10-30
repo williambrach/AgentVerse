@@ -15,7 +15,7 @@ There are two ways to deploy the Override demo. The AgentVerse Python simulation
 
 ## 1. Prepare the repository
 
-Commit and push the complete `demos/override/` directory to the branch you intend to deploy. The current demo branch is `demo/override`. Include `package-lock.json`, the server and client sources, and all PNG assets under `public/assets/banana/`.
+Commit and push the complete `demos/override/` directory to the branch you intend to deploy. The current demo branch is `demo/override`. Include `package-lock.json`, the server and client sources, and all PNG assets under `public/assets/banana/` and `public/assets/tower/`.
 
 Keep `.env`, `node_modules/`, `dist/`, `data/`, and test outputs out of the commit. The demo's [.gitignore](.gitignore) and [.dockerignore](.dockerignore) cover these generated files and the local environment file.
 

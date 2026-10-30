@@ -1,19 +1,19 @@
 import type Phaser from 'phaser';
+import type { Frame } from './atlas.ts';
 
-export type Frame = { x: number; y: number; w: number; h: number; anchorX: number; anchorY: number };
 export type IdleSpec = { textureKey: string; poses: Frame[]; scale: number; period: number; offset: number };
 
 const textureKey = 'monkey-idle';
-const cellSize = 362;
+const cellSize = 181;
 const periods = [4800, 4300, 5600, 5000, 4500];
 const offsets = [0, 1200, 2600, 1800, 3400];
 const characters = {
-  momo: { row: 0, height: 47, sourceHeight: 317, period: 4800, offset: 0,
-    anchors: [[169, 354], [169.5, 354], [169.5, 354], [171, 354]] },
-  pip: { row: 1, height: 44, sourceHeight: 313, period: 4300, offset: 1200,
-    anchors: [[169.5, 332], [169, 332], [169, 332], [170, 332]] },
-  nori: { row: 2, height: 44, sourceHeight: 310, period: 5600, offset: 2600,
-    anchors: [[169.5, 313], [169.5, 314], [169.5, 314], [171, 314]] },
+  momo: { row: 0, height: 47, sourceHeight: 158.5,
+    anchors: [[84.5, 177], [84.75, 177], [84.75, 177], [85.5, 177]] },
+  pip: { row: 1, height: 44, sourceHeight: 156.5,
+    anchors: [[84.75, 166], [84.5, 166], [84.5, 166], [85, 166]] },
+  nori: { row: 2, height: 44, sourceHeight: 155,
+    anchors: [[84.75, 156.5], [84.75, 157], [84.75, 157], [85.5, 157]] },
 };
 
 /** The same poses on another texture (a recoloured copy), with the timing of its own cast slot. */
@@ -30,26 +30,22 @@ export function idleSpec(poses: Frame[], textureKey: string, height: number, slo
   };
 }
 
-function groveSpec(config: typeof characters.momo): IdleSpec {
+function groveSpec(config: typeof characters.momo, slot: number): IdleSpec {
   return {
     textureKey,
     poses: config.anchors.map(([anchorX, anchorY], pose) => ({
       x: pose * cellSize, y: config.row * cellSize, w: cellSize, h: cellSize, anchorX, anchorY,
     })),
     scale: config.height / config.sourceHeight,
-    period: config.period, offset: config.offset,
+    period: periods[slot]!, offset: offsets[slot]!,
   };
 }
 
 export const groveIdle: Record<string, IdleSpec> = {
-  momo: groveSpec(characters.momo),
-  pip: groveSpec(characters.pip),
-  nori: groveSpec(characters.nori),
+  momo: groveSpec(characters.momo, 0),
+  pip: groveSpec(characters.pip, 1),
+  nori: groveSpec(characters.nori, 2),
 };
-
-export function loadMonkeyIdle(scene: Phaser.Scene) {
-  scene.load.image(textureKey, '/assets/banana/monkey-idle.png');
-}
 
 /** Staggered blinks and small gestures, with a greeting on approach. */
 export class MonkeyIdle {

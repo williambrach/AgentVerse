@@ -1,10 +1,11 @@
+import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { gzipSync, brotliCompressSync, constants } from 'node:zlib';
 
-const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
+const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.webp': 'image/webp' };
 const compressible = new Set(['.html', '.js', '.css', '.svg']);
-const hashed = /^\/assets\/.+-[A-Za-z0-9_-]{6,}\.(js|css|woff2)$/;
+const hashed = /^\/assets\/.+-[A-Za-z0-9_-]{6,}\.(js|css|woff2|png|webp)$/;
 
 function walk(dir, prefix, out) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -26,6 +27,7 @@ export function loadStatic(publicDir) {
       type: mimeTypes[ext] || 'application/octet-stream',
       cache: ext === '.html' ? 'no-cache' : hashed.test(path) ? 'public, max-age=31536000, immutable' : 'public, max-age=3600',
       identity: body,
+      etag: `"${createHash('sha1').update(body).digest('hex')}"`,
       vary: compressible.has(ext),
     };
     if (entry.vary && body.length > 1024) {
@@ -50,6 +52,11 @@ export function acceptedEncodings(header) {
   return coding => (q.has(coding) ? q.get(coding) : (q.get('*') ?? 0)) > 0;
 }
 
+function etagMatches(header, etag) {
+  if (!header) return false;
+  return String(header).split(',').some(tag => { const t = tag.trim().replace(/^W\//, ''); return t === '*' || t === etag; });
+}
+
 // Returns -1 when the path is not a loaded file (nothing written), else body bytes written.
 export function serveStatic(files, req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') return -1;
@@ -62,8 +69,14 @@ export function serveStatic(files, req, res) {
   const allowed = acceptedEncodings(accept);
   const encoding = entry.br && allowed('br') ? 'br' : entry.gzip && allowed('gzip') ? 'gzip' : null;
   const body = encoding === 'br' ? entry.br : encoding === 'gzip' ? entry.gzip : entry.identity;
-  const headers = { 'Content-Type': entry.type, 'Cache-Control': entry.cache, 'Content-Length': body.length };
+  const headers = { 'Content-Type': entry.type, 'Cache-Control': entry.cache, ETag: entry.etag, 'Content-Length': body.length };
   if (entry.vary) headers.Vary = 'Accept-Encoding';
+  if (etagMatches(req.headers?.['if-none-match'], entry.etag)) {
+    delete headers['Content-Type']; delete headers['Content-Length'];
+    res.writeHead(304, headers);
+    res.end();
+    return 0;
+  }
   if (encoding) headers['Content-Encoding'] = encoding;
   res.writeHead(200, headers);
   if (req.method === 'HEAD') { res.end(); return 0; }

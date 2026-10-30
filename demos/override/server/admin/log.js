@@ -1,4 +1,5 @@
 // Message log: filter bar, newest-first list, player panel. Text only via textContent.
+import { el as mk, mmss, pad2 } from './dom.js';
 const MESSAGE_KINDS = ['question', 'answer', 'failure'];
 const MAX_DOM = 1000;
 const MAX_KEEP = 5000;
@@ -19,19 +20,17 @@ function nameOf(row, catalog) {
   return ch ? ch.name : row.character || '';
 }
 
-const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
-
-// A schema v2 verdict (suspect, no score) is old format.
 function verdictText(row) {
   const v = row.verdict;
   if (!v) return row.text ?? '';
-  if (!isNum(v.score) || !isNum(v.total)) return 'Verdict (old format)';
+  if (!Number.isInteger(v.score) || !Number.isInteger(v.total)) return 'verdict';
   return `${v.score}/${v.total} roles · ${v.confidence} %`;
 }
 
 function verdictLine(row) {
   const v = row.verdict;
-  if (!v || !isNum(v.score) || !isNum(v.total)) return 'Verdict (old format)';
+  if (!v) return '';
+  if (!Number.isInteger(v.score) || !Number.isInteger(v.total)) return 'Verdict';
   return `Verdict: ${v.score} of ${v.total} roles right · ${v.confidence} %`;
 }
 
@@ -62,26 +61,16 @@ function describeBase(row, catalog) {
 
 const teamOr = (team, fallback) => (typeof team === 'string' && team ? team : fallback || '');
 
-function mmss(ms) {
-  const s = Math.max(0, Math.floor((ms || 0) / 1000));
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-}
-
 export function clock(at, tz) {
   const d = new Date(at);
   const utc = tz === 'utc';
-  const p = (n) => String(n).padStart(2, '0');
+  const p = pad2;
   return `${p(utc ? d.getUTCHours() : d.getHours())}:${p(utc ? d.getUTCMinutes() : d.getMinutes())}:${p(utc ? d.getUTCSeconds() : d.getSeconds())}`;
 }
 
 export function createLog(root, { api, panel }) {
   const doc = root.ownerDocument;
-  const el = (tag, cls, text) => {
-    const e = doc.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  };
+  const el = (tag, cls, text) => mk(doc, tag, cls, { text });
   const teamOf = new Map();
   let catalog = [];
   let all = [];

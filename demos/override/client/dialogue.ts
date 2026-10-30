@@ -1,9 +1,7 @@
 import type { Character, Inspection, Turn, CaseCopy } from './types.ts';
 // The .ts extension keeps `node --test` resolving this file.
 import { noThoughtBlock, reasoningBlock } from './tools.ts';
-
-const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, c =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+import { escape as esc, heading } from './html.ts';
 
 const ARROW = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg>';
 const COIN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg>';
@@ -49,10 +47,6 @@ const price = (label: string): string => label.match(/^\d+/)?.[0] ?? label;
 
 /** The question line as in the design: `You asked: “…”`. */
 const asked = (q: unknown): string => `You asked: “${esc(q)}”`;
-
-export function heading(kicker: string, title: string, description: string): string {
-  return `<div class="panel-heading"><span class="eyebrow">${kicker}</span><h2>${title}</h2><p>${description}</p></div>`;
-}
 
 export function briefingPanel(v: BriefingView): string {
   const b = v.copy.briefing;

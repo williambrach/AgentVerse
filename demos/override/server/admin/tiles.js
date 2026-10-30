@@ -1,4 +1,5 @@
 // Player numbers, health tiles and sparklines. Pure DOM, text via textContent only.
+import { isNum, pad2 } from './dom.js';
 const SVGNS = 'http://www.w3.org/2000/svg';
 
 // key: [direction, amber, red]. 'gt' = worse when above, 'lt' = worse when below.
@@ -14,7 +15,7 @@ export const THRESHOLDS = {
 };
 
 const ORDER = { ok: 0, warn: 1, bad: 2 };
-const num = (v) => typeof v === 'number' && Number.isFinite(v);
+const num = isNum;
 
 export function levelOf(key, value, now) {
   const t = THRESHOLDS[key];
@@ -35,7 +36,7 @@ export function levelOf(key, value, now) {
 }
 
 const trim = (n) => (n >= 10 ? String(Math.round(n)) : String(Math.round(n * 10) / 10));
-const pad = (n) => String(n).padStart(2, '0');
+const pad = pad2;
 
 export function format(key, value) {
   if (!num(value)) return '–';

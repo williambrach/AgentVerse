@@ -19,6 +19,12 @@ function failureMessage(code, status) {
 }
 // A queue wait or a budget retry says nothing about the endpoint's health.
 const NOT_HEALTH = new Set(['queue_timeout', 'completion_limit']);
+const RETRY_AFTER_CAP_MS = 5000;
+const defaultSleep = (ms, signal) => new Promise(resolve => {
+  const timer = setTimeout(done, ms);
+  function done() { clearTimeout(timer); signal?.removeEventListener('abort', done); resolve(); }
+  signal?.addEventListener('abort', done, { once: true });
+});
 const SEMANTIC = new Set(['empty_or_invalid_answer', 'content_filter', 'completion_limit', 'invalid_response']);
 const FIVE_MINUTES = 300_000;
 const safe = (fn, label) => (...args) => { try { fn(...args); } catch (error) { console.error(`${label} failed: ${error.message}`); } };
@@ -33,14 +39,14 @@ function pickReasoning(message) {
 export class LlmRouter {
   constructor({
     endpoints, maxInFlight = 200, deadlineMs = 60_000, maxCompletionTokens = 2048, failover = { failures: 5, windowMs: 30_000 },
-    fetcher = fetch, now = Date.now, restore = null, onSystem = () => {}, onTrace = () => {}, onEvent = () => {},
+    fetcher = fetch, now = Date.now, sleep = defaultSleep, restore = null, onSystem = () => {}, onTrace = () => {}, onEvent = () => {},
   }) {
     this.eps = endpoints.map(e => ({
       ...e, baseUrl: e.baseUrl.replace(/\/$/, ''), host: new URL(e.baseUrl).host, maxInFlight: e.maxInFlight ?? 50,
       tokenParam: e.tokenParam || 'max_completion_tokens', timeoutMs: e.timeoutMs ?? 25_000, temperature: e.temperature ?? null, reasoningEffort: e.reasoningEffort ?? null,
       inFlight: 0, failureTimes: [], recent: [], lastSuccessAt: null, lastFailureAt: null, lastFailureReason: null, lastAlertAt: -Infinity,
     }));
-    Object.assign(this, { maxInFlight, deadlineMs, maxCompletionTokens, failover, fetcher, now });
+    Object.assign(this, { maxInFlight, deadlineMs, maxCompletionTokens, failover, fetcher, now, sleep });
     this.onSystem = safe(onSystem, 'onSystem'); this.onTrace = safe(onTrace, 'onTrace'); this.onEvent = safe(onEvent, 'onEvent');
     this.activeIdx = 0; this.pinned = false;
     const restored = restore ? this.eps.findIndex(e => e.name === restore.active) : -1;
@@ -125,6 +131,7 @@ export class LlmRouter {
     if (NOT_HEALTH.has(code)) return;
     const t = this.now();
     ep.failureTimes = ep.failureTimes.filter(x => x > t - FIVE_MINUTES); ep.failureTimes.push(t);
+    if (code === 'rate_limited') return; // busy is not broken: no automatic failover
     ep.recent = ep.recent.filter(x => x > t - this.failover.windowMs); ep.recent.push(t);
     if (idx === this.activeIdx && !this.pinned && idx < this.eps.length - 1 && ep.recent.length >= this.failover.failures) {
       this.changeActive(idx + 1, { pinned: false, by: 'auto', reason: `${ep.recent.length} failures in ${this.failover.windowMs} ms` });
@@ -150,6 +157,7 @@ export class LlmRouter {
           method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ep.key}` }, body: JSON.stringify(body), signal,
         });
         out.status = response.status;
+        out.retryAfter = response.headers?.get?.('retry-after') ?? null;
         out.data = response.ok ? await response.json() : null;
         return response;
       })();
@@ -223,6 +231,13 @@ export class LlmRouter {
     return error;
   }
 
+  // Retry-After seconds (capped) when the provider sent them, else 500-1500 ms of jitter.
+  rateLimitWait(result) {
+    const seconds = Number(result.retryAfter);
+    if (result.retryAfter !== null && result.retryAfter !== '' && Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, RETRY_AFTER_CAP_MS);
+    return 500 + Math.floor(Math.random() * 1001);
+  }
+
   async run(req, deadline, track) {
     const initial = this.maxCompletionTokens;
     let budget = initial; let lastResult = null; let lastIdx = null;
@@ -252,16 +267,26 @@ export class LlmRouter {
           return { content: result.content.trim(), reasoning: result.reasoning ?? null, provenance: this.provenance(track, idx, result) };
         }
         this.recordFailure(idx, result.code, result.status);
-        let target = null;
+        let target = null; let wait = 0;
         // A timeout bound by the question deadline leaves no time for a second call.
         if (n === 1 && !deadline.signal.aborted && !(result.code === 'timeout' && result.deadlineBound)) {
           if (result.code === 'completion_limit') {
             const doubled = Math.min(initial * 2, 8192);
             if (doubled !== budget) { target = idx; budget = doubled; }
-          } else if (idx + 1 < this.eps.length) { target = idx + 1; budget = initial; }
+          } else if (result.code === 'rate_limited' && (wait = this.rateLimitWait(result)) < deadline.endsAt - this.now()) {
+            target = idx;
+          } else if (idx + 1 < this.eps.length) { target = idx + 1; budget = initial; wait = 0; }
         }
         if (target === null) { held = null; this.release(idx); break; }
         track.semanticRetry = semantic;
+        if (wait > 0) {
+          // Back off without holding the slot, then take the head of the queue.
+          held = null; this.release(idx);
+          await this.sleep(wait, deadline.signal);
+          queued = this.now();
+          pending = this.acquire(target, deadline.signal, true);
+          continue;
+        }
         // Queue the retry before freeing the slot, so it keeps its place at the head.
         queued = this.now();
         pending = this.acquire(target, deadline.signal, true);

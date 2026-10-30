@@ -1,4 +1,4 @@
-import { statfsSync } from 'node:fs';
+import { diskFreeBytes } from './monitor-sources.mjs';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 
 // A small Prometheus text encoder (no prom-client: the server has no runtime dependencies).
@@ -163,8 +163,7 @@ export function bindCollectors(registry, { router = null, investigations = null,
   });
   registry.gauge('override_disk_free_bytes', 'Free disk space under the data directory.', [], () => {
     if (!dataDir) return null;
-    const fs = statfsSync(dataDir);
-    return fs.bavail * fs.bsize;
+    return diskFreeBytes(dataDir);
   });
   let monitor = monitors.get(registry);
   if (!monitor) { monitor = monitorEventLoopDelay({ resolution: 20 }); monitor.enable(); monitors.set(registry, monitor); }

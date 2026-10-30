@@ -9,8 +9,6 @@ export interface WorldPack {
   slots: SlotPoint[];
   /** Measured art only: on-screen height of the sheet's tallest cast frame and of the investigator, in px. */
   heights?: { cast: number; investigator: number };
-  /** Walk rows (0 down, 1 up, 2 left, 3 right) whose step 3 is rebuilt from step 1 with the legs mirrored. */
-  strideFix?: { rows: number[]; band: number; halfWidth: number };
 }
 
 const grove: WorldPack = {

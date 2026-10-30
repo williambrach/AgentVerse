@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Arbiter teaser stage</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=block">
+<!-- The teaser, frame by frame: window.renderAt(t) draws the storyboard at time t (seconds). No CSS animation or timers. -->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #e8edda; overflow: hidden; }
+  #frame { position: relative; overflow: hidden; background: #e8edda; color: #2f4630; font-family: 'DM Sans', sans-serif; }
+  #win { position: absolute; overflow: hidden; background: #82a75e; }
+  .plate { position: absolute; left: 0; top: 0; width: 3840px; height: 2720px; transform-origin: 0 0; }
+  .band { position: absolute; inset: 0; overflow: hidden; display: none; }
+  .tint { position: absolute; left: 0; right: 0; mix-blend-mode: screen; display: none; }
+
+  #hud { position: absolute; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; align-items: center; background: #f6f1dc; border-bottom: 4px solid #3d513c; font: 600 22px/1 'IBM Plex Mono', monospace; letter-spacing: .12em; color: #4b6340; }
+  #hud b { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #729c54; margin-right: 14px; vertical-align: 1px; }
+
+  .bubble { position: absolute; left: 0; top: 0; background: #fffbea; border: 5px solid #3d513c; border-radius: 8px; box-shadow: 0 10px 0 rgba(47, 70, 48, .28); white-space: nowrap; opacity: 0; }
+  .bubble span { display: block; font: 600 22px/1 'IBM Plex Mono', monospace; letter-spacing: .14em; color: #7e8e62; }
+  .bubble p { font-weight: 700; color: #2f4630; letter-spacing: -.01em; }
+  .bubble i { position: absolute; bottom: -19px; width: 30px; height: 30px; background: #fffbea; border-right: 5px solid #3d513c; border-bottom: 5px solid #3d513c; transform: translateX(-50%) rotate(45deg); }
+
+  .q { position: absolute; left: 0; top: 0; font: 700 64px/1 'IBM Plex Mono', monospace; color: #2f4630; background: #fff6dd; border: 5px solid #2f4630; padding: 10px 22px 14px; box-shadow: 0 8px 0 rgba(47, 70, 48, .3); opacity: 0; }
+
+  .cap { position: absolute; left: 0; top: 0; font: 600 68px/1.12 'IBM Plex Mono', monospace; letter-spacing: -.02em; color: #2f4630; background: #fff6dd; border: 6px solid #2f4630; padding: 22px 40px 26px; box-shadow: 12px 12px 0 rgba(47, 70, 48, .3); white-space: nowrap; opacity: 0; }
+  .cap mark { background: linear-gradient(transparent 55%, #f1c94a 55% 92%, transparent 92%); color: inherit; }
+  .cap div + div { display: none; }
+
+  #info { position: absolute; left: 0; right: 0; text-align: center; display: none; }
+  .eyebrow { font: 600 24px/1 'IBM Plex Mono', monospace; letter-spacing: .16em; color: #7e8e62; }
+  #steps { display: flex; justify-content: center; gap: 38px; margin-top: 34px; font: 600 28px/1 'DM Sans', sans-serif; color: #9aa68b; }
+  #steps div { padding-bottom: 12px; border-bottom: 5px solid transparent; }
+  #steps small { font: 600 20px 'IBM Plex Mono', monospace; margin-right: 10px; }
+  #steps .on { color: #2f4630; border-color: #e2a91f; }
+
+  #card { position: absolute; inset: 0; background: repeating-linear-gradient(#fff9e8 0 47px, #efe8cf 47px 48px); display: none; }
+  #card > * { position: absolute; opacity: 0; }
+  #c-q { font: 700 120px/.98 'DM Sans', sans-serif; letter-spacing: -.035em; color: #2f4630; }
+  #c-you { font: 600 54px/1 'DM Sans', sans-serif; color: #54774b; letter-spacing: -.01em; }
+  #c-mark { font: 700 150px/1 'IBM Plex Mono', monospace; letter-spacing: .06em; color: #2f4630; }
+  #c-cup { font: 600 44px/1 'IBM Plex Mono', monospace; background: #2f4630; color: #fff6dd; padding: 14px 30px 16px; border-radius: 6px; letter-spacing: .02em; }
+  #c-cup b { color: #f1c94a; font-weight: 700; }
+  #c-mugs { display: flex; opacity: 1; }
+  .mug { text-align: center; opacity: 0; }
+  .mug .shot { background: url(cache/plate-native.png) no-repeat; image-rendering: pixelated; border: 6px solid #2f4630; box-shadow: 8px 8px 0 rgba(47, 70, 48, .25); }
+  .mug .name { display: inline-block; margin-top: 20px; font: 600 28px/1 'IBM Plex Mono', monospace; letter-spacing: .12em; background: #fff6dd; border: 4px solid #2f4630; padding: 8px 14px; }
+  #flash { position: absolute; inset: 0; background: #fffef4; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <div id="win">
+    <img class="plate" id="plate" src="cache/plate8x.png" alt="">
+    <div id="bands"></div>
+    <div class="tint" id="tint-a" style="background: rgba(255, 70, 140, .35)"></div>
+    <div class="tint" id="tint-b" style="background: rgba(70, 220, 255, .35)"></div>
+    <div id="bubbles"></div>
+    <div id="qs"></div>
+    <div id="hud"><span><b></b>THE BANANA MYSTERY / PICNIC DAY</span><span id="clock">00:12</span></div>
+  </div>
+  <div class="cap" id="cap"><div>Three agents,</div><div>but one is <mark>misaligned</mark>.</div><div>Can you find him?</div></div>
+  <div id="info">
+    <div class="eyebrow">CASE 001 · THE BANANA MYSTERY</div>
+    <div id="steps"><div><small>01</small>Find 3 clues</div><div><small>02</small>Ask 3 monkeys</div><div><small>03</small>Choose</div></div>
+  </div>
+  <div id="card">
+    <div class="eyebrow" id="c-eyebrow">CASE 001 · THE BANANA MYSTERY</div>
+    <div id="c-q">Who broke<br>the rule?</div>
+    <div id="c-mugs"></div>
+    <div id="c-you">You are the:</div>
+    <div id="c-mark">ARBITER</div>
+    <div id="c-cup"><b>@</b> IMADA Cup</div>
+  </div>
+  <div id="flash"></div>
+</div>
+<script>
+// Scene coordinates are game pixels of the 480×340 grove canvas (cache/plate-native.png); plate8x.png is the same at 8×.
+const PLATE = { w: 480, h: 340, scale: 8 };
+// Timeline (seconds; audio.sh uses the same beats): the wide opener with the caption revealed line by line
+// (the glitch lands on "misaligned"), one close-up per suspect, then the end card at CARD.
+const LINES = [.1, 1.0, 1.5], GLITCH = .95, CARD = 7.0;
+const SUSPECTS = [
+  { name: 'MOMO', role: 'THE PLANNER', line: 'The keeper said we could!', at: 2.5, focus: [118, 110], cx: 118, head: 96, box: [92, 92, 52, 58] },
+  { name: 'PIP', role: 'THE CARRIER', line: 'I just carried them.', at: 4.0, focus: [366, 112], cx: 366, head: 98, box: [340, 94, 52, 58] },
+  { name: 'NORI', role: 'THE LOOKOUT', line: 'I never heard the bell.', at: 5.5, focus: [366, 225], cx: 366, head: 211, box: [340, 207, 52, 58] },
+];
+
+const LAYOUTS = {
+  '16x9': {
+    W: 1920, H: 1080, win: [0, 0, 1920, 1080], hud: 22,
+    closeK: 9, wideK: 5, wideY: 160, bubbleText: 56, q: 64,
+    cap: 'center', info: null,
+    mugScale: 5, card: 'wide',
+  },
+  '9x16': {
+    W: 1080, H: 1920, win: [0, 440, 1080, 1120], hud: 20,
+    closeK: 7, wideK: 3.35, wideY: 178, bubbleText: 52, q: 54,
+    cap: 'top', info: 1610,
+    mugScale: 5, card: 'tall',
+  },
+};
+const L = LAYOUTS[new URLSearchParams(location.search).get('aspect') ?? '16x9'];
+const [WX, WY, WW, WH] = L.win;
+
+const $ = id => document.getElementById(id);
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const outCubic = x => 1 - (1 - clamp01(x)) ** 3;
+const outBack = x => (x = clamp01(x), 1 + 2.4 * (x - 1) ** 3 + 1.4 * (x - 1) ** 2);
+const hash = n => { const s = Math.sin(n * 12.9898) * 43758.5453; return s - Math.floor(s); };
+const px = v => `${Math.round(v * 100) / 100}px`;
+
+// ---- layout set-up (once) ----
+const frame = $('frame');
+Object.assign(frame.style, { width: px(L.W), height: px(L.H) });
+Object.assign($('win').style, { left: px(WX), top: px(WY), width: px(WW), height: px(WH) });
+$('hud').style.fontSize = px(L.hud);
+$('hud').style.padding = `${L.hud * .7}px ${L.hud * 1.2}px`;
+
+const bands = Array.from({ length: 6 }, () => {
+  const band = document.createElement('div');
+  band.className = 'band';
+  band.innerHTML = '<img class="plate" src="cache/plate8x.png" alt="">';
+  $('bands').append(band);
+  return band;
+});
+const bubbles = SUSPECTS.map(s => {
+  const el = document.createElement('div');
+  el.className = 'bubble';
+  el.innerHTML = `<span>${s.name} · ${s.role}</span><p>${s.line}</p><i></i>`;
+  el.style.padding = `${L.bubbleText * .36}px ${L.bubbleText * .5}px ${L.bubbleText * .4}px`;
+  el.querySelector('p').style.font = `700 ${L.bubbleText}px/1.1 'DM Sans', sans-serif`;
+  el.querySelector('p').style.marginTop = px(L.bubbleText * .24);
+  $('bubbles').append(el);
+  return el;
+});
+const qs = SUSPECTS.map(() => {
+  const el = document.createElement('div');
+  el.className = 'q';
+  el.textContent = '?';
+  el.style.fontSize = px(L.q);
+  $('qs').append(el);
+  return el;
+});
+const mugs = SUSPECTS.map(s => {
+  const [x, y, w, h] = s.box, k = L.mugScale;
+  const el = document.createElement('div');
+  el.className = 'mug';
+  el.innerHTML = `<div class="shot" style="width:${w * k + 12}px;height:${h * k + 12}px;background-size:${PLATE.w * k}px ${PLATE.h * k}px;background-position:${-x * k}px ${-y * k}px"></div><div class="name">${s.name}</div>`;
+  $('c-mugs').append(el);
+  return el;
+});
+$('c-mugs').style.gap = px(L.mugScale * 8);
+
+function cardLayout() {
+  const place = (id, x, y, anchor = 'left') => {
+    const el = $(id);
+    el.style.top = px(y);
+    el.style.left = px(anchor === 'center' ? x - el.offsetWidth / 2 : x);
+  };
+  $('card').style.display = 'block';
+  if (L.card === 'wide') {
+    place('c-eyebrow', 150, 190);
+    place('c-q', 144, 248);
+    place('c-you', 150, 548);
+    place('c-mark', 140, 640);
+    place('c-cup', 150, 830);
+    place('c-mugs', 1420, 345, 'center');
+  } else {
+    $('c-q').style.textAlign = 'center';
+    $('c-q').style.fontSize = '140px';
+    $('c-you').style.fontSize = '60px';
+    $('c-mark').style.fontSize = '170px';
+    place('c-eyebrow', 540, 220, 'center');
+    place('c-q', 540, 270, 'center');
+    place('c-mugs', 540, 620, 'center');
+    place('c-you', 540, 1080, 'center');
+    place('c-mark', 540, 1170, 'center');
+    place('c-cup', 540, 1380, 'center');
+  }
+  $('card').style.display = 'none';
+}
+if (L.info) { $('info').style.display = 'block'; $('info').style.top = px(L.info); }
+
+// ---- camera ----
+function camera(t) {
+  let k, f;
+  if (t < SUSPECTS[0].at) {
+    k = L.wideK + t * .1;
+    f = [242, L.wideY];
+  } else {
+    const s = [...SUSPECTS].reverse().find(s => t >= s.at), dt = t - s.at;
+    k = L.closeK * (.9 + .1 * outCubic(dt / .16)) + dt * .3;
+    f = s.focus;
+  }
+  const w = PLATE.w * k, h = PLATE.h * k;
+  const tx = Math.min(0, Math.max(WW - w, WW / 2 - f[0] * k));
+  const ty = Math.min(0, Math.max(WH - h, WH / 2 - f[1] * k));
+  return { k, tx, ty };
+}
+const toWin = (c, x, y) => [c.tx + x * c.k, c.ty + y * c.k];
+const plateTransform = (c, dx = 0, dy = 0) => `translate(${px(c.tx + dx)}, ${px(c.ty + dy)}) scale(${c.k / PLATE.scale})`;
+
+function placeCap(el, mode, appear, t) {
+  const w = el.offsetWidth, h = el.offsetHeight;
+  const x = (L.W - w) / 2;
+  const y = mode === 'bottom' ? L.H - 110 - h : mode === 'top' ? (WY - h) / 2 + 10 : (L.H - h) / 2 + 40;
+  const e = outBack((t - appear) / .22);
+  el.style.opacity = t >= appear ? 1 : 0;
+  el.style.transform = `translate(${px(x)}, ${px(y + (1 - e) * 30)})`;
+}
+
+// ---- the storyboard ----
+window.renderAt = function renderAt(t) {
+  const frameNo = Math.round(t * 30);
+  const onCard = t >= CARD;
+  $('card').style.display = onCard ? 'block' : 'none';
+  $('flash').style.opacity = clamp01(1 - (t - CARD) / .12) * (t >= CARD ? .85 : 0);
+
+  // Scene and camera (with a shake during the glitch on "misaligned").
+  const c = camera(t);
+  const glitch = t >= GLITCH && t < GLITCH + .42;
+  const shake = glitch ? [(hash(frameNo) - .5) * 26, (hash(frameNo + 7) - .5) * 14] : [0, 0];
+  $('plate').style.transform = plateTransform(c, ...shake);
+  bands.forEach((band, i) => {
+    const on = glitch && hash(frameNo * 3 + i) > .25;
+    band.style.display = on ? 'block' : 'none';
+    if (!on) return;
+    const top = hash(frameNo * 11 + i) * WH, height = 14 + hash(frameNo * 5 + i) * 110;
+    band.style.clipPath = `inset(${px(top)} 0 ${px(Math.max(0, WH - top - height))} 0)`;
+    band.firstChild.style.transform = plateTransform(c, shake[0] + (hash(frameNo * 13 + i) - .5) * 120, shake[1]);
+  });
+  ['tint-a', 'tint-b'].forEach((id, i) => {
+    const el = $(id), on = glitch && hash(frameNo * 17 + i) > .35;
+    el.style.display = on ? 'block' : 'none';
+    el.style.top = px(hash(frameNo * 19 + i) * WH);
+    el.style.height = px(20 + hash(frameNo * 23 + i) * 90);
+  });
+
+  $('hud').style.display = onCard ? 'none' : 'flex';
+  $('clock').textContent = `00:${String(12 + Math.floor(t)).padStart(2, '0')}`;
+
+  // Testimony bubbles: one per close-up, popping from the tail.
+  SUSPECTS.forEach((s, i) => {
+    const el = bubbles[i], next = SUSPECTS[i + 1]?.at ?? CARD, appear = s.at + .06;
+    const on = t >= appear && t < next;
+    el.style.opacity = on ? 1 : 0;
+    if (!on) return;
+    const [hx, hy] = toWin(c, s.cx, s.head);
+    const w = el.offsetWidth, h = el.offsetHeight, margin = 40;
+    const left = Math.max(margin, Math.min(WW - margin - w, hx - w / 2));
+    const top = hy - 40 - h;
+    const tail = Math.max(36, Math.min(w - 36, hx - left));
+    el.querySelector('i').style.left = px(tail);
+    el.style.transformOrigin = `${px(tail)} 100%`;
+    const e = outBack((t - appear) / .2);
+    el.style.transform = `translate(${px(left)}, ${px(top)}) scale(${.55 + .45 * e})`;
+  });
+
+  // Opener: a question mark over every suspect.
+  SUSPECTS.forEach((s, i) => {
+    const el = qs[i], appear = LINES[2] + i * .1, on = t >= appear && t < SUSPECTS[0].at;
+    el.style.opacity = on ? 1 : 0;
+    if (!on) return;
+    const [hx, hy] = toWin(c, s.cx, s.head);
+    const e = outBack((t - appear) / .22), bob = Math.sin(t * 7 + i * 2) * 5;
+    el.style.transform = `translate(${px(hx - el.offsetWidth / 2)}, ${px(hy - 24 - el.offsetHeight + bob)}) scale(${.3 + .7 * e})`;
+  });
+
+  // Caption: over the wide shot in 16:9; in 9:16 it stays above the scene through the testimony.
+  const cap = $('cap'), capUntil = L.cap === 'top' ? CARD : SUSPECTS[0].at;
+  if (t >= LINES[0] && t < capUntil) {
+    [...cap.children].forEach((line, i) => { line.style.display = t >= LINES[i] ? 'block' : 'none'; });
+    placeCap(cap, L.cap, LINES[0], t);
+  } else cap.style.opacity = 0;
+
+  if (L.info) {
+    $('info').style.display = onCard ? 'none' : 'block';
+    const step = t < SUSPECTS[0].at ? -1 : 1;
+    [...$('steps').children].forEach((el, i) => el.classList.toggle('on', i === step));
+  }
+
+  // End card.
+  if (onCard) {
+    const rise = (id, at, dist = 40) => {
+      const el = $(id), e = outCubic((t - at) / .25);
+      el.style.opacity = t >= at ? e : 0;
+      el.style.translate = `0 ${px((1 - e) * dist)}`;
+    };
+    rise('c-eyebrow', CARD + .05, 20);
+    rise('c-q', CARD + .05);
+    mugs.forEach((el, i) => {
+      const at = CARD + .2 + i * .12, e = outBack((t - at) / .25);
+      el.style.opacity = t >= at ? 1 : 0;
+      el.style.transform = `scale(${.5 + .5 * e})`;
+    });
+    rise('c-you', CARD + .7);
+    const stamp = CARD + 1.1, e = outCubic((t - stamp) / .18);
+    $('c-mark').style.opacity = t >= stamp ? 1 : 0;
+    $('c-mark').style.transform = `scale(${1.35 - .35 * e})`;
+    $('c-mark').style.transformOrigin = L.card === 'wide' ? '0 50%' : '50% 50%';
+    rise('c-cup', CARD + 1.3, 30);
+  }
+};
+
+window.stageReady = (async () => {
+  await Promise.all(['600 76px "IBM Plex Mono"', '700 150px "IBM Plex Mono"', '700 120px "DM Sans"', '600 54px "DM Sans"'].map(f => document.fonts.load(f)));
+  await document.fonts.ready;
+  await Promise.all([...document.images].map(img => img.decode()));
+  cardLayout();
+  return true;
+})();
+</script>
+</body>
+</html>

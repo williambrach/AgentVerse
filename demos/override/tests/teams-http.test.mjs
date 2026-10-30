@@ -10,7 +10,7 @@ const TAKEN = (n) => `A team called ${n} is already playing. Join it, or pick an
 
 async function boot(t, env = {}, dir = null) {
   if (!dir) { dir = mkdtempSync(join(tmpdir(), 'override-teams-')); t.after(() => rmSync(dir, { recursive: true, force: true })); }
-  const s = await startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 'secret-one', OVERRIDE_ADMIN_TOKEN: 'admin-token', ...env });
+  const s = await startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 'secret-one', OVERRIDE_ADMIN_TOKEN: 'admin-token', ...env }, { publicDir: mkdtempSync(join(tmpdir(), 'override-public-')) });
   t.after(() => s.close());
   return { ...s, dir };
 }

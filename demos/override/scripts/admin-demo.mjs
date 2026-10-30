@@ -7,13 +7,13 @@ import { fileURLToPath } from 'node:url';
 import { startServer } from '../server/index.mjs';
 import { ROLE_IDS } from '../server/roles.mjs';
 import { cases } from '../server/cases/index.mjs';
-import { startMockLlm } from '../tests/mock-llm.mjs';
+import { startMockLlm } from './mock-llm.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BURST_MS = 30_000;
 const BEAT_MS = 30_000;
 
-export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw = [4000, 20_000], burstEvery = 120, port = 3001, adminPort = 3002, token = 'demo', seconds = 0 } = {}) {
+export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw = [4000, 20_000], burstEvery = 120, port = 3001, adminPort = 3002, token = 'demo', seconds = 0, publicDir } = {}) {
   const thinkMs = Array.isArray(thinkRaw) && thinkRaw.length === 2 && thinkRaw.every(Number.isFinite) ? thinkRaw : [4000, 20_000];
   const dir = mkdtempSync(join(tmpdir(), 'override-demo-'));
   const timers = new Set();
@@ -30,7 +30,8 @@ export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw
   });
   const between = (lo, hi) => lo + Math.random() * (hi - lo);
   const think = () => sleep(between(thinkMs[0], thinkMs[1]));
-  const every = (ms, fn) => { const id = setInterval(fn, ms); timers.add(id); return id; };
+  // After close() starts, arming a timer would outlive the demo and hold the process open forever.
+  const every = (ms, fn) => { if (ctl.signal.aborted) return null; const id = setInterval(fn, ms); timers.add(id); return id; };
 
   const close = () => closing ||= (async () => {
     ctl.abort();
@@ -48,9 +49,9 @@ export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw
     writeFileSync(endpoints, JSON.stringify(['a', 'b'].map((l) => ({ name: l, baseUrl: mocks[l].url, model: `mock-${l}`, keyEnv: `OVERRIDE_ENDPOINT_${l.toUpperCase()}_KEY`, maxInFlight: 200 }))));
     const dist = resolve(root, 'dist');
     running = await startServer({
-      PORT: String(port), OVERRIDE_ADMIN_PORT: String(adminPort), OVERRIDE_ENV: 'demo', OVERRIDE_DATA_DIR: join(dir, 'data'), OVERRIDE_SECRET: 'demo-secret',
+      PORT: String(port), OVERRIDE_ADMIN_PORT: String(adminPort), OVERRIDE_ENV: 'demo', OVERRIDE_APP_COMMIT: process.env.OVERRIDE_APP_COMMIT || 'demo', OVERRIDE_DATA_DIR: join(dir, 'data'), OVERRIDE_SECRET: 'demo-secret',
       OVERRIDE_ADMIN_TOKEN: token, OVERRIDE_ENDPOINTS: endpoints, OVERRIDE_ENDPOINT_A_KEY: 'demo-key-a', OVERRIDE_ENDPOINT_B_KEY: 'demo-key-b',
-    }, { publicDir: existsSync(join(dist, 'index.html')) ? dist : null });
+    }, { publicDir: publicDir !== undefined ? publicDir : existsSync(join(dist, 'index.html')) ? dist : null });
   } catch (error) { await close(); throw error; }
 
   if (burstEvery > 0) {
@@ -87,6 +88,7 @@ export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw
     };
     const beat = () => call('POST', '/api/heartbeat', { tab });
     await sleep(rampMs ? (rampMs * index) / Math.max(1, players) : 0);
+    if (ctl.signal.aborted) return;
     every(BEAT_MS, beat);
     beat();
     await call('POST', '/api/team', { name: `Demo team ${index + 1}`, join: true }); // failure: play teamless

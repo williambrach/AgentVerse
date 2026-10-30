@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { InterviewProviderError } from './errors.mjs';
 import { partOf, resolve } from './cases.mjs';
+import { integerEnv } from './http-util.mjs';
 
 export const promptVersion = 'interview-v5';
 export const threadPromptVersion = 'thread-v3';
@@ -9,9 +10,10 @@ export const threadPromptVersion = 'thread-v3';
 export { InterviewProviderError };
 
 function integerSetting(value, fallback, name, minimum, maximum) {
-  if (value === undefined || value === '' || value === null) return fallback;
-  const number = Number(value);
-  if (!Number.isInteger(number) || number < minimum || number > maximum) throw new Error(`${name} must be an integer between ${minimum} and ${maximum}.`);
+  const range = `${name} must be an integer between ${minimum} and ${maximum}.`;
+  let number;
+  try { number = integerEnv(value, fallback, name); } catch { throw new Error(range); }
+  if (number < minimum || number > maximum) throw new Error(range);
   return number;
 }
 

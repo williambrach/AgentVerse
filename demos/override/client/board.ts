@@ -1,14 +1,11 @@
 import type { Board, BoardCase, BoardCell, LeaderboardRow } from './types.ts';
-
-const esc = (s: unknown): string => String(s ?? '').replace(/[&<>"']/g, c =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+import { escape as esc, mmss } from './html.ts';
 
 export const EMPTY = 'No team has finished a case yet.';
 const MAX_ROWS = 10;
 
 export function clock(ms: number): string {
-  const total = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+  return mmss(Math.floor((Number(ms) || 0) / 1000));
 }
 
 const pts = (n: number) => `${n} ${n === 1 ? 'pt' : 'pts'}`;

@@ -11,7 +11,7 @@
     "test": "node --test tests/*.test.mjs",
     "loadtest": "node tests/loadtest.mjs",
     "cases:prompt": "node scripts/case-prompt.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "npm run build && playwright test"
   },
   "dependencies": { "phaser": "3.90.0" },
   "devDependencies": { "typescript": "~5.9.3", "vite": "^7.3.1", "@types/node": "^22.19.0", "@playwright/test": "^1.58.2" }

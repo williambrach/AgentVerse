@@ -94,3 +94,15 @@ test('answer ignores non-finite latency', async () => {
   assert.equal(w.stats().answerP95Ms, 100);
   assert.equal(w.stats().llmErrorRate, 0);
 });
+
+test('open bucket p95 follows new answers; closed bucket stays', () => {
+  const c = clock(0);
+  const w = createWindows({ now: c.now });
+  w.answer(100);
+  assert.equal(w.history()[0].p95Ms, 100);
+  w.answer(900);
+  assert.equal(w.history()[0].p95Ms, 900);
+  c.set(60000);
+  assert.equal(w.history()[0].p95Ms, 900);
+  assert.equal(w.history()[0].p95Ms, 900);
+});
