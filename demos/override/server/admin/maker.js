@@ -22,7 +22,7 @@ export function mountMaker(root, { api, caseId = null, location = null } = {}) {
     for (const c of cases) {
       const b = el(doc, 'button', c.id === id ? 'tab active' : 'tab', { text: `${c.title} · ${c.rev ? 'rev ' + c.rev : 'authored'}`, parent: nav });
       b.type = 'button';
-      b.addEventListener('click', () => select(c.id));
+      b.addEventListener('click', () => select(c.id).catch((err) => { $('status').textContent = err.message; }));
     }
   }
 
@@ -66,7 +66,9 @@ export function mountMaker(root, { api, caseId = null, location = null } = {}) {
   }
 
   async function fetchDetail() {
-    show(await api(`/admin/content/${id}`));
+    const want = id;
+    const next = await api(`/admin/content/${want}`);
+    if (want === id) show(next);
   }
 
   async function load() {
@@ -120,7 +122,14 @@ export function mountMaker(root, { api, caseId = null, location = null } = {}) {
     }
   }
 
+  let publishing = false;
   async function publish() {
+    if (publishing) return;
+    publishing = true;
+    try { await doPublish(); } finally { publishing = false; }
+  }
+
+  async function doPublish() {
     form.clearErrors();
     const note = $('publish-note');
     note.textContent = '';
@@ -183,7 +192,7 @@ function start() {
   }
   $('token').value = token();
   const app = mountMaker(document.body, { api, caseId: new URLSearchParams(window.location.search).get('case'), location: window.location });
-  const go = () => app.load().catch((err) => { $('status').textContent = err.message; });
+  const go = () => app.load().catch((err) => { $('status').textContent = err.status === 401 ? 'Bad token: ' + err.message : err.message; });
   $('auth').addEventListener('submit', (e) => {
     e.preventDefault();
     sessionStorage.setItem('adminToken', $('token').value.trim());

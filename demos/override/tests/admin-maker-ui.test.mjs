@@ -132,3 +132,37 @@ test('case_param_selects_case', async t => {
   await s.app.load();
   assert.equal(s.calls[1][0], '/admin/content/tower-echo-bell');
 });
+
+test('double_click_publish_sends_one_put', async t => {
+  let release;
+  const gate = new Promise(r => { release = r; });
+  const s = mount(t, { overrides: { 'PUT /admin/content/banana-mystery': () => gate } });
+  await s.app.load();
+  const a = s.$('publish').click();
+  const b = s.$('publish').click();
+  release({});
+  await Promise.all([a, b]);
+  assert.equal(s.calls.filter(c => c[2] === 'PUT').length, 1);
+  await s.$('publish').click();
+  assert.equal(s.calls.filter(c => c[2] === 'PUT').length, 2);
+});
+
+test('tab_click_failure_is_shown_not_thrown', async t => {
+  const s = mount(t, { overrides: { 'GET /admin/content/tower-echo-bell': () => { throw new Error('boom'); } } });
+  await s.app.load();
+  await s.$('cases').all(e => e.tag === 'button')[1].click();
+  assert.equal(s.$('status').textContent, 'boom');
+});
+
+test('stale_detail_response_is_ignored', async t => {
+  let release;
+  const slow = new Promise(r => { release = r; });
+  const s = mount(t, { overrides: { 'GET /admin/content/tower-echo-bell': () => slow } });
+  await s.app.load();
+  const p = s.app.select('tower-echo-bell');
+  await s.app.select('banana-mystery');
+  release(detail({ id: 'tower-echo-bell', title: 'Tower', by: 'zed' }));
+  await p;
+  assert.ok(area(s, 'copy.intro.lead'));
+  assert.equal(s.$('history').children.length, 3);
+});
