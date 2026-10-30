@@ -44,7 +44,9 @@ test('leaderboard', () => {
   assert.ok(leaderboardPanel({ rankBy: 'time', teams: [] }).includes('<p class="board-empty">No team has finished a case yet.</p>'));
 });
 
-test('topbar_wraps_narrow', async () => {
-  const css = (await import('node:fs')).readFileSync(new URL('../client/team.css', import.meta.url), 'utf8');
-  assert.match(css, /max-width:720px\)\{\.topbar\{flex-wrap:wrap;height:auto/);
+test('leaderboard_cells', () => {
+  const cases = [{ id: 'a', title: 'A', order: 1, total: 4 }];
+  const html = leaderboardPanel({ rankBy: 'time', cases, teams: [row({ cells: [{ caseId: 'a', state: 'partial', points: 3 }] })] });
+  assert.ok(html.includes('class="board-row you"') && html.includes('class="cell partial"') && html.includes('<th>Cases</th>'));
+  assert.ok(!leaderboardPanel({ rankBy: 'time', teams: [row()] }).includes('class="cell'));
 });

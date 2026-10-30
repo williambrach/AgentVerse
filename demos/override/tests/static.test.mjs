@@ -13,6 +13,7 @@ function fixture() {
   writeFileSync(join(dir, 'index.html'), '<html>' + 'x'.repeat(2000) + '</html>');
   writeFileSync(join(dir, 'assets', 'index-CpDjbI4y.js'), big);
   writeFileSync(join(dir, 'assets', 'plain.css'), 'a{}');
+  writeFileSync(join(dir, 'assets', 'font-CpDjbI4y.woff2'), Buffer.alloc(2048, 7));
   writeFileSync(join(dir, 'logo.png'), Buffer.from([1, 2, 3]));
   writeFileSync(join(dir, '.secret'), 'nope');
   mkdirSync(join(dir, '.hidden'));
@@ -45,6 +46,15 @@ test('brotli for hashed asset', () => {
   assert.match(r.headers['content-type'], /^text\/javascript/);
   assert.equal(r.n, r.body.length);
   assert.equal(brotliDecompressSync(r.body).toString(), big);
+});
+
+test('hashed font is typed, cached for good and not recompressed', () => {
+  const r = call(loadStatic(fixture()), 'GET', '/assets/font-CpDjbI4y.woff2', { 'accept-encoding': 'gzip, br' });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers['content-type'], 'font/woff2');
+  assert.equal(r.headers['cache-control'], 'public, max-age=31536000, immutable');
+  assert.equal(r.headers['content-encoding'], undefined);
+  assert.equal(r.body.length, 2048);
 });
 
 test('gzip when only gzip accepted', () => {

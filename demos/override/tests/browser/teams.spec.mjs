@@ -87,7 +87,9 @@ test('leaderboard_after_correct', async ({ page }) => {
   expect(view.session.verdict).toBeTruthy();
   await page.goto('/');
   await page.locator('#begin-button').click();
-  await page.locator('#leaderboard-button').click();
+  // A closed case resumes on the debrief, which covers the HUD: its own button opens the board.
+  await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
+  await page.locator('#debrief-leaderboard').click();
   await expect(page.locator('#leaderboard')).toBeVisible();
   const own = page.locator('.board-row.you');
   await expect(own).toContainText(name);
@@ -104,7 +106,9 @@ test('replay_keeps_points', async ({ page }) => {
   await play(page.request, TOWER_PERFECT, first, 'tower-echo-bell');
   await page.goto('/');
   await page.locator('#begin-button').click();
-  await page.locator('#leaderboard-button').click();
+  // A closed case resumes on the debrief, which covers the HUD: its own button opens the board.
+  await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
+  await page.locator('#debrief-leaderboard').click();
   const own = page.locator('.board-row.you');
   await expect(own).toContainText('3 pts');
   await expect(own).not.toContainText('6 pts');

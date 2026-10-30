@@ -66,7 +66,7 @@ test('a tower case shows the tower and its cast', async ({ page }) => {
   await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   for (const name of ['Wren', 'Basil', 'Juniper']) await expect(page.locator(`nav [data-go] >> text=${name}`)).toBeVisible();
-  await expect(page.locator('#quick-progress')).toContainText('1. Ask the apprentices · 0 / 3 heard');
+  await expect(page.locator('#quick-progress')).toHaveText('0 of 3 asked · free');
   expect((await sceneState(page)).label).toMatch(/^Wizard Tower with Wren, Basil, Juniper/);
 });
 
@@ -91,7 +91,7 @@ test('walking to an apprentice opens the interview', async ({ page }) => {
   await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   await page.locator('nav [data-go="basil"]').click();
-  await expect(page.locator('#panel h2')).toHaveText('Basil', { timeout: 15_000 });
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('BASIL', { timeout: 15_000 });
 });
 
 test('art that appears later replaces the placeholder', async ({ page }) => {
@@ -121,7 +121,7 @@ test('one key press after round trips arrives once', async ({ page }) => {
   await page.keyboard.down('e');
   await page.waitForTimeout(100);
   await page.keyboard.up('e');
-  await expect(page.locator('#panel h2')).toHaveText('Basil');
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('BASIL');
   await page.waitForTimeout(600);
   expect(visits).toHaveLength(1);
   expect(errors).toEqual([]);
@@ -151,7 +151,7 @@ test('switching from an open interview or with the case board open', async ({ pa
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   await page.locator('nav [data-go="juniper"]').click();
   // Juniper is not in the grove case: the switch must not render her interview against the new cast.
-  await expect(page.locator('#panel h2')).toHaveText('Juniper');
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('JUNIPER');
   await switchTo(page, 'banana-mystery');
   await settled(page, 'grove', ['momo', 'pip', 'nori', 'kiki']);
   await expect(page.locator('#panel h2')).toHaveText('A bunch of trouble.');
@@ -190,44 +190,58 @@ test('case board preview shows the selected world', async ({ page }) => {
 });
 
 test('the tower has its own colours, the grove keeps its own, and the case board follows the pick', async ({ page }) => {
-  const look = () => page.evaluate(() => ({
-    theme: document.documentElement.dataset.theme,
-    page: getComputedStyle(document.documentElement).backgroundColor,
-    topbar: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
-    title: document.title,
-  }));
+  // Both worlds share the same dark page now: what differs is the accent and sky tokens and the swatch in the world panel.
+  const look = () => page.evaluate(() => {
+    const root = getComputedStyle(document.documentElement);
+    return {
+      theme: document.documentElement.dataset.theme,
+      accent: root.getPropertyValue('--accent').trim().toUpperCase(),
+      sky: root.getPropertyValue('--sky').trim().toUpperCase(),
+      swatch: getComputedStyle(document.querySelector('.world-swatch')).backgroundColor,
+      title: document.title,
+    };
+  });
   await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
-  expect(await look()).toEqual({ theme: 'tower', page: 'rgb(228, 225, 238)', topbar: 'rgb(248, 246, 252)', title: 'Lanterns Too Soon · AgentVerse' });
+  expect(await look()).toEqual({ theme: 'tower', accent: '#B9A2EE', sky: '#DCD3F2', swatch: 'rgb(185, 162, 238)', title: 'Lanterns Too Soon · AgentVerse' });
   await page.locator('#reset-button').focus();
   await page.keyboard.press('Shift+Tab');
-  expect(await page.locator('#restart-button').evaluate(el => getComputedStyle(el).outlineColor)).toBe('rgb(116, 102, 176)');
+  // The focus ring is gold in every world.
+  expect(await page.locator('#restart-button').evaluate(el => getComputedStyle(el).outlineColor)).toBe('rgb(244, 183, 64)');
   await switchTo(page, 'banana-mystery');
   await settled(page, 'grove', ['momo', 'pip', 'nori', 'kiki']);
-  expect(await look()).toEqual({ theme: 'grove', page: 'rgb(232, 237, 218)', topbar: 'rgb(255, 249, 232)', title: 'The Banana Mystery · AgentVerse' });
+  expect(await look()).toEqual({ theme: 'grove', accent: '#8CC56A', sky: '#BFE0EE', swatch: 'rgb(140, 197, 106)', title: 'The Banana Mystery · AgentVerse' });
   await page.locator('#reset-button').click();
   await page.locator('.case-option input[name="case"][value="tower-echo-bell"]').check();
   await expect.poll(async () => (await look()).theme).toBe('tower');
+  await expect.poll(async () => (await look()).swatch).toBe('rgb(185, 162, 238)');
   await page.keyboard.press('Escape');
   await expect.poll(async () => (await look()).theme).toBe('grove');
+  await expect.poll(async () => (await look()).swatch).toBe('rgb(140, 197, 106)');
   await expect(page.locator('#app')).toHaveAttribute('data-world', 'grove');
 });
 
 test('station labels are sharp HTML over the canvas that follow its size and world', async ({ page }) => {
+  // The canvas fills the stage and the world (480 x 340) is fitted inside it, so the label layer must sit on the world's rect:
+  // inside the canvas, in the world's proportions, with the font in step with the layout scale.
   const fit = () => page.evaluate(() => {
     const c = document.querySelector('#station canvas').getBoundingClientRect();
     const o = document.querySelector('#station .station-labels').getBoundingClientRect();
     const font = parseFloat(getComputedStyle(document.querySelector('#station .station-label')).fontSize);
-    return [c.width - o.width, c.height - o.height, c.left - o.left, c.top - o.top].map(d => Math.abs(Math.round(d))).join() + ` font ${Math.round(font / c.width * 480)}`;
+    const inside = o.left >= c.left - 1 && o.top >= c.top - 1 && o.right <= c.right + 1 && o.bottom <= c.bottom + 1;
+    return `${inside ? 'inside' : 'outside'} ratio ${(o.width / o.height).toFixed(2)} font ${Math.round(font / o.width * 480)} width ${Math.round(o.width)}`;
   });
+  const widthOf = text => Number(/width (\d+)/.exec(text)[1]);
   await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   const labels = page.locator('#station .station-label');
   await expect(labels).toHaveText(['WREN', 'BASIL', 'JUNIPER', 'START HERE', 'YOUR GUESS']);
   await expect(page.locator('#station .station-prompt')).toHaveText('[E] Read the case');
-  await expect.poll(fit).toBe('0,0,0,0 font 7');
+  await expect.poll(fit).toMatch(/^inside ratio 1\.41 font 7 /);
+  const wide = widthOf(await fit());
   await page.setViewportSize({ width: 1100, height: 760 });
-  await expect.poll(fit).toBe('0,0,0,0 font 7');
+  await expect.poll(async () => widthOf(await fit())).toBeLessThan(wide);
+  await expect.poll(fit).toMatch(/^inside ratio 1\.41 font 7 /);
   await switchTo(page, 'banana-mystery');
   await expect(labels).toHaveText(['MOMO', 'PIP', 'NORI', 'KIKI', 'START HERE', 'YOUR GUESS']);
 });
@@ -235,12 +249,14 @@ test('station labels are sharp HTML over the canvas that follow its size and wor
 test('a tower session resumes from its cookie', async ({ page }) => {
   await start(page);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
+  const sessionId = await sessionIdOf(page);
   await page.reload();
   await page.locator('#begin-button').click();
   await expect(page.locator('#intro')).toHaveCount(0);
   await settled(page, 'tower', ['wren', 'basil', 'juniper']);
   for (const id of ['wren', 'basil', 'juniper']) await expect(page.locator(`nav [data-go="${id}"]`)).toHaveCount(1);
-  await expect(page.locator('#notebook-index')).toContainText('/ 05');
+  // The same session came back: the notebook page counter this used to read is gone, so compare the session itself.
+  expect(await sessionIdOf(page)).toBe(sessionId);
 });
 
 test('the real tower art keeps its proportions, uses the corrected walk atlas and sits on the grove chrome', async ({ page }) => {
@@ -267,7 +283,10 @@ test('the real tower art keeps its proportions, uses the corrected walk atlas an
   expect(look.avatar).toBeLessThanOrEqual(45);
   // All strides now come directly from the corrected PNG, without the rebuilt strip.
   for (const y of look.drawn) expect(y).toBeLessThan(look.sheetHeight);
-  await expect(page.locator('.room-nav .avatar-dot').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  // The cast card's tile shows the tower's own portrait art, not a flat colour fill.
+  const face = page.locator('.room-nav .cast-tile .monkey-face').first();
+  await expect(face).toBeVisible();
+  expect(await face.evaluate(el => getComputedStyle(el).backgroundImage)).toContain('/assets/tower/apprentices.png');
   expect(errors).toEqual([]);
 });
 
@@ -280,12 +299,12 @@ test('the tower verdict goes through the role picker and every wizard is fooled'
   expect(Object.values(truth)).toEqual(['fooled', 'fooled', 'fooled']);
   for (const id of ['wren', 'basil', 'juniper']) {
     await page.locator(`nav [data-go="${id}"]`).click();
-    await expect(page.locator('#panel h2')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.dialogue .speaker-tag b')).toBeVisible({ timeout: 15_000 });
     await page.locator('[data-quick-question]').click();
     await expect(page.locator('.speech.investigator')).toHaveCount(1, { timeout: 12_000 });
     await expect(page.locator('.speech.investigator')).toContainText(quickQuestionFor(cast, id));
   }
-  await page.locator('nav [data-go="report"]').click();
+  await page.locator('.verdict-button').click();
   await expect(page.locator('fieldset.role-row')).toHaveCount(3);
   for (const id of ['wren', 'basil', 'juniper']) await pickRole(page, id, truth[id]);
   await page.locator('#lock-in').click();

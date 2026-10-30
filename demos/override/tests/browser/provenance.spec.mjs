@@ -31,10 +31,10 @@ test('export carries case provenance', async ({ page }) => {
   expect(before.find(e => e.type === 'session_started').cast).toBeNull();
   const cast = castOf(sessionId);
   const truth = truthOf(cast);
-  await page.locator('nav [data-go="report"]').click();
+  await page.locator('.verdict-button').click();
   for (const id of ['wren', 'basil', 'juniper']) await pickRole(page, id, truth[id]);
   await page.locator('#lock-in').click();
-  await expect(page.locator('#panel h2')).toHaveText('Nobody knew it was too soon.');
+  await expect(page.locator('#panel .debrief-head h1')).toHaveText('Nobody knew it was too soon.');
 
   const res = await page.request.get('/api/events');
   expect(res.ok()).toBe(true);

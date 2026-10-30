@@ -42,6 +42,7 @@ test('connects', async ({ page }) => {
   const csp = res.headers()['content-security-policy'];
   expect(csp).toContain("script-src 'self'");
   expect(csp).not.toContain('unsafe-inline');
+  await expect(page.locator('header.top h1')).toHaveText('command-centre');
   await page.locator('#token').fill(TOKEN);
   await page.locator('#save').click();
   await expect(page.locator('#status')).toHaveText(/connected/, { timeout: 5000 });
@@ -130,6 +131,10 @@ test('leaderboard_section', async ({ page, playwright }) => {
   await connect(page);
   const rows = page.locator('#board .board-row');
   for (const name of names) await expect(page.locator('#board')).toContainText(name, { timeout: 10_000 });
+  await page.setViewportSize({ width: 1440, height: 1040 });
+  const nameBox = page.locator('#board .board-name').filter({ hasText: names[0] });
+  await expect(nameBox).toContainText(names[0]);
+  expect(await nameBox.evaluate(e => e.clientWidth)).toBeGreaterThan(100);
   await page.locator('#board [data-rank-by="coins"]').click();
   await expect(page.locator('#board [data-rank-by="coins"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#board [data-rank-by="time"]')).toHaveAttribute('aria-pressed', 'false');

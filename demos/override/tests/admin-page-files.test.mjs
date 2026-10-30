@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -55,4 +55,28 @@ test('the /admin CSP is strict', async () => {
     assert.equal(csp, "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
     assert.ok(!csp.includes('unsafe-inline'));
   });
+});
+
+const read = (f) => readFileSync(new URL(f, dir), 'utf8');
+
+test('app.css is dark only on the deep token', () => {
+  const css = read('app.css');
+  assert.ok(!css.includes('prefers-color-scheme'));
+  assert.match(css, /--bg:\s*#0B151B/i);
+  assert.ok(!/font-family:[^;]*(Atkinson|googleapis)/.test(css));
+});
+
+test('index.html carries the watch banner, the big-screen link and the command-centre title', () => {
+  const html = read('index.html');
+  assert.match(html, /<section id="watch" hidden><\/section>/);
+  assert.match(html, /<a id="board-link"[^>]*target="_blank"[^>]*rel="noreferrer"[^>]*hidden>big-screen ↗<\/a>/);
+  assert.match(html, /<h1>command-centre<\/h1>/);
+  assert.ok(!/<script[^>]*watch\.js/.test(html), 'watch.js loads through app.js');
+});
+
+test('healthy tile values are plain light text, problems keep colour', () => {
+  const css = readFileSync(new URL('tiles.css', dir), 'utf8');
+  assert.match(css, /\[data-level="ok"\] \.tile-v \{ color: #E8EEF0;/);
+  assert.match(css, /\[data-level="warn"\] \.tile-v \{ color: var\(--gold\)/);
+  assert.match(css, /\[data-level="bad"\] \.tile-v \{ color: var\(--bad\)/);
 });

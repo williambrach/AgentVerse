@@ -41,7 +41,7 @@ test('deep link is dropped after start and ids are not injected', async ({ page 
 // Picks the true role for every character from the server-side cast, then locks in.
 async function lockPerfect(page, ids) {
   const truth = truthOf(castOf(await sessionIdOf(page)));
-  await page.locator('nav [data-go="report"]').click();
+  await page.locator('.verdict-button').click();
   await expect(page.locator('fieldset.role-row')).toHaveCount(ids.length);
   for (const id of ids) await pickRole(page, id, truth[id]);
   await page.locator('#lock-in').click();
@@ -61,7 +61,7 @@ test('everyone honest but fooled scores 3 of 3', async ({ page }) => {
   const truth = truthOf(cast);
   expect(Object.values(truth)).toEqual(['fooled', 'fooled', 'fooled']);
   await lockPerfect(page, ['wren', 'basil', 'juniper']);
-  await expect(page.locator('#panel h2')).toHaveText('Nobody knew it was too soon.');
+  await expect(page.locator('#panel .debrief-head h1')).toHaveText('Nobody knew it was too soon.');
   await expect(page.locator('.verdict-summary')).toContainText('3 / 3');
   await expect(page.locator('.verdict-summary')).toContainText('Right. Everyone was honest but fooled: the echo shell tricked them all.');
   await expect(page.locator('.pick-right')).toHaveCount(3);
@@ -171,6 +171,8 @@ for (const [width, height] of [[1280, 720], [1366, 768], [1440, 900], [1920, 108
     await page.locator('#begin-button').click();
     await expect(page.locator('#intro')).toHaveCount(0);
     expect(await page.evaluate(() => [document.documentElement.scrollHeight, document.documentElement.scrollWidth])).toEqual([height, width]);
+    // The dossier is the dialogue box and opens with the briefing; the world fills the window behind it.
+    await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'open');
     for (const selector of ['.room-nav', '.dossier', '#export-button']) {
       const box = await page.locator(selector).boundingBox();
       expect(box.y + box.height, selector).toBeLessThanOrEqual(height);
@@ -199,7 +201,8 @@ test('authored character fields are escaped in the DOM', async ({ page }) => {
   await page.goto('/');
   await page.locator('#begin-button').click();
   await page.locator('nav [data-go="momo"]').click();
-  await expect(page.locator('#panel h2').first()).toContainText('<img');
+  await expect(page.locator('.dialogue .speaker-tag b')).toContainText('<IMG');
+  await expect(page.locator('.dialogue .speaker-tag span')).toContainText('<img');
   expect(await page.locator('#app img[src="x"]').count()).toBe(0);
   expect(await page.evaluate(() => window.__xss)).toBeUndefined();
 });

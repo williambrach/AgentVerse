@@ -93,7 +93,7 @@ test('leaderboard_public', async t => {
   assert.equal(mine.rankBy, 'time');
   assert.equal(mine.teams.length, 1);
   const row = mine.teams[0];
-  assert.deepEqual(Object.keys(row).sort(), ['coins', 'name', 'played', 'points', 'rank', 'timeMs', 'you']);
+  assert.deepEqual(Object.keys(row).sort(), ['cells', 'coins', 'name', 'played', 'points', 'rank', 'timeMs', 'you']);
   assert.deepEqual([row.rank, row.points, row.you, row.name], [1, 1, true, 'Owls']);
   assert.equal(JSON.stringify(mine).includes(a.jar.override_team), false);
   const o = browser(s.url);

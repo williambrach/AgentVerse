@@ -70,17 +70,24 @@ test('WASD and arrows animate all four directions and return to a facing idle po
 test('map clicks never move the investigator; destination buttons open the page in place', async ({ page }) => {
   await start(page);
   expect((await samples(page, 150)).at(-1)).toEqual({ frame: 'down-0', x: 244, y: 276 });
+  // The dialogue box covers the world while it is open: close it, then click where the world is.
+  await expect(page.locator('#panel h2')).toHaveText('A bunch of trouble.');
+  await page.locator('#dialogue-close').click();
+  await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'closed');
   const canvas = page.locator('#station canvas');
   const bounds = await canvas.boundingBox();
-  await canvas.click({ position: { x: bounds.width * 300 / 480, y: bounds.height * 204 / 340 } });
+  // The world (480 x 340) is fitted inside the window-sized canvas, so map game pixels through its rect.
+  const layer = await page.locator('.station-labels').boundingBox();
+  const at = (x, y) => ({ x: layer.x - bounds.x + layer.width * x / 480, y: layer.y - bounds.y + layer.height * y / 340 });
+  await canvas.click({ position: at(300, 204) });
   for (const value of await samples(page, 600)) expect(value).toEqual({ frame: 'down-0', x: 244, y: 276 });
-  const heading = await page.locator('#panel h2').textContent();
-  expect(heading).toBe('A bunch of trouble.');
-  await canvas.click({ position: { x: bounds.width * 116 / 480, y: bounds.height * 120 / 340 } });
-  await expect(page.locator('#panel h2')).toHaveText('A bunch of trouble.');
+  await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'closed');
+  await canvas.click({ position: at(116, 120) });
+  await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'closed');
   for (const value of await samples(page, 300)) expect(value).toEqual({ frame: 'down-0', x: 244, y: 276 });
   await page.locator('nav [data-go="momo"]').click();
-  await expect(page.locator('#panel h2')).toHaveText('Momo');
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('MOMO');
+  await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'open');
   expect((await samples(page, 200)).at(-1)).toEqual({ frame: 'down-0', x: 244, y: 276 });
 });
 
@@ -198,7 +205,7 @@ test('monkeys react on approach and remain solid and clickable during their gest
   expect(blocked.at(-1).player.y).toBeCloseTo(152, 0);
   // Hold E across a frame so the scene's JustDown check sees it.
   await page.keyboard.press('e', { delay: 100 });
-  await expect(page.locator('#panel h2')).toHaveText('Momo');
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('MOMO');
 });
 
 test('NPC animations respect preference changes and pause for a modal', async ({ page }) => {
@@ -230,10 +237,11 @@ test('Kiki has a stop that is reachable and walkable like the others', async ({ 
     .toEqual([[116, 144], [364, 144], [364, 256], [84, 200]]);
   // The nav button opens Kiki's page in place; the investigator does not move.
   await page.locator('nav [data-go="kiki"]').click();
-  await expect(page.locator('#panel h2')).toHaveText('Kiki');
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('KIKI');
   expect((await samples(page, 150)).at(-1)).toMatchObject({ x: 244, y: 276 });
   // Walking there with the keyboard reaches the stop, and E opens the page.
-  await page.locator('.dossier [data-go="briefing"]').click();
+  await page.locator('#dialogue-close').click();
+  await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'closed');
   await page.locator('#station canvas').click({ position: { x: 10, y: 10 } });
   await center(page, 84, 240);
   await page.keyboard.down('w');
@@ -243,6 +251,6 @@ test('Kiki has a stop that is reachable and walkable like the others', async ({ 
   const last = (await samples(page, 150)).at(-1);
   expect(Math.hypot(last.x - 84, last.y - 212)).toBeLessThan(18);
   await page.keyboard.press('e', { delay: 100 });
-  await expect(page.locator('#panel h2')).toHaveText('Kiki');
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('KIKI');
   expect(errors).toEqual([]);
 });

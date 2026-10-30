@@ -14,8 +14,14 @@ async function fresh(page) {
   await expect(page.locator('#confirm-reset')).toHaveCount(0);
 }
 async function go(page, location) {
-  await page.locator(`nav [data-go="${location}"]`).click();
-  await expect(page.locator('#panel h2')).toBeVisible({ timeout: 12_000 });
+  // The verdict button sits outside the cast rail; a character page names its speaker in the dialogue box.
+  if (location === 'report') {
+    await page.locator('.verdict-button').click();
+    await expect(page.locator('#panel h1')).toBeVisible({ timeout: 12_000 });
+  } else {
+    await page.locator(`nav [data-go="${location}"]`).click();
+    await expect(page.locator('.dialogue .speaker-tag b')).toBeVisible({ timeout: 12_000 });
+  }
 }
 async function interviewAll(page) {
   for (const [i, id] of IDS.entries()) {
@@ -39,9 +45,9 @@ test('four_monkeys', async ({ page }) => {
   await fresh(page);
   await page.waitForFunction(() => window.walkingTestGame?.scene.getScene('banana-grove')?.npcs);
   const buttons = page.locator('nav [data-go]');
-  await expect(buttons).toHaveCount(5);
+  await expect(buttons).toHaveCount(4);
   for (const [i, name] of NAMES.entries()) await expect(buttons.nth(i)).toContainText(name);
-  await expect(buttons.nth(4)).toContainText('Your guess');
+  await expect(page.locator('.verdict-button')).toContainText('Make your verdict');
   expect(await page.evaluate(() => window.walkingTestGame.scene.getScene('banana-grove').npcs.size)).toBe(4);
 });
 
@@ -75,11 +81,12 @@ test('picker_requires_all', async ({ page }) => {
   await go(page, 'report');
   await expect(page.locator('fieldset.role-row')).toHaveCount(4);
   await expect(page.locator('#lock-in')).toBeDisabled();
-  await expect(page.locator('#lock-in')).toContainText('Pick a role for Momo');
+  await expect(page.locator('#lock-in')).toContainText('0 of 4 picked');
   for (const id of IDS.slice(0, 3)) { await pick(page, id, 'honest'); await expect(page.locator('#lock-in')).toBeDisabled(); }
   await pick(page, 'kiki', 'honest');
   await expect(page.locator('#lock-in')).toBeEnabled();
-  await expect(page.locator('#lock-in')).toContainText('Lock in roles');
+  await expect(page.locator('#lock-in')).toContainText('Lock in verdict');
+  await expect(page.locator('#lock-in')).not.toContainText('picked');
 });
 
 test('perfect_score', async ({ page }) => {
@@ -126,7 +133,7 @@ test('shuffle_varies', async ({ page }) => {
 async function expectNavLabels(page) {
   const id = await sessionId(page);
   const cast = castOf(id);
-  for (const cid of IDS) await expect(page.locator(`#room-nav [data-go="${cid}"] small`)).toHaveText(LABEL[cast[cid]]);
+  for (const cid of IDS) await expect(page.locator(`#room-nav [data-go="${cid}"] small`)).toContainText(LABEL[cast[cid]]);
   return cast;
 }
 
@@ -136,7 +143,7 @@ test('nav_labels_follow_cast', async ({ page }) => {
   // The report panel row must agree with the nav (it opens once every character is interviewed).
   await interviewAll(page);
   await go(page, 'report');
-  for (const cid of IDS) await expect(page.locator(`fieldset.role-row:has(input[name="role-${cid}"]) .role-who small`)).toHaveText(LABEL[first[cid]]);
+  for (const cid of IDS) await expect(page.locator(`fieldset.role-row:has(input[name="role-${cid}"]) .role-who .role-part`)).toHaveText(LABEL[first[cid]]);
   let current = first;
   for (let tries = 0; tries < 8 && JSON.stringify(current) === JSON.stringify(first); tries++) {
     const state = await (await page.request.get('/api/state')).json();

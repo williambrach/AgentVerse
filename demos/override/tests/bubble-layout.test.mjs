@@ -15,3 +15,8 @@ test('growth is bounded by the scene top', () => {
   assert.equal(placeBubble(100, 90, 140).maxHeight, 71);
   assert.equal(placeBubble(100, 2, 140).maxHeight, 0);
 });
+test('topClear caps the height from the stage top', () => {
+  assert.deepEqual(placeBubble(240, 100, 140, 34), { left: 170, top: 5, bottom: 85, maxHeight: 51, tail: 70 });
+  assert.equal(placeBubble(240, 100, 140).maxHeight, 81);
+  assert.equal(placeBubble(240, 20, 140, 34).maxHeight, 0);
+});

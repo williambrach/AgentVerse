@@ -17,6 +17,8 @@ const roleVerdict = (sid, caseId, right, s, extra = {}) => {
   const results = Object.fromEntries(ids.map((id, i) => [id, i < right]));
   return { type: 'verdict_submitted', sessionId: sid, timestamp: iso(s), verdict: { roles: {}, truth: {}, results, score: right, total: ids.length, confidence: 'sure' }, ...extra };
 };
+const none = (caseId) => ({ caseId, state: 'none', points: 0 });
+const caseList = cases.map((c) => ({ id: c.id, title: c.title, order: c.order, total: c.characters.length }));
 const feed = (lb, evs) => evs.forEach((e) => lb.observe(e));
 const names = (lb, o = { includeHidden: false, you: null }) => lb.standings(o).teams.map((t) => t.name);
 
@@ -28,10 +30,10 @@ test('example standings', () => {
     start('c', C, 'banana-mystery', 0),
   ]);
   assert.deepEqual(lb.standings({ includeHidden: false, you: 'A' }), {
-    rankBy: 'time', startedAt: 0, teams: [
-      { rank: 1, teamId: 'A', name: 'Banana Squad', points: 4, played: 1, timeMs: 120000, coins: 8, hidden: false, you: true },
-      { rank: 2, teamId: 'B', name: 'Owls', points: 0, played: 1, timeMs: 60000, coins: 4, hidden: false, you: false },
-      { rank: null, teamId: 'C', name: 'Lynx', points: 0, played: 0, timeMs: 0, coins: 0, hidden: false, you: false },
+    rankBy: 'time', startedAt: 0, round: null, cases: caseList, teams: [
+      { rank: 1, teamId: 'A', name: 'Banana Squad', points: 4, played: 1, timeMs: 120000, coins: 8, hidden: false, you: true, cells: [{ caseId: 'banana-mystery', state: 'perfect', points: 4 }, none('tower-echo-bell')] },
+      { rank: 2, teamId: 'B', name: 'Owls', points: 0, played: 1, timeMs: 60000, coins: 4, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'zero', points: 0 }, none('tower-echo-bell')] },
+      { rank: null, teamId: 'C', name: 'Lynx', points: 0, played: 0, timeMs: 0, coins: 0, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'playing', points: 0 }, none('tower-echo-bell')] },
     ],
   });
   lb.setHidden('A', true);
@@ -101,7 +103,7 @@ test('reset_round', () => {
   feed(lb, [start('a', A, 'banana-mystery', 50), verdict('a', 'momo', 120), start('b', B, 'banana-mystery', 110)]);
   assert.deepEqual(names(lb), ['Owls']);
   lb.reset(500000);
-  assert.deepEqual(lb.standings({}), { rankBy: 'time', startedAt: 500000, teams: [] });
+  assert.deepEqual(lb.standings({}), { rankBy: 'time', startedAt: 500000, round: null, cases: caseList, teams: [] });
   feed(lb, [start('c', C, 'banana-mystery', 400)]);
   assert.deepEqual(names(lb), []);
 });
@@ -169,4 +171,45 @@ test('bad_numbers_and_out_of_order_starts', () => {
   assert.equal(lb.standings({}).teams.length, 1);
   lb.reset('1970-01-01T00:08:20.000Z');
   assert.equal(lb.standings({}).startedAt, 500000);
+});
+
+test('cells in case order, one per case, with states', () => {
+  const lb = board();
+  feed(lb, [
+    start('a', A, 'banana-mystery', 0), roleVerdict('a', 'banana-mystery', 4, 10),
+    start('b', B, 'banana-mystery', 0), roleVerdict('b', 'banana-mystery', 2, 10),
+    start('c', C, 'banana-mystery', 0), roleVerdict('c', 'banana-mystery', 0, 10),
+    start('d', { id: 'D', name: 'Dots' }, 'tower-echo-bell', 0),
+  ]);
+  const t = Object.fromEntries(lb.standings({ includeHidden: true }).teams.map((x) => [x.teamId, x.cells]));
+  for (const id of ['A', 'B', 'C', 'D']) assert.deepEqual(t[id].map((c) => c.caseId), cases.map((c) => c.id));
+  assert.deepEqual(t.A[0], { caseId: 'banana-mystery', state: 'perfect', points: 4 });
+  assert.equal(t.B[0].state, 'partial');
+  assert.equal(t.C[0].state, 'zero');
+  assert.deepEqual([t.D[0].state, t.D[1].state], ['none', 'playing']);
+});
+
+test('round label', () => {
+  const lb = board();
+  assert.equal(lb.standings().round, null);
+  lb.reset(0, 'Session B');
+  assert.equal(lb.standings().round, 'Session B');
+  lb.reset(0);
+  assert.equal(lb.standings().round, null);
+});
+
+test('restarted finished case stays scored; reset without a label clears round; stale cells vanish', () => {
+  const lb = board();
+  const id = cases[0].id;
+  feed(lb, [start('a1', A, id, 0), roleVerdict('a1', id, cases[0].characters.length, 30), start('a2', A, id, 40)]);
+  lb.reset(1000 * 100, 'Final');
+  assert.equal(lb.standings().round, 'Final');
+  lb.reset(1000 * 200);
+  assert.equal(lb.standings().round, null);
+  lb.reset(0, 'R');
+  feed(lb, [start('a1', A, id, 0), roleVerdict('a1', id, cases[0].characters.length, 30), start('a2', A, id, 40)]);
+  const cell = lb.standings().teams[0].cells.find((c) => c.caseId === id);
+  assert.equal(cell.state, 'perfect');
+  lb.reset(1000 * 500, 'R2');
+  assert.deepEqual(lb.standings().teams, []);
 });

@@ -1,5 +1,5 @@
 import { test, expect } from './team.mjs';
-import { castOf, truthOf, sessionIdOf, pickRole, rehearsalReply, quickQuestionFor } from './cast.mjs';
+import { castOf, truthOf, sessionIdOf, pickRole, pickConfidence, rehearsalReply, quickQuestionFor } from './cast.mjs';
 
 async function fresh(page) {
   await page.goto('/');
@@ -9,9 +9,11 @@ async function fresh(page) {
   await page.locator('#confirm-reset').click();
   await expect(page.locator('#confirm-reset')).toHaveCount(0);
 }
-async function go(page, location, heading) {
+const ask = page => page.locator('#interview-form .ask-button');
+// A character page names its speaker in the dialogue box (the briefing keeps an h2).
+async function go(page, location, name) {
   await page.locator(`nav [data-go="${location}"]`).click();
-  await expect(page.locator('#panel h2')).toHaveText(heading, { timeout: 12_000 });
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText(name.toUpperCase(), { timeout: 12_000 });
 }
 
 test('walk the grove, ask all monkeys, submit a role verdict, export and reset', async ({ page }) => {
@@ -22,8 +24,9 @@ test('walk the grove, ask all monkeys, submit a role verdict, export and reset',
   await fresh(page);
   await expect(page.locator('canvas')).toBeVisible();
   await expect(page.locator('#mode-badge')).toHaveText('SCRIPTED REHEARSAL');
-  await expect(page.locator('nav [data-go]')).toHaveCount(5);
-  await expect(page.locator('nav [data-go]').last()).toContainText('Your guess');
+  await expect(page.locator('nav [data-go]')).toHaveCount(4);
+  await expect(page.locator('.verdict-button')).toContainText('Make your verdict');
+  await expect(page.locator('nav [data-go="report"]')).toHaveCount(0);
   await expect(page.locator('#reveal-button, .evidence-card, #present-evidence, #verdict-clue')).toHaveCount(0);
   const cast = castOf(await sessionIdOf(page));
   const reply = (id, question = quickQuestionFor(cast, id)) => rehearsalReply(cast, id, question);
@@ -31,16 +34,17 @@ test('walk the grove, ask all monkeys, submit a role verdict, export and reset',
   await page.locator('[data-quick-question]').click();
   await expect(page.locator('.speech.character').last()).toContainText(reply('momo'));
   await page.getByRole('button', { name: 'Next: ask Pip' }).click();
-  await expect(page.locator('#panel h2')).toHaveText('Pip', { timeout: 12_000 });
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('PIP', { timeout: 12_000 });
   await page.locator('[data-quick-question]').click();
   await expect(page.locator('.speech.character').last()).toContainText(reply('pip'));
   await page.locator('#question').fill('So you believed Momo had permission?');
   await expect(page.locator('#present-evidence')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await expect(ask(page)).toContainText('Ask');
+  await ask(page).click();
   await expect(page.locator('.speech.investigator')).toHaveCount(2);
   await expect(page.locator('.speech.character').last()).toContainText(reply('pip', 'So you believed Momo had permission?'));
   await page.getByRole('button', { name: 'Next: ask Nori' }).click();
-  await expect(page.locator('#panel h2')).toHaveText('Nori', { timeout: 12_000 });
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('NORI', { timeout: 12_000 });
   await page.locator('[data-quick-question]').click();
   await expect(page.locator('.speech.character').last()).toContainText(reply('nori'));
   await page.screenshot({ path: 'test-results/banana-interview-desktop.png', fullPage: true });
@@ -53,15 +57,17 @@ test('walk the grove, ask all monkeys, submit a role verdict, export and reset',
   const sessionId = await sessionIdOf(page);
   const truth = truthOf(cast);
   const planner = Object.entries(cast).find(([, part]) => part === 'planner')[0];
-  await page.locator('nav [data-go="report"]').click();
-  await expect(page.locator('#panel h2')).toHaveText('Who played which part?', { timeout: 12_000 });
+  await page.locator('.verdict-button').click();
+  await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
+  await expect(page.locator('#panel h1')).toHaveText('Who played which part?', { timeout: 12_000 });
   await expect(page.locator('fieldset.role-row')).toHaveCount(4);
   for (const id of ['momo', 'pip', 'nori', 'kiki']) await pickRole(page, id, truth[id]);
-  await page.locator('#confidence').selectOption('95');
+  await pickConfidence(page, 95);
   // The fast demo path deliberately leaves the optional explanation empty.
   await page.locator('#lock-in').click();
   const name = { momo: 'Momo', pip: 'Pip', nori: 'Nori', kiki: 'Kiki' }[planner];
-  await expect(page.locator('#panel h2')).toHaveText(`${name} made up the permission.`);
+  await expect(page.locator('#panel .debrief-head h1')).toHaveText(`${name} made up the permission.`);
+  await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
   await expect(page.locator('.verdict-summary')).toContainText('4 / 4');
   await expect(page.locator('.verdict-summary')).toContainText('Every role right! You saw who lied, who helped, who was fooled, and who stayed honest.');
   await expect(page.locator('#panel')).not.toContainText(/Nobody|Not sure/);
@@ -100,11 +106,13 @@ test('mobile, reduced motion, failed interview retry and server restart recovery
   await go(page, 'pip', 'Pip');
   await page.locator('#question').fill('Who told you the keeper said yes?');
   await page.route('**/api/interview', route => route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'Provider unavailable. Please retry.' }) }));
-  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await expect(ask(page)).toContainText('Ask');
+  await ask(page).click();
   await expect(page.locator('#toast')).toContainText('Provider unavailable');
   await expect(page.locator('#question')).toHaveValue('Who told you the keeper said yes?');
   await page.unroute('**/api/interview');
-  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await expect(ask(page)).toContainText('Ask');
+  await ask(page).click();
   await expect(page.locator('.speech.investigator')).toHaveCount(1);
   await expect(page.locator('#toast')).toBeHidden();
   expect(await page.locator('.dossier').evaluate(el => el.getAnimations({ subtree: true }).length)).toBe(0);
@@ -113,7 +121,7 @@ test('mobile, reduced motion, failed interview retry and server restart recovery
   const prior = await (await page.request.get('/api/state')).json();
   await page.route('**/api/state', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ...prior, session: null, debrief: null }) }));
   await page.route('**/api/visit', route => route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Start the case first.' }) }));
-  await page.locator('nav [data-go="report"]').click();
+  await page.locator('.verdict-button').click();
   await expect(page.locator('#begin-button')).toHaveText('Let’s investigate');
   await expect(page.locator('#panel h2')).toHaveText('A bunch of trouble.');
 });
@@ -128,7 +136,8 @@ test('compact notebook keeps drafts and reading position across interview pages'
   await go(page, 'pip', 'Pip');
   await expect(page.locator('#question')).toHaveValue('Did you check with the keeper?');
   const scroller = page.locator('.notebook-page');
-  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await expect(ask(page)).toContainText('Ask');
+  await ask(page).click();
   await expect(page.locator('.speech.investigator')).toHaveCount(1);
   await expect(page.locator('#question')).toHaveValue('');
   await expect.poll(() => scroller.evaluate(el => el.scrollTop)).toBe(0);
@@ -160,6 +169,7 @@ test('copy, counts and nav come from the active case', async ({ page }) => {
   await expect(page.locator('#intro-title')).toContainText('Lanterns');
   await page.locator('#begin-button').click();
   await expect(page.locator('#panel h2')).toHaveText('Lanterns, too soon.');
-  await expect(page.locator('.eyebrow', { hasText: 'CASE 002' })).toBeVisible();
-  await expect(page.locator('.station-topline')).toContainText('LANTERNS TOO SOON / POTION DAY');
+  await expect(page.locator('#case-eyebrow')).toContainText('CASE 002');
+  await expect(page.locator('#case-eyebrow')).toContainText('TOWER');
+  await expect(page.locator('#case-headline')).toHaveText('Was it time?');
 });

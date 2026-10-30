@@ -12,14 +12,20 @@ async function fresh(page, caseId = 'banana-mystery') {
   await page.locator('#confirm-reset').click();
   await expect(page.locator('#case-switch')).toHaveCount(0);
 }
-async function go(page, location, heading) {
+// The counter shows the coins left: "13 / 15" over the label COINS LEFT.
+async function coinsLeft(page, left) {
+  await expect(page.locator(`${COUNTER} .coin-num`)).toHaveText(`${left} / 15`);
+  await expect(page.locator(`${COUNTER} .hud-label`)).toHaveText('COINS LEFT');
+}
+// A character page names its speaker in the dialogue box.
+async function go(page, location, name) {
   await page.locator(`nav [data-go="${location}"]`).click();
-  await expect(page.locator('#panel h2')).toHaveText(heading, { timeout: 12_000 });
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText(name.toUpperCase(), { timeout: 12_000 });
 }
 async function ask(page, id, name, total) {
   await go(page, id, name);
   await page.locator('[data-quick-question]').click();
-  await expect(page.locator(COUNTER)).toHaveText(`${total} / 15 coins`);
+  await coinsLeft(page, 15 - total);
 }
 /** Waits until three different characters have each shown a bubble. */
 async function threeBubbles(page) {
@@ -38,9 +44,9 @@ async function api(page, name, body = {}) {
 
 test('counter_starts_zero', async ({ page }) => {
   await fresh(page);
-  await expect(page.locator(COUNTER)).toHaveText('0 / 15 coins');
+  await coinsLeft(page, 15);
   await go(page, 'momo', 'Momo');
-  await expect(page.locator(COUNTER)).toHaveText('0 / 15 coins');
+  await coinsLeft(page, 15);
 });
 
 test('question_costs', async ({ page }) => {
@@ -55,7 +61,7 @@ test('inspect_once', async ({ page }) => {
   await ask(page, 'pip', 'Pip', 4);
   await go(page, 'momo', 'Momo');
   await page.locator('#inspect-button').click();
-  await expect(page.locator(COUNTER)).toHaveText('9 / 15 coins');
+  await coinsLeft(page, 6);
   await expect(page.locator('.speech.reasoning')).toBeVisible();
   await expect(page.locator('#inspect-button')).toBeDisabled();
   await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('0 left');
@@ -69,6 +75,9 @@ test('toolbelt', async ({ page }) => {
   await expect(page.locator('#inspect-button')).toBeDisabled();
   await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('Open a monkey’s chat');
   await go(page, 'momo', 'Momo');
+  // The Ask price is the bare number on the button; nothing blocks it yet.
+  await expect(page.locator('.tool-chip[data-tool="ask"]')).toHaveText('2');
+  await expect(page.locator('p.ask-off')).toHaveCount(0);
   await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('Momo has not spoken yet');
   await page.locator('[data-quick-question]').click();
   await expect(page.locator('#inspect-button')).toBeEnabled();
@@ -95,7 +104,7 @@ test('talk_round', async ({ page }) => {
   await page.locator('#continue-button').click();
   await threeBubbles(page);
   await expect(page.locator('#thread-log .thread-post')).toHaveCount(3);
-  await expect(page.locator(COUNTER)).toHaveText('9 / 15 coins');
+  await coinsLeft(page, 6);
 });
 
 test('talk_from_start', async ({ page }) => {
@@ -105,7 +114,7 @@ test('talk_from_start', async ({ page }) => {
   await page.locator('#continue-button').click();
   await threeBubbles(page);
   await expect(page.locator('#thread-log .thread-post')).toHaveCount(3);
-  await expect(page.locator(COUNTER)).toHaveText('1 / 15 coins');
+  await coinsLeft(page, 14);
 });
 
 test('budget_409', async ({ page }) => {
@@ -139,10 +148,10 @@ test('reload_keeps_thread', async ({ page }) => {
 test('tower_tools', async ({ page }) => {
   test.setTimeout(90_000);
   await fresh(page, 'tower-echo-bell');
-  await expect(page.locator(COUNTER)).toHaveText('0 / 15 coins');
+  await coinsLeft(page, 15);
   await ask(page, 'juniper', 'Juniper', 2);
   await page.locator('#inspect-button').click();
-  await expect(page.locator(COUNTER)).toHaveText('7 / 15 coins');
+  await coinsLeft(page, 8);
   await expect(page.locator('.speech.reasoning')).toBeVisible();
   await ask(page, 'wren', 'Wren', 9);
   await ask(page, 'basil', 'Basil', 11);
@@ -159,7 +168,7 @@ test('verdict_through_roles', async ({ page }) => {
   await ask(page, 'kiki', 'Kiki', 8);
   const cast = castOf(await sessionIdOf(page), 'test-results/sessions-coins');
   const truth = truthOf(cast);
-  await page.locator('nav [data-go="report"]').click();
+  await page.locator('.verdict-button').click();
   await expect(page.locator('fieldset.role-row')).toHaveCount(4);
   for (const id of ['momo', 'pip', 'nori', 'kiki']) await pickRole(page, id, truth[id]);
   await page.locator('#lock-in').click();

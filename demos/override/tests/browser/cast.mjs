@@ -15,6 +15,8 @@ export const truthOf = cast => {
   return Object.fromEntries(Object.entries(cast).map(([id, part]) => [id, tower ? 'fooled' : PART_ROLE[part]]));
 };
 export const sessionIdOf = async page => (await (await page.request.get('/api/state')).json()).session.id;
+// Confidence is a radio group (40, 70, 95); the input is visually hidden, so click its label.
+export const pickConfidence = (page, value) => page.locator(`label.conf-chip:has(input[name="confidence"][value="${value}"])`).click();
 export const pickRole = (page, id, role) => page.locator(`label.role-chip:has(input[name="role-${id}"][value="${role}"])`).click();
 
 // Quick questions per part (content doc), and the scripted rehearsal replies, so a test can assert the exact answer.
