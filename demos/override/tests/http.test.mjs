@@ -4,7 +4,8 @@ import http from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApp, startServer } from '../server/index.mjs';
+import { createApp, startServer, makerTokens, adminHosts } from '../server/index.mjs';
+import { readJsonl } from '../server/dataset.mjs';
 import { until } from './helpers/until.mjs';
 import { startMockLlm } from '../scripts/mock-llm.mjs';
 import { Investigations } from '../server/session.mjs';
@@ -450,4 +451,73 @@ test('startServer resolves with a working player url, with and without an admin 
       assert.equal(Boolean(running.adminUrl), Boolean(extra.OVERRIDE_ADMIN_TOKEN));
     } finally { await running.close(); }
   }
+});
+
+// ---- content editor wiring
+const makerEnv = { OVERRIDE_ADMIN_TOKEN: 'ops', OVERRIDE_MAKER_TOKENS: 'alice:s1' };
+const asAlice = { Authorization: 'Bearer s1' };
+const startGame = async url => {
+  const r = await fetch(`${url}/api/start`, { method: 'POST', headers: json, body: '{}' });
+  const view = await r.json();
+  return { view, id: view.session.id };
+};
+const startedEvent = (dir, id) => readJsonl(join(dir, 'test', 'sessions', `${id}.jsonl`)).find(e => e.type === 'session_started');
+
+test('content_publish_reaches_new_games', async t => {
+  const server = await boot(t, makerEnv);
+  const put = await fetch(`${server.adminUrl}/admin/content/banana-mystery`, { method: 'PUT', headers: { ...json, ...asAlice }, body: JSON.stringify({ edits: { 'copy.intro.lead': 'A new lead.' }, baseRev: 0 }) });
+  assert.equal(put.status, 200);
+  assert.equal((await put.json()).rev, 1);
+  const { view, id } = await startGame(server.url);
+  assert.equal(view.copy.intro.lead, 'A new lead.');
+  const hash = startedEvent(server.dir, id).contentHash;
+  assert.notEqual(hash, 'd891b333116d');
+  const list = await (await fetch(`${server.adminUrl}/admin/content`, { headers: asAlice })).json();
+  const info = list.cases.find(c => c.id === 'banana-mystery');
+  assert.equal(info.by, 'alice');
+  assert.equal(info.rev, 1);
+  assert.equal(info.contentHash, hash);
+});
+
+test('content_survives_restart', async t => {
+  const first = await boot(t, makerEnv);
+  await fetch(`${first.adminUrl}/admin/content/banana-mystery`, { method: 'PUT', headers: { ...json, ...asAlice }, body: JSON.stringify({ edits: { 'copy.intro.lead': 'Kept lead.' }, baseRev: 0 }) });
+  await first.close();
+  const again = await startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: first.dir, OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 'secret-one', ...makerEnv }, { publicDir: tmp(t) });
+  t.after(() => again.close());
+  assert.equal((await startGame(again.url)).view.copy.intro.lead, 'Kept lead.');
+  const detail = await (await fetch(`${again.adminUrl}/admin/content/banana-mystery`, { headers: asAlice })).json();
+  assert.equal(detail.rev, 1);
+  assert.equal(detail.history[0].by, 'alice');
+});
+
+test('maker_scope_end_to_end', async t => {
+  const server = await boot(t, makerEnv);
+  assert.equal((await fetch(`${server.adminUrl}/admin/health`, { headers: asAlice })).status, 403);
+  assert.equal((await fetch(`${server.adminUrl}/admin/health`, { headers: { Authorization: 'Bearer ops' } })).status, 200);
+  assert.equal((await fetch(`${server.adminUrl}/admin/content`, { headers: asAlice })).status, 200);
+  assert.equal((await fetch(`${server.adminUrl}/admin/content`, { headers: { Authorization: 'Bearer nope' } })).status, 401);
+});
+
+test('admin_hosts_env', async t => {
+  const server = await boot(t, { ...makerEnv, OVERRIDE_ADMIN_HOSTS: ' X.test , ' });
+  const get = host => rawGet(`${server.adminUrl}/admin/health`, { Host: host, Authorization: 'Bearer ops' });
+  assert.equal((await get('x.test')).res.statusCode, 200);
+  assert.equal((await get('y.test')).res.statusCode, 403);
+});
+
+test('maker_tokens_parse', () => {
+  assert.deepEqual(makerTokens({ OVERRIDE_MAKER_TOKENS: 'alice:s1,bob:s2' }), [{ name: 'alice', token: 's1' }, { name: 'bob', token: 's2' }]);
+  assert.deepEqual(makerTokens({}), []);
+  assert.deepEqual(makerTokens({ OVERRIDE_MAKER_TOKENS: '  ' }), []);
+  for (const bad of ['alice:s1,alice:s2', 'bad name:x', 'alice:', 'alice', 'a:s,b:s']) {
+    assert.throws(() => makerTokens({ OVERRIDE_MAKER_TOKENS: bad }), /OVERRIDE_MAKER_TOKENS/, bad);
+  }
+  assert.throws(() => makerTokens({ OVERRIDE_MAKER_TOKENS: 'alice:ops', OVERRIDE_ADMIN_TOKEN: 'ops' }), /OVERRIDE_MAKER_TOKENS/);
+  assert.deepEqual(adminHosts({ OVERRIDE_ADMIN_HOSTS: ' X.test, y.test ,' }), ['x.test', 'y.test']);
+  assert.deepEqual(adminHosts({}), []);
+});
+
+test('bad_maker_tokens_fail_startup', async t => {
+  await assert.rejects(boot(t, { OVERRIDE_ADMIN_TOKEN: 'ops', OVERRIDE_MAKER_TOKENS: 'alice:' }), /OVERRIDE_MAKER_TOKENS/);
 });

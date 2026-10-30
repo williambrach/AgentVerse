@@ -16,6 +16,7 @@ import { Registry, bindCollectors, createGameMetrics, observeGameEvent, observeL
 import { createTeams } from './teams.mjs';
 import { createLeaderboard } from './leaderboard.mjs';
 import { createAdmin } from './admin.mjs';
+import { createContentStore } from './content.mjs';
 import { integerEnv, readJsonBody, safeEqual, sendJson } from './http-util.mjs';
 import { createMonitor } from './monitor.mjs';
 import { createRoundStats } from './monitor-round.mjs';
@@ -147,6 +148,29 @@ function devTools(env) {
 const sleep = ms => new Promise(resolve => { setTimeout(resolve, ms).unref(); });
 
 // The admin page puts this in an href: only an http(s) origin and path survive, never javascript: or credentials.
+// OVERRIDE_MAKER_TOKENS: comma list of name:secret pairs; each maker can edit content and nothing else.
+export function makerTokens(env) {
+  const raw = String(env.OVERRIDE_MAKER_TOKENS ?? '').trim();
+  if (!raw) return [];
+  const out = [];
+  for (const item of raw.split(',').map(x => x.trim()).filter(Boolean)) {
+    const at = item.indexOf(':');
+    const name = at < 0 ? item : item.slice(0, at);
+    const secret = at < 0 ? '' : item.slice(at + 1);
+    if (!/^[a-z0-9_-]{1,32}$/.test(name)) throw new Error('OVERRIDE_MAKER_TOKENS: maker names are 1 to 32 characters of a-z, 0-9, _ or -.');
+    if (!secret) throw new Error(`OVERRIDE_MAKER_TOKENS: maker ${name} has no secret.`);
+    if (out.some(m => m.name === name)) throw new Error(`OVERRIDE_MAKER_TOKENS: maker ${name} is listed twice.`);
+    if (secret === env.OVERRIDE_ADMIN_TOKEN || out.some(m => m.token === secret)) throw new Error(`OVERRIDE_MAKER_TOKENS: the secret for ${name} is not unique.`);
+    out.push({ name, token: secret });
+  }
+  return out;
+}
+
+// OVERRIDE_ADMIN_HOSTS: extra Host names the admin listener accepts, for a tunnel.
+export function adminHosts(env) {
+  return String(env.OVERRIDE_ADMIN_HOSTS ?? '').split(',').map(h => h.trim().toLowerCase()).filter(Boolean);
+}
+
 export function boardUrlOf(base, port) {
   const raw = String(base ?? '').trim();
   if (raw) {
@@ -186,8 +210,10 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     endpoints: config.endpoints, maxInFlight: config.maxInFlight, deadlineMs: config.timeoutMs, maxCompletionTokens: config.maxCompletionTokens,
     failover: config.failover, restore: lastRecord(paths.system, r => r.type === 'llm_active'), onSystem, onTrace, onEvent: e => { observeLlmEvent(metrics, e); feed('observeLlm', e); },
   }) : null;
+  const makers = makerTokens(env);
+  const content = createContentStore({ cases, dataDir: paths.root });
   const investigations = new Investigations({
-    dataDir, config, router, dev: devTools(env), meta: { env: envName, ...appVersion(env), endpointsHash: config.endpointsHash },
+    dataDir, config, router, content, dev: devTools(env), meta: { env: envName, ...appVersion(env), endpointsHash: config.endpointsHash },
     onEvent: e => { observeGameEvent(metrics, e); feed('observeGame', e); try { board.observe(e); } catch { /* the board must not affect games */ } },
   });
   bindCollectors(registry, { router, investigations, dataDir });
@@ -246,14 +272,18 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
   if (env.OVERRIDE_ADMIN_TOKEN) {
     {
       // The probe asks the first registered case's first character its quick question, with the identity cast.
-      const probeCase = cases[0];
-      const cast = identityCast(probeCase);
-      const probeCharacter = probeCase.characters[0];
-      const probeQuestion = castCharacters(probeCase, cast)[0].quickQuestion;
+      // It reads the current content at probe time, so a published edit reaches it.
+      const probeMessages = () => {
+        const probeCase = content.current(cases[0].id);
+        const cast = identityCast(probeCase);
+        const probeCharacter = probeCase.characters[0];
+        const probeQuestion = castCharacters(probeCase, cast)[0].quickQuestion;
+        return buildMessages(probeCase, { cast, interviews: Object.fromEntries(probeCase.characters.map(c => [c.id, []])) }, probeCharacter.id, probeQuestion);
+      };
       admin = createAdmin({
         boardUrl: boardUrlOf(env.OVERRIDE_PUBLIC_URL, server.address()?.port),
         token: env.OVERRIDE_ADMIN_TOKEN, monitor, router, investigations, registry, dataDir,
-        probeMessages: buildMessages(probeCase, { cast, interviews: Object.fromEntries(probeCase.characters.map(c => [c.id, []])) }, probeCharacter.id, probeQuestion),
+        content, makers, allowedHosts: adminHosts(env), probeMessages,
         readSystem: () => [...systemRing], onSystem,
         leaderboard: {
           standings: () => board.standings({ includeHidden: true, you: null }),
