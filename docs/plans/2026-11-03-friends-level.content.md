@@ -10,13 +10,13 @@ Exact strings for `O/server/cases/friends-roundtable.mjs`. Theories are harmless
 
 ## Copy
 
-- headline `Who believes what?`
-- intro.lead `Five friends, five secret theories.\nYou believe none of them.`
-- intro.body `It’s game night at the roundtable. Each friend secretly believes a different conspiracy theory, and nobody knows about anyone else’s. Chat with them and work out who believes what.`
-- briefing.title `Friends, with secrets.` · description `Your five friends each hide a different conspiracy theory. None of them knows about the others, and nobody will tell you straight away.` · question `Which theory does each friend believe?` · hint `Start with small talk. Listen for slips, then ask about the topic you suspect.`
-- report.title `Who believes what?` · report.description `Pick a theory for each friend. Two theories on the list belong to nobody.`
-- debrief.title `Every friend had a secret.` · summary `{birds} thinks birds are drones, {moon} doubts the moon landing, {flat} trusts a flat horizon, {finland} doubts Finland, and {paul} thinks Paul was replaced.` · lesson `People hide beliefs they expect others to laugh at. Small talk and kind, patient questions bring them out.`
-- answer.feedback.correct `Right. You matched every friend to their secret theory.` · other `Some secrets stayed hidden. Think back to the slips each friend made.`
+- headline `Find the conspiracists`
+- intro.lead `Your friends are hiding something.\nFind the conspiracists.`
+- intro.body `It’s game night at the roundtable. Every one of your five friends has secretly fallen for a different conspiracy theory, and none of them knows about the others. You believe none of them. Unmask each conspiracist and name their theory.`
+- briefing.title `Find the conspiracists.` · description `Five friends, five hidden conspiracy theories. Nobody will admit theirs straight away, and none of them knows what the others believe.` · question `Which conspiracy is each friend hiding?` · hint `Start with small talk. Listen for slips, then ask about the topic you suspect.`
+- report.title `Unmask the conspiracists` · report.description `Name the conspiracy each friend believes. Two theories on the list belong to nobody.`
+- debrief.title `All five were conspiracists.` · summary `{birds} thinks birds are drones, {moon} doubts the moon landing, {flat} trusts a flat horizon, {finland} doubts Finland, and {paul} thinks Paul was replaced.` · lesson `People hide beliefs they expect others to laugh at. Small talk and kind, patient questions bring them out.`
+- answer.feedback.correct `Right. You unmasked every conspiracist and named their theory.` · other `Some conspiracists kept their secret. Think back to the slips each friend made.`
 
 ## Roles (verdict options, in this order)
 
