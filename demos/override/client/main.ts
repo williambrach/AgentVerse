@@ -9,13 +9,14 @@ import './case-board.css';
 import './team.css';
 import './board.css';
 import './bubbles.css';
+import './friends.css';
 import { escape, svg, heading, mmss } from './html.ts';
 import { HINTS, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, threadPanel } from './tools';
 import { teamGate, teamNameError, leaderboardPanel, type GateView } from './team';
 import { boardScreen } from './board.ts';
 import { debriefPage } from './debrief.ts';
 import { renderNotebook } from './notebook';
-import type { Station } from './station';
+import { createStage, type Stage } from './stage';
 import { postHeartbeat, startHeartbeat } from './heartbeat';
 import { worldFor } from './worlds';
 import { hudShell, castCard } from './hud.ts';
@@ -29,7 +30,7 @@ const world = () => worldFor(state?.world?.id);
 let worldKey = '';
 const blankDrafts = (): Record<string, string> => Object.fromEntries(state.characters.map(c => [c.id, '']));
 let state: CaseState;
-let station: Station;
+let station: Stage;
 let panel: LocationId = 'briefing';
 let busy = false;
 let pendingCharacter: string | null = null;
@@ -43,7 +44,7 @@ let dialogueOpen = false;
 let talking = false;
 let wakeTalk: (() => void) | undefined;
 let bubbleTimer: ReturnType<typeof setTimeout> | undefined;
-interface CaseRow { id: string; title: string; lead: string; order: number; world?: string }
+interface CaseRow { id: string; title: string; lead: string; order: number; world?: string; cast?: { id: string; name: string }[] }
 let catalog: CaseRow[] = [];
 let selectedCase = '';
 let drafts: Record<string, string> = {};
@@ -133,7 +134,18 @@ async function shell() {
   worldKey = '';
   app.dataset.hud = 'on';
   const { createStation } = await import('./station');
-  station = createStation(location => void visit(location), hint => { document.querySelector('#movement-hint')!.textContent = hint; }, () => { if (!dialogueOpen) return; dialogueOpen = false; render(); });
+  const { createRoundtable } = await import('./roundtable');
+  const hint = (text: string) => { document.querySelector('#movement-hint')!.textContent = text; };
+  station = createStage({
+    station: () => createStation(location => void visit(location), hint, () => { if (!dialogueOpen) return; dialogueOpen = false; render(); }),
+    roundtable: () => createRoundtable(id => void visit(id), hint),
+    show(which) {
+      document.querySelector<HTMLElement>('#station')!.hidden = which !== 'station';
+      document.querySelector<HTMLElement>('#roundtable')!.hidden = which !== 'roundtable';
+      app.dataset.stage = which;
+      if (which === 'station') window.dispatchEvent(new Event('resize'));
+    },
+  });
   app.addEventListener('click', onClick);
   app.addEventListener('change', event => {
     const input = event.target as HTMLInputElement;
@@ -232,7 +244,8 @@ async function onClick(event: MouseEvent) {
   if (button.id === 'continue-button') { void talk(); return; }
   if (button.id === 'notebook-button') { stopTalking(); if (state.session && !introVisible) { dialogueOpen = true; render(); } return; }
   if (button.id === 'dialogue-close' || button.id === 'lineup-back') { closeDialogue(); return; }
-  if (button.id === 'read-thread') { stopTalking(); threadOpen = true; render(); return; }
+  // The thread lives in the notebook: open both, or a closed notebook keeps it hidden.
+  if (button.id === 'read-thread') { stopTalking(); threadOpen = true; dialogueOpen = true; render(); return; }
   if (button.id === 'inspect-button') {
     stopTalking();
     if (!ids().includes(panel)) return;
@@ -335,16 +348,25 @@ function render() {
   const debrief = Boolean(session?.status === 'closed' && panel === 'report' && !introVisible && !threadOpen);
   app.dataset.view = lineup || debrief ? 'lineup' : 'world';
   syncWalking();
+  station?.focus(dialogueOpen && !introVisible && ids().includes(panel) ? panel : null);
   const target = document.querySelector<HTMLElement>('#panel')!;
   const sections: Record<string, string> = { briefing: 'Case briefing', ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
   document.querySelector('#notebook-section')!.textContent = threadOpen ? 'Thread' : sections[panel];
   let markup: string;
-  if (threadOpen && session) markup = threadPanel(session.thread, Object.fromEntries(state.characters.map(c => [c.id, c.name])), session.chatter.pending);
+  if (threadOpen && session) markup = threadPanel(session.thread, Object.fromEntries(state.characters.map(c => [c.id, c.name])), session.chatter.pending, world().text.threadNote);
   else if (session?.status === 'closed' && panel === 'report') markup = debriefMarkup();
-  else if (panel === 'briefing') markup = briefingPanel({ copy: state.copy, cast: state.characters.length, many: world().text.many, one: world().text.one, oneWithArticle: world().text.oneWithArticle, firstId: state.characters[0]?.id, firstName: state.characters[0]?.name, guide: state.session ? toolGuide(state.session.economy) : '' });
+  else if (panel === 'briefing') markup = briefingPanel({ copy: state.copy, cast: state.characters.length, many: world().text.many, one: world().text.one, oneWithArticle: world().text.oneWithArticle, firstId: state.characters[0]?.id, firstName: state.characters[0]?.name, guide: state.session ? toolGuide(state.session.economy) : '', ...(world().scene === 'roundtable' ? { verdict: state.copy.report.description, howTo: world().text.hint } : {}) });
   else if (panel === 'report') markup = reportPanel();
   else markup = interviewMarkup(panel);
-  if (renderNotebook(target, markup, `${session?.id}:${panel}:${session?.status}${threadOpen ? ':thread' : ''}`, panel, Object.keys(sections))) bindForms();
+  const rendered = renderNotebook(target, markup, `${session?.id}:${panel}:${session?.status}${threadOpen ? ':thread' : ''}`, panel, Object.keys(sections));
+  if (rendered) bindForms();
+  // The thread is a capped strip under the room: after a new post, show the newest one rather than #1.
+  // Only boxes inside the notebook scroll; scrollIntoView would also move the page in the compact layout.
+  if (rendered && threadOpen) {
+    for (let box = target.querySelector<HTMLElement>('#thread-log'); box && box !== target.parentElement; box = box.parentElement) {
+      if (box.scrollHeight > box.clientHeight) box.scrollTop = box.scrollHeight;
+    }
+  }
   // A box that was hidden loses its scroll position: show the newest turn when it opens.
   const log = target.querySelector<HTMLElement>('#transcript');
   if (log && dialogueOpen && !wasOpen) log.scrollTop = log.scrollHeight;
@@ -379,13 +401,15 @@ function casePreview(id: 'intro' | 'case-switch') {
   const title = row ? row.title : state.title;
   const label = busy ? 'Opening…' : !state.session ? 'Let’s investigate' : !loaded ? 'Start this case' : id === 'intro' ? 'Continue mystery' : active ? 'Restart this case' : 'Play again';
   const primary = `<button class="primary-button" id="${id === 'intro' ? 'begin-button' : 'confirm-reset'}" ${busy ? 'disabled' : ''}>${label} ${icon('arrow')}</button>`;
+  // The picked case's own personas (the catalog carries them), so the preview never shows the loaded case's cast.
+  const cast = row?.cast ?? state.characters;
   const note = active && (id === 'case-switch' || !loaded) ? `${loaded ? 'Restarting' : 'Starting it'} ends the case you’re in. Its records stay on the server.` : '';
   return `<div class="intro-stamp">CASE ${caseNumber(row ? row.order : state.order)} <span>AUTHORED DEMONSTRATION</span></div>
-    <div class="monkey-line" data-world="${escape(row?.world || state.world?.id || 'grove')}" aria-hidden="true">${state.characters.map(c => `<i class="monkey-face ${castClass(c.id)}"></i>`).join('')}</div>
+    <div class="monkey-line" data-world="${escape(row?.world || state.world?.id || 'grove')}" aria-hidden="true">${cast.map((c, i) => `<i class="monkey-face ${escape(c.id)} slot-${i}"></i>`).join('')}</div>
     <span class="eyebrow">A 2–3 MINUTE MYSTERY</span><h2 id="intro-title">${escape(title).replace(/ (\S+)$/, '<br>$1')}<span>.</span></h2>
     <p class="intro-lead">${escape(row ? row.lead : state.copy.intro.lead).replace(/\n/g, '<br>')}</p>
     <p id="intro-body" ${loaded ? '' : 'hidden'}>${escape(state.copy.intro.body)}</p>
-    <div class="intro-flow"><span>01 <b>Ask ${state.characters.length} ${escape(pw.text.many)}</b></span><span>02 <b>Choose</b></span></div>
+    <div class="intro-flow"><span>01 <b>Ask ${cast.length} ${escape(pw.text.many)}</b></span><span>02 <b>Choose</b></span></div>
     ${id === 'intro' ? primary : `<div class="reset-actions"><button class="secondary-button" id="cancel-reset">Keep investigating</button>${primary}</div>`}
     <p class="fine-print">${note || `The ${escape(pw.text.many)} are AI agents in an authored story. Questions, answers, and game actions are recorded. ${state.mode === 'rehearsal' ? 'This preview uses scripted replies.' : 'Their answers are generated live.'}`}</p>`;
 }
@@ -431,7 +455,7 @@ function reportPanel() {
   return lineupPanel({
     title: state.title, noun: world().text.one, time: elapsedText(), spent: session.economy.spent, roles: state.roles,
     cast: state.characters.map(c => ({ id: c.id, name: c.name, part: c.role, faceClass: castClass(c.id) })),
-    picks: reportDraft.roles, confidence: reportDraft.confidence, explanation: reportDraft.explanation, busy, hint: submitHint(),
+    heading: state.copy.report, picks: reportDraft.roles, confidence: reportDraft.confidence, explanation: reportDraft.explanation, busy, hint: submitHint(),
   });
 }
 
@@ -504,6 +528,7 @@ async function talk() {
   if (busy || talking || !state.session) return;
   clearTimeout(bubbleTimer);
   threadOpen = true;
+  dialogueOpen = true;
   talking = true;
   render();
   try {
@@ -529,7 +554,14 @@ async function askQuestion() {
   const character: string = panel;
   stopTalking();
   pendingCharacter = character;
-  await action('interview', { character, question: drafts[character] }, () => { drafts[character] = ''; });
+  station.think(character);
+  const asked = await action('interview', { character, question: drafts[character] }, () => { drafts[character] = ''; });
+  station.think(null);
+  if (asked) {
+    const turns = state.session?.interviews[character];
+    const answer = turns?.[turns.length - 1]?.answer;
+    if (answer) station.speak(character, answer);
+  }
   pendingCharacter = null;
   document.querySelector<HTMLTextAreaElement>('#question')?.focus({ preventScroll: true });
 }

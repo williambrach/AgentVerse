@@ -14,10 +14,10 @@ test('rules_defaults_and_env', () => {
 });
 
 test('rules_validation', () => {
-  for (const v of ['7', '1000', '7.5', 'abc']) {
-    assert.throws(() => economyRules({ OVERRIDE_COIN_BUDGET: v }), { message: 'OVERRIDE_COIN_BUDGET must be an integer between 8 and 999.' });
+  for (const v of ['9', '1000', '9.5', 'abc']) {
+    assert.throws(() => economyRules({ OVERRIDE_COIN_BUDGET: v }), { message: 'OVERRIDE_COIN_BUDGET must be an integer between 10 and 999.' });
   }
-  assert.equal(economyRules({ OVERRIDE_COIN_BUDGET: '8' }).budget, 8);
+  assert.equal(economyRules({ OVERRIDE_COIN_BUDGET: '10' }).budget, 10);
   assert.equal(economyRules({ OVERRIDE_COIN_BUDGET: '999' }).budget, 999);
   assert.throws(() => economyRules({ OVERRIDE_REASONING_CHARGES: '3' }), { message: 'OVERRIDE_REASONING_CHARGES must be 1 or 2.' });
 });
@@ -33,7 +33,7 @@ test('quote_examples', () => {
   assert.deepEqual(quote(w, ['ask', 'continue'], 0), { cost: 3, ok: false, reason: 'No conversations left.' });
   const w2 = fresh(); w2.spent = 12;
   assert.deepEqual(quote(w2, ['inspect'], 0), { cost: 5, ok: false, reason: 'Not enough coins: this costs 5 and you have 3 left.' });
-  const w3 = fresh({ OVERRIDE_COIN_BUDGET: '8' }); w3.spent = 4;
+  const w3 = fresh({ OVERRIDE_COIN_BUDGET: '10' }); w3.spent = 6;
   assert.deepEqual(quote(w3, ['continue'], 4), { cost: 1, ok: false, reason: 'Save coins: you need 4 to ask everyone once.' });
 });
 

@@ -40,6 +40,10 @@ export interface BriefingView {
   firstName: string;
   /** Trusted markup from `toolGuide`, already escaped. */
   guide: string;
+  /** Plain text for the verdict step; defaults to the role-picking line. */
+  verdict?: string;
+  /** Plain text for the note under the button; defaults to the walking hint. */
+  howTo?: string;
 }
 
 /** The number in a price label such as `2 coins · 3 left`. */
@@ -52,9 +56,9 @@ export function briefingPanel(v: BriefingView): string {
   const b = v.copy.briefing;
   return `${heading('THE CASE / 2–3 MINUTES', esc(b.title), esc(b.description))}
     <div class="notebook-content briefing-content"><div class="briefing-note"><span class="eyebrow">YOUR QUESTION</span><p>${esc(b.question)}</p><small>${esc(b.hint)}</small></div>
-    <ol class="task-list"><li><b>Ask ${esc(v.cast)} ${esc(v.many)}</b><span>One quick question each.</span></li><li class="tool-step"><b>Use your Arbiter tools</b><span>Optional. They cost coins and sit in the left rail.</span>${v.guide}</li><li><b>Make your verdict</b><span>Pick a role for each ${esc(v.one)}. Then see what happened.</span></li></ol>
+    <ol class="task-list"><li><b>Ask ${esc(v.cast)} ${esc(v.many)}</b><span>One quick question each.</span></li><li class="tool-step"><b>Use your Arbiter tools</b><span>Optional. They cost coins and sit in the left rail.</span>${v.guide}</li><li><b>Make your verdict</b><span>${v.verdict !== undefined ? esc(v.verdict) : `Pick a role for each ${esc(v.one)}. Then see what happened.`}</span></li></ol>
     <button class="primary-button" data-go="${esc(v.firstId)}">Ask ${esc(v.firstName)} ${ARROW}</button>
-    <div class="subtle-note">Walk with WASD or the arrow keys and press E next to ${esc(v.oneWithArticle || `a ${v.one}`)} to talk. The cards on the left open a page straight away.</div></div>`;
+    <div class="subtle-note">${v.howTo !== undefined ? esc(v.howTo) : `Walk with WASD or the arrow keys and press E next to ${esc(v.oneWithArticle || `a ${v.one}`)} to talk. The cards on the left open a page straight away.`}</div></div>`;
 }
 
 export function interviewPanel(v: InterviewView): string {

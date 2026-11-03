@@ -41,8 +41,10 @@ test('failed_answer_costs_nothing', async t => {
 });
 
 test('reserve_blocks_continue', async t => {
-  // Four monkeys: after asking momo (2 of 8), the other three need 6, so a continue (1) would cut into them.
-  const { ask, act } = await begun(t, { env: { OVERRIDE_COIN_BUDGET: '8' } });
+  // Four monkeys, budget 10 (the floor, for five friends): after asking momo twice (4 of 10),
+  // the other three need 6, so a continue (1) would cut into them.
+  const { ask, act } = await begun(t, { env: { OVERRIDE_COIN_BUDGET: '10' } });
+  await ask();
   await ask();
   await assert.rejects(act('continue'), { status: 409, message: 'Save coins: you need 6 to ask everyone once.' });
 });
@@ -84,15 +86,16 @@ test('inspect_no_function_409', async t => {
 
 test('continue_rotates_and_rounds', async t => {
   const { act, g } = await begun(t);
-  for (let i = 0; i < 3; i++) await act('continue');
-  assert.deepEqual(g.session.thread.map(l => l.character), ['momo', 'pip', 'nori']);
-  assert.deepEqual(g.session.thread.map(l => l.text), ['Momo#0', 'Pip#0', 'Nori#0']);
+  // One round is one line from each of the four monkeys.
+  for (let i = 0; i < 4; i++) await act('continue');
+  assert.deepEqual(g.session.thread.map(l => l.character), ['momo', 'pip', 'nori', 'kiki']);
+  assert.deepEqual(g.session.thread.map(l => l.text), ['Momo#0', 'Pip#0', 'Nori#0', 'Kiki#0']);
   assert.deepEqual(g.session.chatter, { round: 1, pending: 0 });
   assert.equal(g.session.economy.spent, 1);
   await act('continue');
-  assert.equal(g.session.thread[3].character, 'kiki');
-  assert.deepEqual(g.session.chatter, { round: 2, pending: 2 });
-  for (let i = 0; i < 2 + 3; i++) await act('continue');
+  assert.equal(g.session.thread[4].character, 'momo');
+  assert.deepEqual(g.session.chatter, { round: 2, pending: 3 });
+  for (let i = 0; i < 3 + 4; i++) await act('continue');
   assert.deepEqual(g.session.chatter, { round: 3, pending: 0 });
   assert.equal(g.session.economy.charges.continue.used, 3);
   await assert.rejects(act('continue'), { status: 409, message: 'No conversations left.' });
@@ -243,7 +246,7 @@ test('replay of a v3 log restores economy, cast, thread and inspections', async 
   assert.equal(restored.economy.budget, 15);
   assert.deepEqual(restored.thread, g.session.thread);
   assert.deepEqual(restored.inspections, g.session.inspections);
-  assert.deepEqual(restored.chatter, { round: 1, pending: 2 });
+  assert.deepEqual(restored.chatter, { round: 1, pending: 3 });
   assert.deepEqual(restored, g.session);
   assert.deepEqual(again.find(g.session.id).view(), g.view());
 });

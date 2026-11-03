@@ -141,9 +141,11 @@ test('reduced motion retains direction changes without stepping', async ({ page 
   await start(page);
   await record(page);
   await center(page);
+  await page.keyboard.down('d');
+  // Until the game reads the key the avatar still shows its standing `down-0`; start recording once it faces right.
+  await expect.poll(async () => (await snap(page)).frame).toBe('right-0');
   await forget(page);
   const begin = (await snap(page)).x;
-  await page.keyboard.down('d');
   await expect.poll(async () => (await snap(page)).x - begin).toBeGreaterThan(30);
   await page.keyboard.up('d');
   expect(await seen(page, 'player')).toEqual(['right-0']);

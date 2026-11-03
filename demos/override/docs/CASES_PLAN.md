@@ -155,6 +155,11 @@ Build these only when the trigger happens. Until then they are not on the list.
 | Tiled maps, camera follow, doors between maps | Layouts multiply. |
 | Custom editor (built 2026-10-30: text is edited in the admin page at `/admin/maker.html`; structure: ids, roles, characters and versions, still lives in the modules) | Non-programmers write cases, or more than about 10 cases exist, or placement mistakes keep passing the checks. |
 | Story variants per role. Today a part's job label, introduction and quick question always belong to the same role, so tables could still share “the planner did it” | Cross-table sharing is seen at an event. |
+| Admin per-role tallies (`server/admin/round.js` `ROLE_LABELS`) list only the four standard roles, so friends theory tallies are hidden there | Someone reads friends stats in `/admin`. |
+| Friends decoys are fixed per case | Replaying players learn them. |
+| Friends assets are about 7 MB, loaded only for this case | The event network is slow. |
+| Missing friends art: Alex, Nora and Sam have only standing pose loops; no walk cycles or newly drawn seated rows; Ken's thinking loop is a pose substitute; fireplace and lamp loops are procedural | The art arrives. |
+| Wall and floor panels show seams | Art review. |
 | Hot reload for content files | Never, as long as cases are modules. `node --watch` already handles imports. |
 
 ## Decisions

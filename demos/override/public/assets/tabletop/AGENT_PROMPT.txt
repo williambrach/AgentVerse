@@ -1,0 +1,28 @@
+The game artwork has two different problems: generated frames change character
+proportions, and standing fallback legs are visible beside seated characters.
+
+In the friends-level worktree, the fixes are in:
+/Users/williambrach/Developer/AgentVerse/.superlite/worktrees/friends-level/demos/override
+
+Read client/roundtable-motion.ts, client/roundtable.ts and
+client/roundtable-layout.ts. Natural motion holds one registered body frame per
+state, with only small mouth/eyelid crops changing. Breathing and nods translate
+the sprite by at most 1.25 logical pixels; do not squash/stretch bodies, loop
+all independently generated drawings, or continuously change head sizes.
+Keep Ken's seated idle drawing during thinking to preserve head scale/glasses.
+Crop standing fallback legs and use table/chair occlusion until seated art exists.
+Sam additionally reuses a cropped, warm-tinted player seated lower body as a
+temporary rig. This is a runtime composition of existing art, not a Sam redraw.
+These fixes improve playback and staging; they do not create missing artwork.
+
+Use this folder's original CC0 tabletop PNGs and preserve their source/license
+files. They are already copied into the worktree's public/assets/tabletop/.
+Renderer placements are in drawTableProps(). Keep the large table and cluster
+small cards, dice, drinks and cookies rather than filling the table with icons.
+Scale upright cups separately from flat foreshortened cards. Leave faces clear.
+
+Before further work, check for concurrent user edits. Validate stable body
+registration during speech, blink timing, reduced motion, click targets and
+table depth ordering. Use existing rehearsal browser tests rather than live
+model requests. Do not claim the seated redraw is complete: image generation
+is currently at its daily limit.

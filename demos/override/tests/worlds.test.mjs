@@ -56,3 +56,22 @@ test('every world sets an agent count from 3 to 5', () => {
   assert.equal(serverWorlds.grove.agents, 4);
   assert.equal(serverWorlds.tower.agents, 3);
 });
+
+test('friends pack is a roundtable', () => {
+  const w = worldFor('friends');
+  assert.equal(w.scene, 'roundtable');
+  assert.equal(worldFor('grove').scene, undefined);
+  assert.equal(worldFor('tower').scene, undefined);
+  assert.deepEqual(w.text, { ...w.text, place: 'The Roundtable', eyebrow: 'FRIENDS', day: 'GAME NIGHT', one: 'friend', many: 'friends', castLabel: 'FRIEND', hint: 'Click a friend at the table, or pick one on the left.' });
+  assert.deepEqual(w.art, { cast: '', idle: '', walk: '', props: '' });
+  assert.deepEqual(w.slots, []);
+});
+
+test('friends_pack_matches_server_world', () => {
+  const w = worldFor('friends'), s = serverWorlds.friends;
+  assert.ok(s, 'server world friends (T2) has landed');
+  assert.equal(w.id, s.id);
+  assert.equal(w.text.place, s.place);
+  assert.equal(w.text.many, s.cast.many);
+  assert.ok(s.cast.one.endsWith(' ' + w.text.one));
+});

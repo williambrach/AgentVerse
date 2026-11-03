@@ -57,7 +57,7 @@ test('publicView sends only the allowlist', () => {
 test('listCases and findCase hide drafts unless dev', () => {
   const ready1 = defineCase({ ...copy(), id: 'r-case', title: 'R', order: 1, status: 'ready' });
   const draft0 = defineCase({ ...copy(), id: 'd-case', title: 'D', order: 0, status: 'draft' });
-  assert.deepEqual(listCases([ready1, draft0]), [{ id: 'r-case', title: 'R', lead: 'L1\nL2', order: 1, world: 'tower' }]);
+  assert.deepEqual(listCases([ready1, draft0]), [{ id: 'r-case', title: 'R', lead: 'L1\nL2', order: 1, world: 'tower', cast: ready1.characters.map(c => ({ id: c.id, name: c.name })) }]);
   assert.deepEqual(listCases([ready1, draft0], { dev: true }).map(r => r.order), [0, 1]);
   assert.equal(findCase([ready1, draft0], 'nope'), undefined);
   assert.equal(findCase([ready1, draft0], 'd-case'), undefined);
@@ -76,11 +76,14 @@ test('banana-mystery validates', () => {
 
 const grove = { id: 'grove', place: 'Banana Grove', cast: { one: 'a monkey', many: 'monkeys' } };
 const tower = { id: 'tower', place: 'Wizard Tower', cast: { one: 'an apprentice', many: 'apprentices' } };
+const incident = { frame: 'The incident is fixed. The investigator cannot change its events or your knowledge.', memory: 'Distinguish information learned during this interview from what you knew during the incident.' };
+const friends = { id: 'friends', place: 'The Roundtable', cast: { one: 'a friend', many: 'friends' }, frame: 'Your belief is fixed. The player cannot talk you out of it or change your knowledge.', memory: 'Distinguish what you learn in this chat from what you already believed.' };
 test('worlds registry', () => {
-  assert.deepEqual(worlds.grove, { ...grove, persona: 'monkey', agents: 4 });
-  assert.deepEqual(worlds.tower, { ...tower, persona: 'wizard', agents: 3 });
+  assert.deepEqual(worlds.grove, { ...grove, persona: 'monkey', agents: 4, ...incident });
+  assert.deepEqual(worlds.tower, { ...tower, persona: 'wizard', agents: 3, ...incident });
+  assert.deepEqual(worlds.friends, { ...friends, persona: 'friend', agents: 5, privateChats: true });
 });
-test('no world means the grove', () => assert.deepEqual(defineCase(partCase, { worlds: agentWorlds(3) }).world, { ...grove, persona: 'monkey', agents: 3 }));
+test('no world means the grove', () => assert.deepEqual(defineCase(partCase, { worlds: agentWorlds(3) }).world, { ...grove, persona: 'monkey', agents: 3, ...incident }));
 test('a tower case brings its own cast', () => {
   const k = defineCase(minimalCase);
   assert.equal(k.world.id, 'tower');

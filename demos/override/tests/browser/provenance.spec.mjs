@@ -80,5 +80,10 @@ test('/api/cases is the allowlist', async ({ page }) => {
   expect(res.ok()).toBe(true);
   const { cases } = await res.json();
   expect(cases.length).toBeGreaterThan(0);
-  for (const c of cases) expect(Object.keys(c).sort()).toEqual(['id', 'lead', 'order', 'title', 'world']);
+  for (const c of cases) {
+    expect(Object.keys(c).sort()).toEqual(['cast', 'id', 'lead', 'order', 'title', 'world']);
+    // The case board preview draws faces and names only: each cast row carries no prompt, role or secret.
+    expect(c.cast.length).toBeGreaterThan(0);
+    for (const member of c.cast) expect(Object.keys(member).sort()).toEqual(['id', 'name']);
+  }
 });

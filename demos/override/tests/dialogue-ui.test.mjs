@@ -111,7 +111,11 @@ test('briefing restyle: copy and parchment palette', () => {
 test('non-interview panels: section tag, thread box, alignment', () => {
   assert.match(rule('#app #notebook-section'), /top: -20px[\s\S]*background: #18252D/);
   assert.match(css, /#app \.dossier:has\(\.dialogue\) #notebook-section \{ display: none; \}/);
-  assert.match(rule('#app .dossier:has(.thread-panel)'), /max-height: 40dvh/);
+  // The thread cap must beat the page rule (same specificity, so it must come later), or the thread grows over the room.
+  const page = '#app:not([data-view="lineup"]) .dossier:not(:has(.dialogue)) {';
+  const thread = '#app:not([data-view="lineup"]) .dossier:has(.thread-panel) {';
+  assert.match(rule(thread.slice(0, -2)), /max-height: 40dvh/);
+  assert.ok(css.indexOf(page) >= 0 && css.indexOf(thread) > css.indexOf(page), 'thread cap comes after the page max-height rule');
   assert.match(rule('#app .thread-panel .panel-heading'), /clip: rect\(0 0 0 0\)/);
   assert.match(rule('#app .thread-panel .thread-author'), /font: 600 13px/);
   assert.match(rule('#app .thread-panel .fine'), /font-size: 13px/);
@@ -129,6 +133,16 @@ test('briefing', () => {
   assert.match(h, /class="subtle-note"/);
   assert.match(h, /<p class="g">guide<\/p>/);
   assert.doesNotMatch(briefingPanel(bv({ copy: { briefing: { title: '<s>', description: '', question: '', hint: '' } } })), /<s>/);
+});
+
+test('briefing_roundtable_text: verdict step and how-to come from the caller, escaped; no walking line', () => {
+  const h = briefingPanel(bv({ verdict: 'Name the conspiracy each friend believes.', howTo: 'Click a friend at the table, or pick one on the left.' }));
+  assert.match(h, /<b>Make your verdict<\/b><span>Name the conspiracy each friend believes\.<\/span>/);
+  assert.match(h, /<div class="subtle-note">Click a friend at the table, or pick one on the left\.<\/div>/);
+  assert.doesNotMatch(h, /WASD|Pick a role/);
+  assert.doesNotMatch(briefingPanel(bv({ verdict: '<i>v</i>', howTo: '<i>h</i>' })), /<i>/);
+  // Walking worlds keep today's text.
+  assert.match(briefingPanel(bv()), /Pick a role for each monkey\. Then see what happened\.[\s\S]*Walk with WASD/);
 });
 
 test('notebook.css is retired and dialogue.css stands alone', async () => {

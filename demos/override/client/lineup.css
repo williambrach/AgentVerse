@@ -96,3 +96,16 @@
 .debrief-primary { background: var(--gold); color: #18252D; border: 2px solid #18252D; box-shadow: 0 4px 0 #8A5E10; }
 .debrief-secondary { background: transparent; color: var(--cream); border: 2px solid var(--edge); }
 .debrief-page button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* Choice mode: the case's own answers as a labelled list, no honest-to-villain scale. */
+.lineup-choice { --choice: var(--gold); }
+.lineup-choice .lineup-cards { max-width: calc(var(--n, 3) * 260px); grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+.lineup-choice .role-row:has(input:checked) { border-color: var(--choice); }
+.lineup-choice .role-legend .legend-swatch { background: var(--choice); }
+.role-choices { display: flex; flex-direction: column; gap: 4px; }
+.lineup-board .role-chip.role-choice { --c: var(--choice); width: auto; height: auto; min-height: 36px; box-sizing: border-box; display: flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 6px 8px; border: 2px solid transparent; text-align: left; }
+.lineup-board .role-chip.role-choice:hover { background: #1B3340; }
+.lineup-board .role-chip.role-choice:has(input:checked) { background: #1B3340; border-color: var(--choice); }
+.lineup-board .role-chip.role-choice .role-dot { flex-shrink: 0; }
+.lineup-board .role-chip.role-choice .choice-label { font-size: 14px; line-height: 1.25; color: var(--cream); overflow-wrap: anywhere; }
+.lineup-board .role-chip.role-choice:has(input:checked) .choice-label { font-weight: 700; }

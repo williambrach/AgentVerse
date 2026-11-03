@@ -1,8 +1,7 @@
 import { randomUUID, randomInt } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { publicView, listCases, findCase, partOf, identityCast, resolve as resolveText } from './cases.mjs';
-import { ROLES, ROLE_IDS } from './roles.mjs';
+import { publicView, listCases, findCase, partOf, identityCast, rolesOf, resolve as resolveText } from './cases.mjs';
 import { cases as registry } from './cases/index.mjs';
 import { answerInterview, answerThread, promptVersion, threadPromptVersion } from './interviews.mjs';
 import { economyRules, createWallet, quote, spend } from './economy.mjs';
@@ -64,7 +63,8 @@ export function replay(events, cases, lastSaid = null) {
     if (lastSaid && (e.type === 'interview_answer' || e.type === 'chatter_line')) lastSaid.set(e.character, e.eventId);
     if (e.type === 'chatter_line') {
       s.thread.push({ character: e.character, text: e.text, round: e.round, timestamp: e.timestamp });
-      s.chatter = { round: e.round, pending: 3 - e.line };
+      // Rounds were 3 lines before roundLines was logged; older logs keep that.
+      s.chatter = { round: e.round, pending: (e.roundLines ?? 3) - e.line };
     }
     if (e.type === 'reasoning_inspected') s.inspections.push({ character: e.character, sourceEventId: e.sourceEventId, reasoning: e.reasoning, timestamp: e.timestamp });
     if (e.type === 'interview_answer') s.interviews[e.character].push({ question: e.question, answer: e.answer, timestamp: e.timestamp });
@@ -244,7 +244,7 @@ export class Investigation {
     let session = null;
     if (s) { session = structuredClone(s); delete session.cast; session.inspectable = this.inspectable(); }
     return {
-      ...publicView(kase, cast), roles: ROLES, authored: true, mode: this.config.mode, model: this.config.model,
+      ...publicView(kase, cast), roles: rolesOf(kase), authored: true, mode: this.config.mode, model: this.config.model,
       session, debrief: s?.status === 'closed' ? this.debrief(s) : null,
     };
   }
@@ -450,7 +450,11 @@ export class Investigation {
     const speaker = characters[(last + 1) % characters.length];
     const n = s.thread.filter(l => l.character === speaker.id).length;
     const round = starting ? s.chatter.round + 1 : s.chatter.round;
-    const line = starting ? 1 : 4 - s.chatter.pending;
+    // A new round is one line from every character. A round in progress keeps its size,
+    // so a round restored from an older log (3 lines) ends where it would have.
+    const done = starting ? 0 : s.thread.filter(l => l.round === s.chatter.round).length;
+    const roundLines = starting ? characters.length : done + s.chatter.pending;
+    const line = done + 1;
     let text;
     let reasoning = null;
     let provenance = null;
@@ -476,20 +480,21 @@ export class Investigation {
       if (typeof text !== 'string' || !text) text = `${speaker.name} has nothing to add.`;
     }
     const paid = starting ? spend(s.economy, ['continue']) : null;
-    const event = this.log('chatter_line', { character: speaker.id, text, round, line, provenance, threadPromptVersion, spend: paid });
+    const event = this.log('chatter_line', { character: speaker.id, text, round, line, roundLines, provenance, threadPromptVersion, spend: paid });
     this.remember(speaker.id, event.eventId, reasoning);
     s.thread.push({ character: speaker.id, text, round, timestamp: event.timestamp });
-    s.chatter = { round, pending: 3 - line };
+    s.chatter = { round, pending: roundLines - line };
   }
 
   verdict(input) {
     const s = this.session;
     const { characters } = this.kase;
     if (characters.some(c => !s.interviews[c.id].length)) throw new RequestError(400, `Ask all ${characters.length} ${this.kase.world.cast.many} before choosing.`);
+    const roleIds = rolesOf(this.kase).map(r => r.id);
     const picks = input.roles;
     const ids = characters.map(c => c.id);
     const pickedOk = picks && typeof picks === 'object' && !Array.isArray(picks)
-      && Object.keys(picks).length === ids.length && ids.every(id => Object.hasOwn(picks, id) && ROLE_IDS.includes(picks[id]));
+      && Object.keys(picks).length === ids.length && ids.every(id => Object.hasOwn(picks, id) && roleIds.includes(picks[id]));
     if (!pickedOk) throw new RequestError(400, `Pick a role for each ${this.kase.world.cast.one.replace(/^an? /, '')}.`);
     if (!Number.isInteger(input.confidence) || input.confidence < 0 || input.confidence > 100) throw new RequestError(400, 'Confidence must be between 0 and 100.');
     const explanation = input.explanation ?? '';

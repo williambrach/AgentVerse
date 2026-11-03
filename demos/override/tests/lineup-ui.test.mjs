@@ -76,3 +76,39 @@ test('explanation_escaped', () => {
   assert.ok(!html.includes('<script>'));
   assert.match(html, /<textarea[^>]*id="explanation"[^>]*>&quot;&gt;&lt;\/textarea&gt;&lt;script&gt;x&lt;\/script&gt;<\/textarea>/);
 });
+
+const theories = ['moon', 'bird', 'sock', 'lizard', 'map', 'tide', 'ghost'].map(id => ({ id, label: `Theory <b>${id}</b>`, hint: `Hint & ${id}` }));
+const friends = ['maya', 'ken', 'alex', 'nora', 'sam'].map(id => ({ id, name: id.toUpperCase(), part: 'A friend', faceClass: id }));
+const heading = { title: 'Who believes what?', description: 'Pick a theory for each friend.' };
+const choiceView = (o = {}) => view({ roles: theories, cast: friends, heading, noun: 'friend', ...o });
+
+test('choice_mode_escapes_labels', () => {
+  const html = lineupPanel(choiceView());
+  assert.doesNotMatch(html, /<b>moon<\/b>/);
+  assert.match(html, /Theory &lt;b&gt;moon&lt;\/b&gt;/);
+  assert.equal(count(html, /<label class="role-chip role-choice"/g), 35);
+  assert.equal(count(html, /name="role-maya" value="/g), 7);
+  assert.doesNotMatch(html, /scale-ends/);
+  assert.match(html, /<h1>Who believes what\?<\/h1>/);
+  assert.match(html, /Pick a theory for each friend\./);
+  for (const id of ['report-form', 'lock-in', 'explanation', 'lineup-back']) assert.match(html, new RegExp(`id="${id}"`));
+  assert.equal(count(html, /name="confidence"/g), 3);
+  const esc = lineupPanel(choiceView({ heading: { title: '<i>x</i>', description: '&' } }));
+  assert.match(esc, /<h1>&lt;i&gt;x&lt;\/i&gt;<\/h1>/);
+});
+
+test('choice_mode_keeps_picks', () => {
+  const html = lineupPanel(choiceView({ picks: { ken: 'sock', nora: 'tide' } }));
+  assert.match(html, /name="role-ken" value="sock" aria-label="[^"]*" checked/);
+  assert.equal(count(html, / checked>/g), 2 + 1);
+  assert.match(lineupPanel(choiceView({ hint: 'x', picks: { ken: 'sock' } })), /1 of 5 picked/);
+});
+
+test('standard_lineup_unchanged', () => {
+  const html = lineupPanel(view({ heading }));
+  assert.match(html, /<h1>Who played which part\?<\/h1>/);
+  assert.match(html, /class="scale-ends"/);
+  assert.doesNotMatch(html, /role-choice|lineup-choice/);
+  assert.match(html, /<form id="report-form" class="lineup-board">/);
+  assert.equal(html, lineupPanel(view()));
+});

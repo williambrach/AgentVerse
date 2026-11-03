@@ -130,7 +130,8 @@
 #app .subtle-note kbd { font-size: 13px; }
 
 /* Thread: no heading text on screen, at most 40dvh tall so bubbles over characters below y=212 stay visible. */
-#app .dossier:has(.thread-panel) { max-height: 40dvh; }
+/* The thread stays a strip under the room so the friends stay in view; it scrolls inside. Same specificity as the page rule above, so it must stay after it. */
+#app:not([data-view="lineup"]) .dossier:has(.thread-panel) { max-height: 40dvh; }
 #app .thread-panel .panel-heading { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 #app .thread-panel .notebook-content { overflow-y: auto; padding-top: 22px; padding-right: 56px; }
 #app .thread-panel .thread-post { color: #18252D; background: #FFFDF5; border: 1px solid #D9C796; }

@@ -28,13 +28,14 @@ async function ask(page, id, name, total) {
   await coinsLeft(page, 15 - total);
 }
 /** Waits until three different characters have each shown a bubble. */
-async function threeBubbles(page) {
+// One round of talk is one line from every character (four monkeys, three in the tower), each seen in a bubble.
+async function everyoneSpeaks(page, count = 4) {
   const seen = new Set();
   await expect.poll(async () => {
     const who = await page.locator('.station-bubble').first().getAttribute('data-character', { timeout: 500 }).catch(() => null);
     if (who) seen.add(who);
     return seen.size;
-  }, { timeout: 60_000, intervals: [100] }).toBe(3);
+  }, { timeout: 60_000, intervals: [100] }).toBe(count);
 }
 /** Calls a mutating endpoint with the current session and revision. */
 async function api(page, name, body = {}) {
@@ -134,8 +135,8 @@ test('talk_round', async ({ page }) => {
   await ask(page, 'nori', 'Nori', 6);
   await ask(page, 'kiki', 'Kiki', 8);
   await page.locator('#continue-button').click();
-  await threeBubbles(page);
-  await expect(page.locator('#thread-log .thread-post')).toHaveCount(3);
+  await everyoneSpeaks(page);
+  await expect(page.locator('#thread-log .thread-post')).toHaveCount(4);
   await coinsLeft(page, 6);
 });
 
@@ -144,8 +145,8 @@ test('talk_from_start', async ({ page }) => {
   await fresh(page);
   await expect(page.locator('#continue-button')).toBeEnabled();
   await page.locator('#continue-button').click();
-  await threeBubbles(page);
-  await expect(page.locator('#thread-log .thread-post')).toHaveCount(3);
+  await everyoneSpeaks(page);
+  await expect(page.locator('#thread-log .thread-post')).toHaveCount(4);
   await coinsLeft(page, 14);
 });
 
@@ -157,8 +158,8 @@ test('budget_409', async ({ page }) => {
   await ok('interview', { character: 'nori', question: 'Where were you?' });
   await ok('interview', { character: 'kiki', question: 'Who did you talk to?' });
   await ok('inspect', { character: 'momo' });
-  // Two rounds of three lines each: one coin each.
-  for (let i = 0; i < 4; i++) await ok('continue');
+  // A full round (four lines, one coin), then the first line of the next round (one more coin).
+  for (let i = 0; i < 5; i++) await ok('continue');
   const state = await (await page.request.get('/api/state')).json();
   expect(state.session.economy.spent).toBe(15);
   const res = await api(page, 'interview', { character: 'pip', question: 'One more thing?' });
@@ -174,7 +175,8 @@ test('reload_keeps_thread', async ({ page }) => {
   await expect(page.locator('#intro')).toHaveCount(0);
   await page.locator('#read-thread').click();
   await expect(page.locator('#thread-log .thread-post')).toHaveCount(1);
-  await expect(page.locator('#continue-button')).toHaveText('Keep listening (2)');
+  // Four monkeys: one line heard, three still to come.
+  await expect(page.locator('#continue-button')).toHaveText('Keep listening (3)');
 });
 
 test('tower_tools', async ({ page }) => {
@@ -188,7 +190,7 @@ test('tower_tools', async ({ page }) => {
   await ask(page, 'wren', 'Wren', 9);
   await ask(page, 'basil', 'Basil', 11);
   await page.locator('#continue-button').click();
-  await threeBubbles(page);
+  await everyoneSpeaks(page, 3);
   await expect(page.locator('#thread-log .thread-post')).toHaveCount(3);
 });
 

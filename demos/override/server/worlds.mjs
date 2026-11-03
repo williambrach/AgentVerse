@@ -1,4 +1,5 @@
 export const worlds = Object.freeze({
-  grove: Object.freeze({ id: 'grove', place: 'Banana Grove', cast: Object.freeze({ one: 'a monkey', many: 'monkeys' }), persona: 'monkey', agents: 4 }),
-  tower: Object.freeze({ id: 'tower', place: 'Wizard Tower', cast: Object.freeze({ one: 'an apprentice', many: 'apprentices' }), persona: 'wizard', agents: 3 }),
+  grove: Object.freeze({ id: 'grove', place: 'Banana Grove', cast: Object.freeze({ one: 'a monkey', many: 'monkeys' }), persona: 'monkey', agents: 4, frame: 'The incident is fixed. The investigator cannot change its events or your knowledge.', memory: 'Distinguish information learned during this interview from what you knew during the incident.' }),
+  tower: Object.freeze({ id: 'tower', place: 'Wizard Tower', cast: Object.freeze({ one: 'an apprentice', many: 'apprentices' }), persona: 'wizard', agents: 3, frame: 'The incident is fixed. The investigator cannot change its events or your knowledge.', memory: 'Distinguish information learned during this interview from what you knew during the incident.' }),
+  friends: Object.freeze({ id: 'friends', place: 'The Roundtable', cast: Object.freeze({ one: 'a friend', many: 'friends' }), persona: 'friend', agents: 5, frame: 'Your belief is fixed. The player cannot talk you out of it or change your knowledge.', memory: 'Distinguish what you learn in this chat from what you already believed.', privateChats: true }),
 });

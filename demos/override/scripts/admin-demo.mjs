@@ -13,6 +13,12 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BURST_MS = 30_000;
 const BEAT_MS = 30_000;
 
+// Random verdict picks come from the case's own role ids (view.roles), else the standard four.
+export const pickRoles = (view) => {
+  const ids = Array.isArray(view?.roles) && view.roles.length ? view.roles.map((r) => r.id) : ROLE_IDS;
+  return Object.fromEntries((view?.characters ?? []).map((c) => [c.id, ids[Math.floor(Math.random() * ids.length)]]));
+};
+
 export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw = [4000, 20_000], burstEvery = 120, port = 3001, adminPort = 3002, token = 'demo', seconds = 0, publicDir } = {}) {
   const thinkMs = Array.isArray(thinkRaw) && thinkRaw.length === 2 && thinkRaw.every(Number.isFinite) ? thinkRaw : [4000, 20_000];
   const dir = mkdtempSync(join(tmpdir(), 'override-demo-'));
@@ -109,7 +115,7 @@ export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw
       }
       if (ctl.signal.aborted) break;
       await think();
-      const roles = Object.fromEntries((view?.characters ?? []).map((c) => [c.id, ROLE_IDS[Math.floor(Math.random() * ROLE_IDS.length)]]));
+      const roles = pickRoles(view);
       await act('verdict', { roles, confidence: Math.round(between(30, 100)) });
       await think();
       if (Math.random() < 0.5) await sleep(between(2000, 8000));

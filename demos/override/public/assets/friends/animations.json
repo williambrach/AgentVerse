@@ -1,0 +1,1188 @@
+{
+  "version": 1,
+  "frameWidth": 192,
+  "frameHeight": 288,
+  "framesPerStrip": 6,
+  "anchor": {
+    "x": 0.5,
+    "y": 0.9791666666666666
+  },
+  "animations": {
+    "player:idle": {
+      "image": "player-idle.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 100
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "player:walk-right": {
+      "image": "player-walk-right.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "player:seated-idle": {
+      "image": "player-seated-idle.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 100
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "player:seated-talk": {
+      "image": "player-seated-talk.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 150
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 150
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 250
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "player:seated-think": {
+      "image": "player-seated-think.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 400
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 100
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 400
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "maya:idle": {
+      "image": "maya-idle.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 100
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "maya:walk-right": {
+      "image": "maya-walk-right.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "maya:seated-idle": {
+      "image": "maya-seated-idle.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 100
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "maya:seated-talk": {
+      "image": "maya-seated-talk.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 150
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 150
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 250
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "maya:seated-think": {
+      "image": "maya-seated-think.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 400
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 100
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 400
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "ken:idle": {
+      "image": "ken-idle.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 100
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "ken:walk-right": {
+      "image": "ken-walk-right.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 110
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "ken:seated-idle": {
+      "image": "ken-seated-idle.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 100
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 170
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 500
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "ken:seated-talk": {
+      "image": "ken-seated-talk.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 150
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 150
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 180
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 250
+        }
+      ],
+      "loop": true,
+      "kind": "drawn frames"
+    },
+    "ken:seated-think": {
+      "image": "ken-seated-think.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        }
+      ],
+      "loop": true,
+      "kind": "pose-based procedural"
+    },
+    "alex:idle": {
+      "image": "alex-idle.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        }
+      ],
+      "loop": true,
+      "kind": "pose-based procedural"
+    },
+    "alex:talk": {
+      "image": "alex-talk.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        }
+      ],
+      "loop": true,
+      "kind": "pose-based procedural"
+    },
+    "alex:think": {
+      "image": "alex-think.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        }
+      ],
+      "loop": true,
+      "kind": "pose-based procedural"
+    },
+    "nora:idle": {
+      "image": "nora-idle.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        }
+      ],
+      "loop": true,
+      "kind": "pose-based procedural"
+    },
+    "nora:talk": {
+      "image": "nora-talk.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        }
+      ],
+      "loop": true,
+      "kind": "pose-based procedural"
+    },
+    "nora:think": {
+      "image": "nora-think.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        }
+      ],
+      "loop": true,
+      "kind": "pose-based procedural"
+    },
+    "sam:idle": {
+      "image": "sam-idle.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        }
+      ],
+      "loop": true,
+      "kind": "pose-based procedural"
+    },
+    "sam:talk": {
+      "image": "sam-talk.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        }
+      ],
+      "loop": true,
+      "kind": "pose-based procedural"
+    },
+    "sam:think": {
+      "image": "sam-think.png",
+      "frames": [
+        {
+          "x": 0,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 192,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 384,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 576,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 768,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        },
+        {
+          "x": 960,
+          "y": 0,
+          "w": 192,
+          "h": 288,
+          "duration": 200
+        }
+      ],
+      "loop": true,
+      "kind": "pose-based procedural"
+    }
+  }
+}

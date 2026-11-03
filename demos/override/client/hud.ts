@@ -31,7 +31,7 @@ const iconButton = (id: string, label: string, path: string): string =>
 
 /** The whole game screen: the world fills the window and the HUD floats over it. Dynamic parts are filled by main.ts. */
 export function hudShell(v: { teamName: string; headline: string; topline: string }): string {
-  return `<div id="station"></div><div class="hud-scrim" aria-hidden="true"></div>
+  return `<div id="station"></div><div id="roundtable" hidden></div><div class="hud-scrim" aria-hidden="true"></div>
     <header class="topbar">
       <div class="hud-panel case-panel">
         <a class="wordmark" href="/" aria-label="The Override home"><span class="banana-mark" id="world-icon"></span></a>

@@ -11,10 +11,10 @@ Exact strings for `O/server/cases/friends-roundtable.mjs`. Theories are harmless
 ## Copy
 
 - headline `Find the conspiracists`
-- intro.lead `Your friends are hiding something.\nFind the conspiracists.`
-- intro.body `It’s game night at the roundtable. Every one of your five friends has secretly fallen for a different conspiracy theory, and none of them knows about the others. You believe none of them. Unmask each conspiracist and name their theory.`
-- briefing.title `Find the conspiracists.` · description `Five friends, five hidden conspiracy theories. Nobody will admit theirs straight away, and none of them knows what the others believe.` · question `Which conspiracy is each friend hiding?` · hint `Start with small talk. Listen for slips, then ask about the topic you suspect.`
-- report.title `Unmask the conspiracists` · report.description `Name the conspiracy each friend believes. Two theories on the list belong to nobody.`
+- intro.lead `Game night at the roundtable.\nFind the conspiracists.`
+- intro.body `Five friends, one big table and a long night of games. Rumour has it there are conspiracy theorists among them, and nobody will admit to it. Chat, listen for slips, and work out who believes what.`
+- briefing.title `Find the conspiracists.` · description `Rumour has it there are conspiracy theorists at the table. Nobody admits to one straight away.` · question `Who believes in a conspiracy, and which one?` · hint `Start with small talk. Listen for slips, then ask about the topic you suspect.`
+- report.title `Unmask the conspiracists` · report.description `For each friend, pick the conspiracy they believe, or say they are not a conspiracist.`
 - debrief.title `All five were conspiracists.` · summary `{birds} thinks birds are drones, {moon} doubts the moon landing, {flat} trusts a flat horizon, {finland} doubts Finland, and {paul} thinks Paul was replaced.` · lesson `People hide beliefs they expect others to laugh at. Small talk and kind, patient questions bring them out.`
 - answer.feedback.correct `Right. You unmasked every conspiracist and named their theory.` · other `Some conspiracists kept their secret. Think back to the slips each friend made.`
 
@@ -29,8 +29,9 @@ Exact strings for `O/server/cases/friends-roundtable.mjs`. Theories are harmless
 | paul | Paul McCartney was replaced | A lookalike since 1966. |
 | simulation | We live in a simulation | Reality is a computer program. |
 | nessie | Nessie is real and hidden | Scotland keeps the monster secret. |
+| none | Not a conspiracist | Believes no conspiracy theory. |
 
-`simulation` and `nessie` are decoys: no part holds them.
+`simulation`, `nessie` and `none` are held by no part. The story before the verdict never says that every friend has a theory; the debrief reveals it.
 
 ## Parts
 

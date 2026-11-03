@@ -101,12 +101,12 @@ export function noThoughtBlock(name: string, line: number): string {
     `<h4>${esc(name)}’s reasoning</h4><p>${esc(name)} did not think. No coins spent.</p></article>`;
 }
 
-export function threadPanel(thread: ThreadLine[], names: Record<string, string>, pending: number): string {
+export function threadPanel(thread: ThreadLine[], names: Record<string, string>, pending: number, note = 'They see each other’s earlier lines, never your questions.'): string {
   const posts = thread.map((l, n) =>
     `<li class="thread-post" data-motion-key="thread-${n + 1}"><h4 class="thread-author">#${n + 1} ${esc(names[l.character] ?? l.character)}</h4>` +
     `<p>${esc(l.text)}</p></li>`).join('');
   const wait = pending > 0 ? `<li class="thread-pending" aria-live="polite">${esc(pending)} more coming…</li>` : '';
   return `<section class="thread-panel"><div class="panel-heading"><span class="eyebrow">ARBITER TOOL · LET THEM TALK</span><h2>The agents’ thread</h2></div>` +
     `<div class="notebook-content"><ol id="thread-log" role="log" aria-live="polite">${posts}${wait}</ol>` +
-    `<p class="fine">They see each other’s earlier lines, never your questions.</p></div></section>`;
+    `<p class="fine">${esc(note)}</p></div></section>`;
 }

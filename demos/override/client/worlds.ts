@@ -2,7 +2,10 @@ export type SlotPoint = { x: number; y: number };
 
 export interface WorldPack {
   id: string;
-  text: { place: string; eyebrow: string; day: string; one: string; many: string; castLabel: string; hint: string; oneWithArticle: string; investigator: string; icon: string };
+  /** Which stage draws this world. Absent: the walking station. */
+  scene?: 'roundtable';
+  /** threadNote: the thread's footnote when it differs from the default (friends: chats stay private). */
+  text: { place: string; eyebrow: string; day: string; one: string; many: string; castLabel: string; hint: string; oneWithArticle: string; investigator: string; icon: string; threadNote?: string };
   art: { cast: string; idle: string; walk: string; props: string };
   palette: { ground: string; label: string; labelBg: string };
   /** Where the cast stands, by persona index. Five points; the first three are the original layout. */
@@ -30,7 +33,16 @@ const tower: WorldPack = {
   heights: { cast: 47, investigator: 45 },
 };
 
-const packs: Record<string, WorldPack> = { grove, tower };
+const friends: WorldPack = {
+  id: 'friends',
+  scene: 'roundtable',
+  text: { place: 'The Roundtable', eyebrow: 'FRIENDS', day: 'GAME NIGHT', one: 'friend', many: 'friends', castLabel: 'FRIEND', hint: 'Click a friend at the table, or pick one on the left.', oneWithArticle: 'a friend', investigator: 'friend', threadNote: 'They only hear what is said at the table, never your private chats.', icon: '<path d="M4 10h16M6 10v9M18 10v9M3 10c0-3 4-5 9-5s9 2 9 5"/>' },
+  art: { cast: '', idle: '', walk: '', props: '' },
+  palette: { ground: '#c98f5a', label: '#4a2f1d', labelBg: '#fff0d6' },
+  slots: [],
+};
+
+const packs: Record<string, WorldPack> = { grove, tower, friends };
 
 export function worldFor(id: string | undefined): WorldPack {
   return (id !== undefined && Object.hasOwn(packs, id) ? packs[id] : grove) as WorldPack;

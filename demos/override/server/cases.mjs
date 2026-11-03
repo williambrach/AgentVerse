@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { worlds as liveWorlds } from './worlds.mjs';
-import { ROLE_IDS } from './roles.mjs';
+import { ROLES, ROLE_IDS } from './roles.mjs';
 
 const PART_ID = /^[a-z][a-z0-9]{1,15}$/;
 const COPY_SHAPE = { headline: null, intro: ['lead', 'body'], briefing: ['title', 'description', 'question', 'hint'], report: ['title', 'description'] };
@@ -26,6 +26,20 @@ const deepFreeze = value => {
   if (value && typeof value === 'object') { Object.values(value).forEach(deepFreeze); Object.freeze(value); }
   return value;
 };
+
+const ROLE_KEY = /^[a-z][a-z0-9-]{1,23}$/;
+const rolesCheck = (roles, fail) => {
+  if (!Array.isArray(roles) || roles.length < 2 || roles.length > 9) fail('roles', 'must hold 2 to 9 roles');
+  const seen = [];
+  roles.forEach((r, i) => {
+    if (typeof r?.id !== 'string' || !ROLE_KEY.test(r.id)) fail(`roles[${i}].id`, `must match ${ROLE_KEY}`);
+    if (seen.includes(r.id)) fail(`roles[${i}].id`, `duplicate role id ${r.id}`);
+    seen.push(r.id);
+    for (const k of ['label', 'hint']) if (typeof r[k] !== 'string' || !r[k]) fail(`roles[${i}].${k}`, 'must be a non-empty string');
+  });
+};
+
+export const rolesOf = kase => kase.roles ?? ROLES;
 
 const TOOL_KEYS = ['rehearsalReasoning', 'rehearsalChatter'];
 const toolsOf = (data, fail) => {
@@ -66,6 +80,8 @@ export function defineCase(data, { worlds = liveWorlds } = {}) {
   str(prompt.setting, 'prompt.setting');
   for (const key of ['use', 'avoid']) if (!Array.isArray(prompt[key]) || !prompt[key].every(s => typeof s === 'string')) fail(`prompt.${key}`, 'must be an array of strings');
   data.characters.forEach((c, i) => ['id', 'name', 'color'].forEach(k => str(c[k], `characters[${i}].${k}`)));
+  if (data.roles !== undefined) rolesCheck(data.roles, fail);
+  const roleIds = data.roles ? data.roles.map(r => r.id) : ROLE_IDS;
   const partIds = [];
   data.parts.forEach((p, i) => {
     if (typeof p?.id !== 'string' || !PART_ID.test(p.id)) fail(`parts[${i}].id`, `must match ${PART_ID}`);
@@ -78,7 +94,7 @@ export function defineCase(data, { worlds = liveWorlds } = {}) {
   const text = (value, path) => { str(value, path); placeholders(value, path); };
   data.parts.forEach((p, i) => {
     const at = `parts[${i}]`;
-    if (!ROLE_IDS.includes(p.role)) fail(`${at}.role`, `must be one of ${ROLE_IDS.join(', ')}`);
+    if (!roleIds.includes(p.role)) fail(`${at}.role`, `must be one of ${roleIds.join(', ')}`);
     for (const k of ['label', 'introduction', 'quickQuestion']) text(p[k], `${at}.${k}`);
     if (!Array.isArray(p.knowledge) || !p.knowledge.length) fail(`${at}.knowledge`, 'must be a non-empty array of non-empty strings');
     p.knowledge.forEach((k, n) => text(k, `${at}.knowledge[${n}]`));
@@ -145,7 +161,7 @@ export function publicView(kase, cast) {
     title: kase.title,
     order: kase.order,
     copy: resolveDeep(kase, cast, kase.copy),
-    world: (({ persona, clueSpot, agents, ...rest }) => ({ ...rest, agents, cast: { ...rest.cast } }))(kase.world),
+    world: (({ persona, frame, memory, clueSpot, agents, ...rest }) => ({ ...rest, agents, cast: { ...rest.cast } }))(kase.world),
     characters: castCharacters(kase, cast),
   };
 }
@@ -157,7 +173,7 @@ export function identityCast(kase) {
 }
 
 export function listCases(cases, { dev = false } = {}) {
-  return visible(cases, dev).map(c => ({ id: c.id, title: c.title, lead: c.copy.intro.lead, order: c.order, world: c.world.id }));
+  return visible(cases, dev).map(c => ({ id: c.id, title: c.title, lead: c.copy.intro.lead, order: c.order, world: c.world.id, cast: c.characters.map(ch => ({ id: ch.id, name: ch.name })) }));
 }
 
 export function findCase(cases, id, { dev = false } = {}) {
