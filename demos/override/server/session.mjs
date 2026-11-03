@@ -196,7 +196,6 @@ export class Investigation {
     this.reasoning = new Map();
     this.meta = meta;
     this.onEvent = onEvent;
-    this.asked = new Window(6, 60_000);
     this.session = session;
     this.busy = false;
     this.touched = Date.now();
@@ -357,7 +356,6 @@ export class Investigation {
     const tools = ['ask'];
     const check = quote(s.economy, tools, this.reserve(character.id));
     if (!check.ok) throw new RequestError(409, check.reason);
-    if (!this.asked.take()) throw new RequestError(429, 'Slow down: at most 6 questions per minute.');
     const question = input.question.trim();
     const wallet = structuredClone(s.economy);
     let answeredLogged = false;

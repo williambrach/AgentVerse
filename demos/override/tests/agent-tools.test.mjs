@@ -109,10 +109,9 @@ test('continue_from_start', async t => {
   assert.equal(g.session.economy.spent, 1);
 });
 
-test('continue_skips_rate_limit', async t => {
+test('seven_questions_then_continue', async t => {
   const { act, ask } = await begun(t, { env: {} });
-  for (let i = 0; i < 6; i++) await ask();
-  await assert.rejects(ask(), { status: 429 });
+  for (let i = 0; i < 7; i++) await ask();
   await act('continue');
 });
 

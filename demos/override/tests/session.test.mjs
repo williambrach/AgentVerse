@@ -253,13 +253,12 @@ test('inspect_after_restore: lastSaid is rebuilt from the log and inspect works 
   await assert.rejects(again.mutate(id, 'inspect', { sessionId: id, revision: game.session.revision, character: 'pip' }), e => e.status === 409 && /has not said anything/.test(e.message));
 });
 
-test('question_rate_limit: the 7th question in a minute is 429 and logs nothing', async t => {
+test('no_question_rate_limit: a 7th question in the same minute is answered', async t => {
   const { act, events } = fleet(t);
   const id = (await act(undefined, 'start')).session.id;
   for (let i = 0; i < 6; i++) await act(id, 'interview', { character: 'momo', question: `Question ${i}?` });
-  const count = events(id).length;
-  await assert.rejects(act(id, 'interview', { character: 'pip', question: 'One more?' }), e => e.status === 429 && /at most 6 questions per minute/.test(e.message));
-  assert.equal(events(id).length, count);
+  await act(id, 'interview', { character: 'pip', question: 'One more?' });
+  assert.equal(events(id).filter(e => e.type === 'interview_answer').length, 7);
   await act(id, 'visit', { location: 'report' });
 });
 

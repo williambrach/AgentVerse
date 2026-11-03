@@ -256,7 +256,6 @@ It prints a table per endpoint with review flags (empty, length, a character out
 
 - 30 wrong access codes per minute per address (429 after that).
 - 20 new games per second (start or reset), server-wide.
-- 6 questions per minute per game.
 - 16 KB request bodies.
 - 40 questions per character and 1,200 characters per question.
 
