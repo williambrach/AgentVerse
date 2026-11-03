@@ -54,7 +54,7 @@ test('thread_panel', () => {
   assert.match(html, /#1 Momo/);
   assert.match(html, /#2 Pip/);
   assert.match(html, /&lt;i&gt;hi&lt;\/i&gt;/);
-  assert.match(html, /They see each other’s earlier lines, never your questions\./);
+  assert.match(html, /They only hear what is said in this thread, never your private chats\./);
   assert.ok(!html.includes('thread-pending'));
   assert.match(threadPanel(lines, { momo: '<M>', pip: 'Pip' }, 1), /thread-pending/);
   assert.match(threadPanel(lines, { momo: '<M>', pip: 'Pip' }, 1), /#1 &lt;M&gt;/);

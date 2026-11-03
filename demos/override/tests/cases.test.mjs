@@ -81,7 +81,7 @@ const friends = { id: 'friends', place: 'The Roundtable', cast: { one: 'a friend
 test('worlds registry', () => {
   assert.deepEqual(worlds.grove, { ...grove, persona: 'monkey', agents: 4, ...incident });
   assert.deepEqual(worlds.tower, { ...tower, persona: 'wizard', agents: 3, ...incident });
-  assert.deepEqual(worlds.friends, { ...friends, persona: 'friend', agents: 5, privateChats: true });
+  assert.deepEqual(worlds.friends, { ...friends, persona: 'friend', agents: 5 });
 });
 test('no world means the grove', () => assert.deepEqual(defineCase(partCase, { worlds: agentWorlds(3) }).world, { ...grove, persona: 'monkey', agents: 3, ...incident }));
 test('a tower case brings its own cast', () => {

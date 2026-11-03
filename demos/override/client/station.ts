@@ -72,6 +72,8 @@ export class Station extends Phaser.Scene {
   private overlay?: HTMLDivElement;
   private prompt?: HTMLSpanElement;
   private promptKey = '';
+  // Each stop's name tag; near a stop, the [E] prompt takes its place so it is clearly that stop's.
+  private labels = new Map<string, HTMLSpanElement>();
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private enabled = false;
@@ -135,6 +137,7 @@ export class Station extends Phaser.Scene {
     this.worldId = this.world.id;
     this.builtKey = keyOf(this.world, this.cast);
     this.overlay?.replaceChildren();
+    this.labels = new Map();
     this.stops = buildStops(this.world, this.cast);
     this.created = false;
     this.npcs = new Map();
@@ -321,7 +324,7 @@ export class Station extends Phaser.Scene {
       for (let pose = 0; pose < 4; pose++) texture.remove(`${id}-${pose}`);
       const npc = new MonkeyIdle(this, id, p.x, p.y - 12, spec);
       this.npcs.set(id, npc);
-      this.label(p.x, p.y - 66, p.label);
+      this.labels.set(id, this.label(p.x, p.y - 66, p.label));
     });
     this.player = this.physics.add.image(this.stops.briefing.x, this.stops.briefing.y, 'feet').setVisible(false).setCollideWorldBounds(true);
     this.lastX = this.player.x; this.lastY = this.player.y; this.moving = false;
@@ -333,10 +336,10 @@ export class Station extends Phaser.Scene {
     this.avatar = this.walk.sprite;
     (['briefing', 'report'] as const).forEach(id => {
       const p = this.stops[id];
-      if (id === 'briefing') { this.label(p.x, p.y + 33, p.label); return; }
+      if (id === 'briefing') { this.labels.set(id, this.label(p.x, p.y + 33, p.label)); return; }
       const size = 38;
       this.prop(keys.props, 'board', p.x, p.y - 15, size).setDepth(p.y - 20);
-      this.label(p.x, p.y - size - 25, p.label);
+      this.labels.set(id, this.label(p.x, p.y - size - 25, p.label));
     });
     this.prop(keys.props, 'bell', 282, 111, 39).setDepth(95);
     if (grove) this.prop(keys.props, 'basket', 244, 221, 45).setDepth(216);
@@ -594,14 +597,19 @@ export class Station extends Phaser.Scene {
     const hint = near ? `E / SPACE · ${near[1].title}` : this.world.text.hint;
     if (hint !== this.currentHint) { this.currentHint = hint; this.onHint(hint); }
     const shown = Boolean(near && this.enabled && !this.typing());
-    const promptKey = shown ? `${Math.round(this.player.x)},${Math.round(this.player.y)},${near![1].title}` : '';
+    // The prompt sits on the stop's own name tag, never under the player, where it could land on a neighbour's tag.
+    const promptKey = shown ? near![0] : '';
     if (this.prompt && promptKey !== this.promptKey) {
+      this.labels.get(this.promptKey)?.style.removeProperty('visibility');
       this.promptKey = promptKey;
       this.prompt.hidden = !shown;
+      const tag = shown ? this.labels.get(promptKey) : undefined;
       if (shown) {
-        this.prompt.textContent = `[E] ${near![1].title}`;
-        this.prompt.style.left = `${this.player.x / width * 100}%`;
-        this.prompt.style.top = `${(this.player.y + 14) / height * 100}%`;
+        const p = near![1];
+        this.prompt.textContent = `[E] ${p.title}`;
+        this.prompt.style.left = tag?.style.left ?? `${p.x / width * 100}%`;
+        this.prompt.style.top = tag?.style.top ?? `${(p.y - 66) / height * 100}%`;
+        tag?.style.setProperty('visibility', 'hidden');
       }
     }
     if (near && this.enabled && !this.typing() && (Phaser.Input.Keyboard.JustDown(this.keys.E) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE))) this.onArrival(near[0]);

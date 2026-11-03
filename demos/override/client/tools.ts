@@ -5,7 +5,7 @@ export const HINTS: Record<'coins' | Tool, string> = {
   coins: 'Every question and tool costs coins.',
   ask: 'Ask one question; only this character hears it.',
   inspect: 'See how this character reasoned about their last line. Rare.',
-  continue: 'They talk among themselves for 3 lines; they never see your questions.',
+  continue: 'They talk among themselves, one line each.',
 };
 
 type ArbiterTool = 'inspect' | 'continue';
@@ -101,7 +101,7 @@ export function noThoughtBlock(name: string, line: number): string {
     `<h4>${esc(name)}’s reasoning</h4><p>${esc(name)} did not think. No coins spent.</p></article>`;
 }
 
-export function threadPanel(thread: ThreadLine[], names: Record<string, string>, pending: number, note = 'They see each other’s earlier lines, never your questions.'): string {
+export function threadPanel(thread: ThreadLine[], names: Record<string, string>, pending: number, note = 'They only hear what is said in this thread, never your private chats.'): string {
   const posts = thread.map((l, n) =>
     `<li class="thread-post" data-motion-key="thread-${n + 1}"><h4 class="thread-author">#${n + 1} ${esc(names[l.character] ?? l.character)}</h4>` +
     `<p>${esc(l.text)}</p></li>`).join('');

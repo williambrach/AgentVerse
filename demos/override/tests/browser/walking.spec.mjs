@@ -214,3 +214,25 @@ test('Kiki has a stop that is reachable and walkable like the others', async ({ 
   await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('KIKI');
   expect(errors).toEqual([]);
 });
+
+test('station_prompt_sits_on_its_own_tag: near Pip the prompt replaces PIP, never lands on NORI', async ({ page }) => {
+  await start(page);
+  await page.locator('#dialogue-close').click();
+  await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'closed');
+  const prompt = page.locator('#station .station-prompt');
+  const tag = text => page.locator('#station .station-label', { hasText: new RegExp(`^${text}$`) });
+  const box = async locator => locator.boundingBox();
+  const centre = b => ({ x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) });
+  const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+  // At the start stop the prompt takes the START HERE tag's place.
+  await expect(prompt).toHaveText('[E] Read the case');
+  expect(centre(await box(prompt))).toEqual(centre(await box(tag('START HERE'))));
+  await expect(tag('START HERE')).toHaveCSS('visibility', 'hidden');
+  // Stand at Pip's stop: the prompt is Pip's, on PIP's tag, clear of NORI's tag below.
+  await page.evaluate(() => window.walkingTestGame.scene.getScene('banana-grove').player.body.reset(364, 156));
+  await expect(prompt).toHaveText('[E] Ask Pip');
+  await expect(tag('START HERE')).toHaveCSS('visibility', 'visible');
+  await expect(tag('PIP')).toHaveCSS('visibility', 'hidden');
+  expect(centre(await box(prompt))).toEqual(centre(await box(tag('PIP'))));
+  expect(overlaps(await box(prompt), await box(tag('NORI')))).toBe(false);
+});

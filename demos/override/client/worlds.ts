@@ -4,7 +4,7 @@ export interface WorldPack {
   id: string;
   /** Which stage draws this world. Absent: the walking station. */
   scene?: 'roundtable';
-  /** threadNote: the thread's footnote when it differs from the default (friends: chats stay private). */
+  /** threadNote: the thread's footnote when it differs from the default (friends: at the table). */
   text: { place: string; eyebrow: string; day: string; one: string; many: string; castLabel: string; hint: string; oneWithArticle: string; investigator: string; icon: string; threadNote?: string };
   art: { cast: string; idle: string; walk: string; props: string };
   palette: { ground: string; label: string; labelBg: string };
