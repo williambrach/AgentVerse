@@ -118,3 +118,38 @@ test('errors land in the result line; system newest first; text only', async () 
   assert.ok(t.indexOf('"second"') < t.indexOf('"first"'));
   assert.ok(!root.all(e => e.innerHTML !== undefined).length);
 });
+
+test('records_go_to_records_root', () => {
+  const { root, opts } = mk();
+  const rec = new El('section', doc);
+  renderControls(root, snap(), { ...opts, recordsRoot: rec });
+  const uls = rec.all(e => e.className.includes('ctl-system'));
+  assert.equal(uls.length, 1);
+  assert.equal(uls[0].parent, rec);
+  assert.equal(root.all(e => e.className.includes('ctl-title')).length, 0);
+  assert.equal(root.all(e => e.className.includes('ctl-system')).length, 0);
+  const t = rec.textContent;
+  assert.ok(t.indexOf('"second"') < t.indexOf('"first"'));
+  renderControls(root, snap(), { ...opts, recordsRoot: rec });
+  assert.equal(rec.all(e => e.className.includes('ctl-record')).length, 2);
+});
+
+test('records_default_unchanged', () => {
+  const { root, opts } = mk();
+  renderControls(root, snap(), opts);
+  const titles = root.all(e => e.className.includes('ctl-title'));
+  assert.equal(titles.length, 1);
+  assert.equal(titles[0].textContent, 'System records');
+  assert.equal(root.all(e => e.className.includes('ctl-system')).length, 1);
+});
+
+test('probe_node_stable', () => {
+  const { root, opts } = mk();
+  const rec = new El('section', doc);
+  renderControls(root, snap(), { ...opts, recordsRoot: rec });
+  const probe = root.button('Probe')[0];
+  const ul = rec.all(e => e.className.includes('ctl-system'))[0];
+  renderControls(root, snap(), { ...opts, recordsRoot: rec });
+  assert.equal(root.button('Probe')[0], probe);
+  assert.equal(rec.all(e => e.className.includes('ctl-system'))[0], ul);
+});

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fieldCopy, sectionOf } from '../server/admin/maker-copy.js';
 import { renderForm, knowledgeLines, linesText } from '../server/admin/maker-form.js';
 
 class El {
@@ -45,8 +46,8 @@ test('renders_every_editable_path', () => {
   const { root, handle } = mk();
   const paths = root.all(e => e.tag === 'textarea').map(e => e.dataset.path).sort();
   assert.deepEqual(paths, Object.keys(authored()).sort());
-  assert.equal(root.all(e => e.tag === 'fieldset').length, 3);
-  assert.match(root.all(e => e.tag === 'legend')[0].textContent, /The boss · villain/);
+  assert.equal(root.all(e => e.className === 'form-section').length, 6);
+  assert.match(root.all(e => e.className === 'form-section' && e.dataset.section === 'part:boss')[0].textContent, /The boss/);
   assert.equal(area(root, 'parts.boss.knowledge').value, 'k1 boss\nk2 boss');
   assert.deepEqual(handle.values()['prompt.use'], ['bananas']);
   assert.match(root.textContent, /\{boss\} \{helper\}/);
@@ -134,4 +135,87 @@ test('set_detail_rebuilds_and_clears_errors', () => {
   assert.equal(root.all(e => e.className === 'field-error' && !e.hidden).length, 0);
   assert.equal(handle.dirty(), false);
   assert.deepEqual(handle.overlay(), { 'copy.headline': 'Y' });
+});
+
+const sections = root => root.all(e => e.className === 'form-section');
+
+test('labels_have_no_dotted_key', () => {
+  const { root } = mk();
+  const labels = root.all(e => e.className === 'field-label');
+  assert.equal(labels.length, Object.keys(authored()).length);
+  for (const l of labels) assert.equal(/\w\.\w/.test(l.textContent), false, l.textContent);
+  assert.ok(labels.every(l => l.title.includes('.')));
+});
+
+test('every_field_has_hint', () => {
+  const { root } = mk();
+  const hints = root.all(e => e.className === 'field-hint');
+  assert.equal(hints.length, Object.keys(authored()).length);
+  assert.ok(hints.every(h => h.textContent.length > 0));
+  assert.equal(fieldCopy('parts.planner.finding.classification').label, 'Debrief verdict');
+  assert.deepEqual(fieldCopy('zzz.weird'), { label: 'weird', hint: '' });
+  assert.match(fieldCopy('copy.report.title').hint, /^Not shown to players yet\./);
+  assert.match(fieldCopy('debrief.summary').hint, /^Not shown to players yet\./);
+  assert.match(fieldCopy('prompt.use').hint, /One per line\.$/);
+  assert.match(fieldCopy('parts.x.knowledge').hint, /One per line\.$/);
+});
+
+test('section_of', () => {
+  assert.equal(sectionOf('parts.carrier.knowledge'), 'part:carrier');
+  assert.equal(sectionOf('answer.feedback.other'), 'debrief');
+  assert.equal(sectionOf('copy.headline'), 'story');
+  assert.equal(sectionOf('prompt.use'), 'prompt');
+});
+
+test('sections_list_and_show', () => {
+  const { root, handle } = mk();
+  assert.deepEqual(handle.sections().map(s => s.key), ['story', 'prompt', 'part:boss', 'part:helper', 'part:bystander', 'debrief']);
+  assert.deepEqual(handle.sections()[2], { key: 'part:boss', title: 'The boss', role: 'villain' });
+  assert.equal(sections(root).filter(s => !s.hidden).length, 1);
+  handle.show('prompt');
+  const vis = sections(root).filter(s => !s.hidden);
+  assert.equal(vis.length, 1);
+  assert.equal(vis[0].dataset.section, 'prompt');
+});
+
+test('dirty_sections_and_count', () => {
+  const { root, handle } = mk();
+  assert.deepEqual(handle.dirtySections(), []);
+  assert.equal(handle.dirtyCount(), 0);
+  type(root, 'copy.headline', 'Z');
+  assert.deepEqual(handle.dirtySections(), ['story']);
+  assert.equal(handle.dirtyCount(), 1);
+  type(root, 'parts.helper.label', 'Q');
+  assert.deepEqual(handle.dirtySections(), ['story', 'part:helper']);
+  assert.equal(handle.dirtyCount(), 2);
+  type(root, 'copy.headline', 'H');
+  assert.equal(handle.dirtyCount(), 1);
+});
+
+test('dirty_ignores_authored_difference', () => {
+  const { handle } = mk(fixture({ ...authored(), 'copy.headline': 'Published' }));
+  assert.equal(handle.dirtyCount(), 0);
+});
+
+test('set_error_returns_section', () => {
+  const { handle } = mk();
+  assert.equal(handle.setError('parts.boss.knowledge', 'x'), 'part:boss');
+  assert.equal(handle.setError('nope', 'x'), null);
+});
+
+test('name_tag_legend', () => {
+  const { root } = mk();
+  const tags = root.all(e => e.className === 'placeholders');
+  assert.equal(tags.length, 4);
+  assert.match(root.textContent, /\{boss\} \{helper\}/);
+  assert.match(tags[0].textContent, /^Name tags: \{boss\} \{helper\}\. Each becomes/);
+});
+
+test('grow_skips_without_scrollHeight', () => {
+  const { root } = mk();
+  assert.doesNotThrow(() => type(root, 'copy.headline', 'x'));
+  const a = area(root, 'copy.headline');
+  a.scrollHeight = 120;
+  type(root, 'copy.headline', 'xy');
+  assert.equal(a.style.height, '122px');
 });

@@ -430,7 +430,7 @@ const pageText = (f) => readFileSync(new URL(f, PAGE_DIR), 'utf8');
 const pageUrl = (f) => (f === 'index.html' ? '/admin' : `/admin/${f}`);
 
 test('page directory has the expected files', () => {
-  for (const f of ['index.html', 'app.js', 'tiles.js', 'log.js', 'round.js', 'controls.js', 'maker.html', 'maker.js', 'maker.css', 'maker-form.js']) assert.ok(PAGE_FILES.includes(f), f);
+  for (const f of ['index.html', 'app.js', 'tiles.js', 'log.js', 'round.js', 'controls.js', 'panels.js', 'theme.js', 'centre.css', 'maker.html', 'maker.js', 'maker.css', 'maker-form.js']) assert.ok(PAGE_FILES.includes(f), f);
 });
 
 test('every served file is safe, static and secret-free', async () => {
@@ -474,7 +474,7 @@ test('index.html carries the watch banner, the big-screen link and the command-c
   const html = pageText('index.html');
   assert.match(html, /<section id="watch" hidden><\/section>/);
   assert.match(html, /<a id="board-link"[^>]*target="_blank"[^>]*rel="noreferrer"[^>]*hidden>big-screen ↗<\/a>/);
-  assert.match(html, /<h1>command-centre<\/h1>/);
+  assert.match(html, /<h1>Command centre<\/h1>/);
   assert.ok(!/<script[^>]*watch\.js/.test(html), 'watch.js loads through app.js');
 });
 

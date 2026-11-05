@@ -5,12 +5,14 @@ import * as round from './round.js';
 import * as controls from './controls.js';
 import { renderBoard } from './board.js';
 import { renderWatch } from './watch.js';
+import { initPanels, setBadge } from './panels.js';
 
 const DELAYS = [1000, 2000, 5000, 10000];
 const STALE_MS = 5000;
 
 function start() {
   const $ = (id) => document.getElementById(id);
+  try { initPanels(document, window.localStorage); } catch { initPanels(document, null); }
   const statusEl = $('status');
   const tokenEl = $('token');
   const baseTitle = document.title;
@@ -26,6 +28,7 @@ function start() {
   const setStatus = (s) => {
     status = s;
     statusEl.textContent = s;
+    statusEl.dataset.state = s.replace(/ /g, '-');
   };
   const token = () => sessionStorage.getItem('adminToken') || '';
   tokenEl.value = token();
@@ -52,12 +55,13 @@ function start() {
     tiles.renderPlayers($('players'), snap);
     const worst = tiles.renderTiles($('tiles'), snap);
     document.title = (worst === 'bad' ? '⚠ ' : '') + baseTitle;
+    setBadge($('health-badge'), worst);
     tiles.renderHistory($('history'), snap);
     renderBoard($('board'), snap, { api });
     if ($('watch')) renderWatch($('watch'), snap, typeof snap.at === 'number' ? snap.at : Date.now(), { api });
     round.renderFunnel($('funnel'), snap, catalog);
     round.renderTallies($('tallies'), snap, catalog);
-    controls.renderControls($('controls'), snap, { api });
+    controls.renderControls($('controls'), snap, { api, recordsRoot: $('system-records') });
     roundCtl.update(snap);
   }
 

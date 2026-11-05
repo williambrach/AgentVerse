@@ -42,7 +42,7 @@ test('connects', async ({ page }) => {
   const csp = res.headers()['content-security-policy'];
   expect(csp).toContain("script-src 'self'");
   expect(csp).not.toContain('unsafe-inline');
-  await expect(page.locator('header.top h1')).toHaveText('command-centre');
+  await expect(page.locator('header.top h1')).toHaveText('Command centre');
   await page.locator('#token').fill(TOKEN);
   await page.locator('#save').click();
   await expect(page.locator('#status')).toHaveText(/connected/, { timeout: 5000 });

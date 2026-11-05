@@ -1,6 +1,7 @@
 // The maker's editing form. One textarea per editable path; text goes in and out through
 // textContent and value only, so nothing a maker types is ever parsed as markup.
-import { el } from './dom.js';
+import { el, isNum } from './dom.js';
+import { fieldCopy } from './maker-copy.js';
 
 /** Textarea text to a list: one item per line, trimmed, empty lines dropped. */
 export function knowledgeLines(text) {
@@ -45,9 +46,18 @@ export function renderForm(root, detail, { onChange = () => {} } = {}) {
     f.marker.hidden = same(read(path), d.authored[path]);
   };
 
-  const field = (parent, path, label) => {
+  const grow = area => {
+    if (!area.style || !isNum(area.scrollHeight)) return;
+    area.style.height = 'auto';
+    area.style.height = `${area.scrollHeight + 2}px`;
+  };
+
+  const field = (parent, path) => {
+    const copy = fieldCopy(path);
     const wrap = el(doc, 'div', 'field', { parent });
-    el(doc, 'label', 'field-label', { text: label, parent: wrap });
+    const label = el(doc, 'label', 'field-label', { text: copy.label, parent: wrap });
+    label.title = path;
+    el(doc, 'p', 'field-hint', { text: copy.hint, parent: wrap });
     const area = el(doc, 'textarea', 'field-input', { parent: wrap });
     area.dataset.path = path;
     area.value = toText(d.current[path]);
@@ -56,58 +66,92 @@ export function renderForm(root, detail, { onChange = () => {} } = {}) {
     reset.type = 'button';
     const error = el(doc, 'div', 'field-error', { parent: wrap });
     error.hidden = true;
-    fields.set(path, { area, marker, error });
+    fields.set(path, { area, marker, error, section: current });
     refresh(path);
-    area.addEventListener('input', () => { refresh(path); onChange(handle); });
+    grow(area);
+    area.addEventListener('input', () => { refresh(path); grow(area); onChange(handle); });
     reset.addEventListener('click', () => {
       area.value = toText(d.authored[path]);
       refresh(path);
+      grow(area);
       onChange(handle);
     });
+  };
+
+  let current = null;
+  let shown = null;
+  let secs = []; // { key, title, role?, node }
+
+  const sameAsPublished = p => same(read(p), d.current[p]);
+  const dirtySections = () => {
+    const out = [];
+    for (const s of secs) {
+      for (const [p, f] of fields) if (f.section === s.key && !sameAsPublished(p)) { out.push(s.key); break; }
+    }
+    return out;
+  };
+  const dirtyCount = () => paths().filter(p => !sameAsPublished(p)).length;
+
+  const show = key => {
+    const target = secs.find(s => s.key === key) ?? secs[0];
+    if (!target) return;
+    shown = target.key;
+    for (const s of secs) s.node.hidden = s !== target;
+    for (const f of fields.values()) if (f.section === shown) grow(f.area);
   };
 
   const build = () => {
     root.textContent = '';
     fields = new Map();
+    secs = [];
     const keys = Object.keys(d.authored);
-    const section = (cls, title) => {
-      const s = el(doc, 'section', cls, { parent: root });
-      el(doc, 'h3', 'section-title', { text: title, parent: s });
-      return s;
+    const tags = (d.structure?.placeholders ?? []).join(' ');
+    const section = (key, title, role) => {
+      const node = el(doc, 'section', 'form-section', { parent: root });
+      node.dataset.section = key;
+      const h = el(doc, 'h2', 'section-title', { text: title, parent: node });
+      if (role) el(doc, 'span', 'badge role-badge', { text: role, parent: h });
+      secs.push({ key, title, ...(role ? { role } : {}), node });
+      current = key;
+      return node;
     };
-    const rest = prefix => keys.filter(k => k.startsWith(prefix));
+    const legend = node => el(doc, 'p', 'placeholders', {
+      text: `Name tags: ${tags}. Each becomes the name of the character dealt that part in a session.`, parent: node,
+    });
+    const pick = prefix => keys.filter(k => k.startsWith(prefix));
+
+    const story = section('story', 'Story');
+    for (const k of pick('copy.')) field(story, k);
 
     const prompt = section('prompt', 'Prompt');
-    for (const k of rest('prompt.')) field(prompt, k, k.slice('prompt.'.length));
+    legend(prompt);
+    for (const k of pick('prompt.')) field(prompt, k);
 
-    const names = (d.structure?.placeholders ?? []);
-    const legend = el(doc, 'p', 'placeholders', { parent: root });
-    legend.textContent = `${names.join(' ')} (names are dealt per session)`;
     for (const part of d.structure?.parts ?? []) {
-      const set = el(doc, 'fieldset', 'part', { parent: root });
-      el(doc, 'legend', null, { text: `${d.current[`parts.${part.id}.label`] ?? part.id} · ${part.role}`, parent: set });
-      el(doc, 'span', 'role-badge', { text: part.role, parent: set });
+      const node = section(`part:${part.id}`, d.current[`parts.${part.id}.label`] ?? part.id, part.role);
+      legend(node);
       for (const name of PART_FIELDS) {
         const path = `parts.${part.id}.${name}`;
-        if (path in d.authored) field(set, path, name);
+        if (path in d.authored) field(node, path);
       }
     }
 
-    const copy = section('copy', 'Copy');
-    for (const k of rest('copy.')) field(copy, k, k.slice('copy.'.length));
     const debrief = section('debrief', 'Debrief');
-    for (const k of [...rest('debrief.'), ...rest('answer.')]) field(debrief, k, k);
+    for (const k of [...pick('debrief.'), ...pick('answer.')]) field(debrief, k);
+    show(shown);
   };
 
   const handle = {
-    root, values, overlay, dirty,
+    root, values, overlay, dirty, dirtySections, dirtyCount, show,
+    sections: () => secs.map(({ key, title, role }) => (role ? { key, title, role } : { key, title })),
     setDetail(next) { d = next; build(); },
     setError(path, message) {
       handle.clearErrors();
       const f = fields.get(path);
-      if (!f) return;
+      if (!f) return null;
       f.error.textContent = message;
       f.error.hidden = false;
+      return f.section;
     },
     clearErrors() {
       for (const f of fields.values()) { f.error.textContent = ''; f.error.hidden = true; }

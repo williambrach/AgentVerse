@@ -1,8 +1,7 @@
 // The content editor page. Text only, through textContent and value; no markup is ever parsed.
 import { el } from './dom.js';
 import { renderForm } from './maker-form.js';
-
-const REHEARSAL_NOTE = 'Rehearsal mode: replies are scripted. Start the server in live mode to try the model.';
+import { createChat } from './maker-chat.js';
 
 export function mountMaker(root, { api, caseId = null, location = null, confirm = (m) => window.confirm(m) } = {}) {
   const doc = root.ownerDocument || root;
@@ -11,23 +10,80 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
   let id = null;
   let detail = null;
   let form = null;
+  let currentKey = 'story';
+  const chat = createChat(doc, {
+    api,
+    getEdits: () => (form ? form.overlay() || {} : {}),
+    getCaseId: () => id,
+    onFieldError: (path, msg) => { const k = form && form.setError(path, msg); if (k) selectSection(k); },
+  });
 
   const clear = (node) => { node.textContent = ''; };
   const flags = () => [
     detail?.stale ? 'Stale: the last revision no longer fits this case version, so the authored text is shown' : null,
     detail?.corrupt ? 'History file has an unreadable line; the readable revisions were kept' : null,
   ].filter(Boolean);
-  const setStatus = () => { $('status').textContent = form && form.dirty() ? 'Unsaved changes' : (flags().join(' · ') || 'Up to date'); };
+  const setStatus = () => {
+    const dirty = !!(form && form.dirty());
+    const fl = flags();
+    $('status').textContent = dirty ? 'Unsaved changes' : (fl.join(' · ') || 'Up to date');
+    $('status').dataset.state = dirty ? 'unsaved' : (fl.length ? 'bad' : 'ok');
+    const n = form ? form.dirtyCount() : 0;
+    $('dirty-count').textContent = n === 0 ? '' : n === 1 ? '1 unsaved change' : `${n} unsaved changes`;
+    renderNav();
+  };
+  const showError = (message) => { $('status').textContent = message; $('status').dataset.state = 'bad'; };
+
+  function renderNav() {
+    const nav = $('sections');
+    if (!nav || !form) return;
+    clear(nav);
+    const dirty = form.dirtySections();
+    const item = (key, title, role) => {
+      const b = el(doc, 'button', 'nav-item', { parent: nav });
+      b.type = 'button';
+      b.dataset.section = key;
+      el(doc, 'span', 'nav-title', { text: title, parent: b });
+      if (role) el(doc, 'span', 'badge role-badge', { text: role, parent: b });
+      if (dirty.includes(key)) el(doc, 'span', 'dot', { parent: b });
+      if (key === currentKey) b.setAttribute('aria-current', 'true');
+      b.addEventListener('click', () => selectSection(key));
+    };
+    for (const sec of form.sections()) item(sec.key, sec.title, sec.role);
+    item('history', 'History');
+  }
+
+  function selectSection(key) {
+    currentKey = key;
+    const hist = key === 'history';
+    $('form').hidden = hist;
+    $('history-section').hidden = !hist;
+    if (!hist) form.show(key);
+    renderNav();
+  }
   const wanted = () => caseId ?? (location && location.search ? new URLSearchParams(location.search).get('case') : null);
 
+  let caseSel = null;
   function renderTabs() {
-    const nav = $('cases');
-    clear(nav);
-    for (const c of cases) {
-      const b = el(doc, 'button', c.id === id ? 'tab active' : 'tab', { text: `${c.title} · ${c.rev ? 'rev ' + c.rev : 'authored'}${c.stale ? ' · stale' : ''}`, parent: nav });
-      b.type = 'button';
-      b.addEventListener('click', () => select(c.id).catch((err) => { $('status').textContent = err.message; }));
+    if (!caseSel) {
+      caseSel = $('case-select');
+      if (!caseSel) {
+        caseSel = el(doc, 'select', null, { parent: $('cases') });
+        caseSel.id = 'case-select';
+        caseSel.setAttribute('aria-label', 'Case');
+      }
+      caseSel.addEventListener('change', () => {
+        const next = caseSel.value;
+        if (next === id) return Promise.resolve();
+        return select(next).catch((err) => showError(err.message)).finally(() => { caseSel.value = id; });
+      });
     }
+    clear(caseSel);
+    for (const c of cases) {
+      const o = el(doc, 'option', null, { text: `${c.title} · ${c.rev ? 'rev ' + c.rev : 'authored'}${c.stale ? ' · stale' : ''}`, parent: caseSel });
+      o.value = c.id;
+    }
+    if (id) caseSel.value = id;
   }
 
   function renderHistory() {
@@ -47,25 +103,14 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
     }
   }
 
-  function renderPanel() {
-    const sel = $('character');
-    clear(sel);
-    for (const c of detail.structure?.characters || []) {
-      const cid = typeof c === 'string' ? c : c.id;
-      const o = el(doc, 'option', null, { text: cid, parent: sel });
-      o.value = cid;
-    }
-    const live = detail.mode === 'live';
-    $('try').disabled = !live;
-    $('try-note').textContent = live ? '' : REHEARSAL_NOTE;
-  }
-
   function show(next) {
     detail = next;
     if (form) form.setDetail(detail);
     else form = renderForm($('form'), detail, { onChange: setStatus });
-    renderPanel();
+    chat.setDetail(detail);
     renderHistory();
+    if (currentKey !== 'history' && !form.sections().some((x) => x.key === currentKey)) currentKey = 'story';
+    selectSection(currentKey);
     setStatus();
   }
 
@@ -80,6 +125,7 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
     cases = list.cases || [];
     const want = wanted();
     id = (cases.find(c => c.id === want) || cases[0] || {}).id ?? null;
+    currentKey = 'story';
     renderTabs();
     if (id) await fetchDetail();
   }
@@ -87,44 +133,18 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
   async function select(next) {
     if (form && form.dirty() && !confirm('Discard unsaved changes?')) return;
     id = next;
+    currentKey = 'story';
     $('prompt').textContent = '';
-    $('answer').textContent = '';
-    $('reasoning').textContent = '';
+    $('prompt-box').hidden = true;
     $('publish-note').textContent = '';
     renderTabs();
     await fetchDetail();
   }
 
-  const body = () => ({ edits: form.overlay() || {}, characterId: $('character').value, question: $('question').value || undefined });
-
   function fieldError(err, note) {
-    if (err.path && form) form.setError(err.path, err.message);
+    const k = err.path && form ? form.setError(err.path, err.message) : null;
+    if (k) selectSection(k);
     else note.textContent = err.message;
-  }
-
-  async function preview() {
-    form.clearErrors();
-    $('prompt').textContent = '';
-    try {
-      const r = await api(`/admin/content/${id}/preview`, body());
-      $('prompt').textContent = (r.messages || []).find(m => m.role === 'system')?.content ?? '';
-    } catch (err) {
-      fieldError(err, $('prompt'));
-    }
-  }
-
-  async function tryAsk() {
-    form.clearErrors();
-    $('answer').textContent = '';
-    $('reasoning').textContent = '';
-    $('try-note').textContent = '';
-    try {
-      const r = await api(`/admin/content/${id}/try`, body());
-      $('answer').textContent = r.answer ?? '';
-      $('reasoning').textContent = r.reasoning ?? '';
-    } catch (err) {
-      fieldError(err, $('try-note'));
-    }
   }
 
   let publishing = false;
@@ -168,11 +188,9 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
     renderTabs();
   }
 
-  $('preview').addEventListener('click', preview);
-  $('try').addEventListener('click', tryAsk);
   $('publish').addEventListener('click', publish);
 
-  return { load, select, preview, tryAsk, publish, restore };
+  return { load, select, preview: chat.showPrompt, tryAsk: chat.send, publish, restore };
 }
 
 function start() {
@@ -198,7 +216,7 @@ function start() {
   }
   $('token').value = token();
   const app = mountMaker(document.body, { api, caseId: new URLSearchParams(window.location.search).get('case'), location: window.location });
-  const go = () => app.load().catch((err) => { $('status').textContent = err.status === 401 ? 'Bad token: ' + err.message : err.message; });
+  const go = () => app.load().catch((err) => { $('status').textContent = err.status === 401 ? 'Bad token: ' + err.message : err.message; $('status').dataset.state = 'bad'; });
   $('auth').addEventListener('submit', (e) => {
     e.preventDefault();
     sessionStorage.setItem('adminToken', $('token').value.trim());

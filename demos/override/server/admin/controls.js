@@ -49,9 +49,14 @@ function build(root, opts) {
   st.stats.append(st.statsHead, st.statsState, st.statsStage);
   st.result = el(doc, 'div', 'ctl-result');
   st.result.setAttribute?.('aria-live', 'polite');
-  st.systemTitle = el(doc, 'h3', 'ctl-title', 'System records');
   st.system = el(doc, 'ul', 'ctl-system');
-  root.append(st.summary, st.endpoints, st.global, st.stats, st.result, st.systemTitle, st.system);
+  if (opts.recordsRoot) {
+    root.append(st.summary, st.endpoints, st.global, st.stats, st.result);
+    opts.recordsRoot.appendChild(st.system);
+  } else {
+    st.systemTitle = el(doc, 'h3', 'ctl-title', 'System records');
+    root.append(st.summary, st.endpoints, st.global, st.stats, st.result, st.systemTitle, st.system);
+  }
 
   const ask = (msg) => (st.opts.prompt ?? globalThis.prompt)?.(msg) ?? null;
   const run = async (button, fn) => {

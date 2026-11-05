@@ -4,40 +4,46 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Override · Command centre</title>
+<script src="/admin/theme.js"></script>
 <link rel="stylesheet" href="/admin/app.css">
 <link rel="stylesheet" href="/admin/tiles.css">
 <link rel="stylesheet" href="/admin/log.css">
 <link rel="stylesheet" href="/admin/round.css">
 <link rel="stylesheet" href="/admin/controls.css">
 <link rel="stylesheet" href="/admin/board.css">
+<link rel="stylesheet" href="/admin/centre.css">
 <script type="module" src="/admin/app.js"></script>
 </head>
 <body>
 <header class="top">
-  <h1>command-centre</h1>
+  <h1>Command centre</h1>
   <span id="status" class="status">offline</span>
-  <a id="board-link" target="_blank" rel="noreferrer" hidden>big-screen ↗</a>
-  <a id="maker-link" href="/admin/maker.html">Content editor</a>
+  <nav class="top-links">
+    <a id="board-link" target="_blank" rel="noreferrer" hidden>big-screen ↗</a>
+    <a id="maker-link" href="/admin/maker.html">Content editor</a>
+  </nav>
   <div id="round"></div>
+  <button id="theme-toggle" type="button" class="ghost" aria-pressed="false">Light mode</button>
   <form class="auth" id="auth">
     <input id="token" type="password" placeholder="admin token" autocomplete="off">
     <button id="save" type="submit">Save</button>
   </form>
 </header>
+<main class="centre">
 <section id="watch" hidden></section>
-<main>
+<section class="area" id="area-live"><h2 class="area-title">Live now</h2>
   <section id="players"></section>
-  <section id="tiles"></section>
   <section id="history"></section>
-  <div class="cols">
-    <section id="log"></section>
-    <div class="side">
-      <section id="board"></section>
-      <section id="funnel"></section>
-      <section id="tallies"></section>
-    </div>
-  </div>
-  <section id="controls"></section>
+  <details class="panel" data-panel="health" open><summary><span class="panel-title">Server health</span><span id="health-badge" class="badge" hidden></span></summary><section id="tiles"></section></details>
+</section>
+<section class="area" id="area-players"><h2 class="area-title">Players and log</h2>
+  <div class="cols"><section id="log" class="card"></section><div class="side"><section id="board" class="card"></section></div></div>
+</section>
+<section class="area" id="area-results"><h2 class="area-title">Results</h2>
+  <div class="results"><section id="funnel" class="card"></section><section id="tallies" class="card"></section></div>
+</section>
+<section class="area" id="area-llm"><h2 class="area-title">LLM ops</h2><section id="controls" class="card"></section></section>
+<details class="panel" data-panel="records"><summary><span class="panel-title">System records</span></summary><section id="system-records"></section></details>
 </main>
 <aside id="player-panel" hidden></aside>
 </body>

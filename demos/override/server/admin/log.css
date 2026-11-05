@@ -1,16 +1,16 @@
-.log-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
-.log-bar select, .log-bar input, .log-bar button { min-height: 32px; padding: 0 10px; }
+.log-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.log-bar select, .log-bar input, .log-bar button { min-height: 32px; }
 .log-bar input { flex: 0 1 240px; min-width: 0; }
-.log-chip { border-radius: 0; }
-.log-chip.on { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 600; }
-.log-player-chip { padding: 2px 8px; border: 1px solid var(--edge); border-radius: 10px; }
-.log-list { max-height: 60vh; overflow-y: auto; font-size: 13px; }
+.log-chip { border-radius: 999px; padding: 2px 12px; background: transparent; }
+.log-chip.on { background: transparent; color: var(--accent); border-color: var(--accent); font-weight: 600; }
+.log-player-chip { padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); }
+.log-list { max-height: 60vh; overflow-y: auto; font-family: var(--mono); font-size: var(--fs-sm); }
 .log-row { display: grid; grid-template-columns: 64px minmax(44px, 12ch) 90px 20px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--hair); }
-.log-player { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; cursor: pointer; color: var(--fg); text-decoration: none; font-family: ui-monospace, monospace; }
+.log-player { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; cursor: pointer; color: var(--fg); text-decoration: none; font-family: var(--mono); }
 .log-player:hover { text-decoration: underline; }
 .log-time, .log-meta { color: var(--dim); }
 .log-failure { color: var(--bad); }
 .log-text-cell { overflow-wrap: anywhere; }
-.panel-timeline { padding-left: 0; list-style: none; font-size: 13px; }
+.panel-timeline { padding-left: 0; list-style: none; font-size: var(--fs-sm); }
 .panel-timeline li { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--hair); }
 .panel-error { color: var(--bad); }

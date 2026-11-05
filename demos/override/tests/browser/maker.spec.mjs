@@ -40,6 +40,8 @@ test('maker_edits_publishes_and_restores', async ({ page }) => {
     expect(edited.hash).not.toBe(AUTHORED_HASH);
   } finally {
     // Leave the authored text in place for any later spec, even when an assertion above failed.
+    const hist = page.locator('#sections .nav-item[data-section="history"]');
+    if (await hist.count()) await hist.click();
     const authored = page.locator('#history li', { hasText: 'authored' }).getByRole('button', { name: 'Restore' });
     if (await authored.count()) await authored.first().click();
   }
