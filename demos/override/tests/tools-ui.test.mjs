@@ -58,6 +58,19 @@ test('thread_panel', () => {
   assert.ok(!html.includes('thread-pending'));
   assert.match(threadPanel(lines, { momo: '<M>', pip: 'Pip' }, 1), /thread-pending/);
   assert.match(threadPanel(lines, { momo: '<M>', pip: 'Pip' }, 1), /#1 &lt;M&gt;/);
+  assert.ok(!html.includes('thread-face'));
+});
+
+test('thread_panel_faces', () => {
+  const lines = [{ character: 'momo', text: 'a', round: 1, timestamp: 't' }, { character: 'pip', text: 'b', round: 1, timestamp: 't' }, { character: 'ghost', text: 'c', round: 1, timestamp: 't' }];
+  const html = threadPanel(lines, { momo: 'Momo', pip: 'Pip' }, 0, undefined, { momo: 'momo slot-0', pip: 'pip slot-1' });
+  // Each speaker's head sits first in the post, hidden from screen readers (the name is in the heading).
+  assert.match(html, /<li class="thread-post" data-motion-key="thread-1"><span class="thread-face" aria-hidden="true"><i class="monkey-face momo slot-0"><\/i><\/span><h4 class="thread-author">#1 Momo<\/h4>/);
+  assert.match(html, /<span class="thread-face" aria-hidden="true"><i class="monkey-face pip slot-1"><\/i><\/span><h4 class="thread-author">#2 Pip<\/h4>/);
+  // A speaker with no face class gets no head; the post still renders.
+  assert.equal((html.match(/class="thread-face"/g) ?? []).length, 2);
+  assert.match(html, /<li class="thread-post" data-motion-key="thread-3"><h4 class="thread-author">#3 ghost<\/h4>/);
+  assert.match(threadPanel(lines, {}, 0, undefined, { momo: 'a"><b' }), /class="monkey-face a&quot;&gt;&lt;b"/);
 });
 
 test('tool_card', () => {

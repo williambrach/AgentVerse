@@ -101,9 +101,11 @@ export function noThoughtBlock(name: string, line: number): string {
     `<h4>${esc(name)}’s reasoning</h4><p>${esc(name)} did not think. No coins spent.</p></article>`;
 }
 
-export function threadPanel(thread: ThreadLine[], names: Record<string, string>, pending: number, note = 'They only hear what is said in this thread, never your private chats.'): string {
+/** `faces` maps a character id to its portrait classes (e.g. `maya slot-0`); a post whose speaker has one shows that head beside it, chat style. */
+export function threadPanel(thread: ThreadLine[], names: Record<string, string>, pending: number, note = 'They only hear what is said in this thread, never your private chats.', faces: Record<string, string> = {}): string {
+  const head = (id: string) => faces[id] ? `<span class="thread-face" aria-hidden="true"><i class="monkey-face ${esc(faces[id])}"></i></span>` : '';
   const posts = thread.map((l, n) =>
-    `<li class="thread-post" data-motion-key="thread-${n + 1}"><h4 class="thread-author">#${n + 1} ${esc(names[l.character] ?? l.character)}</h4>` +
+    `<li class="thread-post" data-motion-key="thread-${n + 1}">${head(l.character)}<h4 class="thread-author">#${n + 1} ${esc(names[l.character] ?? l.character)}</h4>` +
     `<p>${esc(l.text)}</p></li>`).join('');
   const wait = pending > 0 ? `<li class="thread-pending" aria-live="polite">${esc(pending)} more coming…</li>` : '';
   return `<section class="thread-panel"><div class="panel-heading"><span class="eyebrow">ARBITER TOOL · LET THEM TALK</span><h2>The agents’ thread</h2></div>` +

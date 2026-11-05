@@ -34,6 +34,10 @@
 .thread-author { margin: 0 0 4px; }
 .thread-post p { margin: 0; line-height: 1.5; }
 .thread-pending { padding: 4px 12px; opacity: .7; font-style: italic; }
+/* The speaker's head in a round badge left of the post, chat style. The art and its crop come from .monkey-face at --cell. */
+.thread-post:has(.thread-face) { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; align-items: start; }
+.thread-post:has(.thread-face) > .thread-author, .thread-post:has(.thread-face) > p { grid-column: 2; }
+.thread-face { grid-row: 1 / span 2; width: 44px; height: 44px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: #24404D; box-shadow: 0 0 0 2px #D9C796; --cell: 42px; }
 .thread-panel .fine { margin: 0; padding: 0 2px; line-height: 1.5; }
 .tool-hint { font-size: .85em; }
 .page-turn-shade { display: none; }

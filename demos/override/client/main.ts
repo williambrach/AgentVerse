@@ -353,7 +353,7 @@ function render() {
   const sections: Record<string, string> = { briefing: 'Case briefing', ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
   document.querySelector('#notebook-section')!.textContent = threadOpen ? 'Thread' : sections[panel];
   let markup: string;
-  if (threadOpen && session) markup = threadPanel(session.thread, Object.fromEntries(state.characters.map(c => [c.id, c.name])), session.chatter.pending, world().text.threadNote);
+  if (threadOpen && session) markup = threadPanel(session.thread, Object.fromEntries(state.characters.map(c => [c.id, c.name])), session.chatter.pending, world().text.threadNote, Object.fromEntries(state.characters.map(c => [c.id, castClass(c.id)])));
   else if (session?.status === 'closed' && panel === 'report') markup = debriefMarkup();
   else if (panel === 'briefing') markup = briefingPanel({ copy: state.copy, cast: state.characters.length, many: world().text.many, one: world().text.one, oneWithArticle: world().text.oneWithArticle, firstId: state.characters[0]?.id, firstName: state.characters[0]?.name, guide: state.session ? toolGuide(state.session.economy) : '', ...(world().scene === 'roundtable' ? { verdict: state.copy.report.description, howTo: world().text.hint } : {}) });
   else if (panel === 'report') markup = reportPanel();
