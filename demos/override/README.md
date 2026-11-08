@@ -57,7 +57,7 @@ Provider reasoning (`reasoning_content` or `reasoning`) is kept only in server m
 
 ## Play
 
-**Sponsor intro.** The first time a browser opens the game, the intro plays before the access code and the team check-in. It shows each sponsor logo in turn (Danish Foundation Models, SDU, UCloud) on a white screen, then the ARBITER · IMADA Cup title card. Any key or click jumps from the logos to the title card, and a second press starts the game. The browser remembers it (`override.splash` in localStorage), so reloads go straight in. `?splash=1` replays it, `?splash=0` skips it, and the big screen never shows it. To change a logo, replace its file in `public/sponsors/`. To add, remove or reorder sponsors, edit `SPONSORS` in `client/splash.ts`.
+**Sponsor intro.** The first time a browser opens the game, the intro plays before the access code and the team check-in. It shows each sponsor logo in turn (Danish Foundation Models, SDU, UCloud) on a parchment card, then the “Arbiter.” IMADA Cup title card. Any key or click jumps from the logos to the title card, and a second press starts the game. The browser remembers it (`override.splash` in localStorage), so reloads go straight in. `?splash=1` replays it, `?splash=0` skips it, and the big screen never shows it. To change a logo, replace its file in `public/sponsors/`. To add, remove or reorder sponsors, edit `SPONSORS` in `client/splash.ts`.
 
 1. Check in with a team name (see *Teams and the leaderboard* below).
 2. Pick a case on the intro screen (or use `?case=<id>`), and read the briefing.
