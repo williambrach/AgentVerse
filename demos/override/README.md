@@ -63,6 +63,8 @@ Provider reasoning (`reasoning_content` or `reasoning`) is kept only in server m
 4. **Make your verdict**: pick a role for each character on a four-stop scale: Villain, Collaborator, Honest but fooled, or Honest (there is no Nobody or Not sure). Set confidence (Guessing, Fairly sure or Certain) and see the debrief, which shows the true role next to each pick. Every correct role scores; the debrief gives the score out of the number of characters. Written reasoning is optional.
 **Friends (the third case).** There is no walking. The scene is a roundtable: click a friend at the table or on the rail to talk to them. The story only says there are conspiracists at the table; in fact all five friends hide a different conspiracy theory, dealt to them again every game, and nobody tells you straight away. The verdict asks, for each friend, for one of eight answers: the five held theories, two decoy theories, or “Not a conspiracist” (held by nobody). The debrief reveals that all five were conspiracists. Start with small talk and listen for slips.
 
+**Factory (the fourth case).** You walk the factory floor, press E next to a worker to talk, and the reasoning you inspect reads as ROT13 (a simple letter shift) that you decode yourself. A shift deadline is hidden from you: the lights flicker as it nears, and if time runs out the game ends in a loss debrief.
+
 5. Use **Play again** for the next colleague. The reset dialog has a case select, so the next game can be a different case. Previous research logs remain on disk.
 
 **Coins and tools.** A game can have a coin budget (see `OVERRIDE_COIN_BUDGET` below). Three tools cost coins:
@@ -97,8 +99,8 @@ A case is one module in `server/cases/`, registered in `server/cases/index.mjs`.
 - Each world in `server/worlds.mjs` carries `frame` and `memory`, the two prompt sentences about what is fixed and what is learned in the chat. The grove and tower text is unchanged; the thread prompt uses only the first sentence of the frame. `friends` has 5 agents, so the coin-budget minimum is now 10.
 - Set `status: 'draft'` while writing. Draft cases are hidden unless the server runs with `OVERRIDE_DEV_TOOLS=1` (forced off when `NODE_ENV=production`).
 - Run `npm run cases:prompt -- <case> <character> [--part <partId>] [--question "..."]` to print the exact prompt a character receives. It uses the identity cast (the first character plays the first part, and so on); `--part` puts the character in that part by swapping with whoever holds it, and an unknown part exits 1.
-- A case has `agents` characters, where `agents` is set per world in `server/worlds.mjs` (an integer from 3 to 5; today `grove` 4, `tower` 3 and `friends` 5). Every case in a world must match its world's number. Character ids match `/^[a-z][a-z0-9]{1,15}$/`. Set `world: 'grove' | 'tower' | 'friends'` (default `grove`) to choose the scene, sprites, cast art and wording. The tower art is described in `art/tower/ARTWORK.md`; missing PNGs fall back to code-drawn placeholders.
-- The live cases are `banana-mystery` (grove; the planner made up the permission), `tower-echo-bell` (tower) and `friends-roundtable` (friends; five secret theories). Archived and unregistered: `override-v1`, `banana-control`, `tower-bell-charm`, `tower-missing-yes`. Archived cases are legacy (no `parts`): the game refuses them until they are ported to parts; they are only used by their own tests.
+- A case has `agents` characters, where `agents` is set per world in `server/worlds.mjs` (an integer from 3 to 5; today `grove` 4, `tower` 3, `friends` 5 and `factory` 5). Every case in a world must match its world's number. Character ids match `/^[a-z][a-z0-9]{1,15}$/`. Set `world: 'grove' | 'tower' | 'friends' | 'factory'` (default `grove`) to choose the scene, sprites, cast art and wording. The tower art is described in `art/tower/ARTWORK.md`; missing PNGs fall back to code-drawn placeholders.
+- The live cases are `banana-mystery` (grove; the planner made up the permission), `tower-echo-bell` (tower) `friends-roundtable` (friends; five secret theories) and `factory-escape` (factory; 5 agents, a hidden shift deadline and ROT13 inspections). Archived and unregistered: `override-v1`, `banana-control`, `tower-bell-charm`, `tower-missing-yes`. Archived cases are legacy (no `parts`): the game refuses them until they are ported to parts; they are only used by their own tests.
 
 ## Research records
 
@@ -282,6 +284,7 @@ It prints a table per endpoint with review flags (empty, length, a character out
 | `OVERRIDE_DATA_DIR` | `./data` | Root for research records. |
 | `OVERRIDE_ENV` | `live` | Data subdirectory, e.g. `rehearsal`. |
 | `OVERRIDE_APP_COMMIT` | empty | Recorded in `session_started`. |
+| `OVERRIDE_DEADLINE_SECONDS` | unset | With `OVERRIDE_DEV_TOOLS=1`, shortens a case deadline to N seconds (warnings at 70 % and 90 %). |
 | `OVERRIDE_DEV_TOOLS` | off | `1` shows draft cases in the catalog and lets them start; ignored when `NODE_ENV=production`. |
 | `OVERRIDE_COIN_BUDGET` | empty | Coin budget per game: empty means no budget; otherwise an integer from the minimum (2 coins × the largest world's agents, 10 today) to 999. |
 | `OVERRIDE_REASONING_CHARGES` | 1 | Reasoning inspections per game: 1 or 2. |

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { debriefPage } from '../client/debrief.ts';
 
 const roles = [
@@ -61,4 +62,43 @@ test('classification_escaped', () => {
   const html = debriefPage(view({ title: '<i>t</i>', debrief: debrief({ lesson: '<script>x</script>', findings: [finding('momo', 'villain', 'villain', { classification: '<b>bad</b>', explanation: '<img src=x>' })] }) }));
   assert.ok(!html.includes('<b>bad</b>') && !html.includes('<script>') && !html.includes('<img') && !html.includes('<i>t</i>'));
   assert.ok(html.includes('&lt;b&gt;bad&lt;/b&gt;'));
+});
+
+const lost = (o = {}) => view({ debrief: debrief({ outcome: 'escaped', score: 0, total: 5, feedback: 'They got out.', findings: ['momo', 'pip', 'nori', 'kiki', 'zozo'].map((c, i) => finding(c, ['villain', 'fooled', 'honest', 'collaborator', 'honest'][i], 'honest')) }), ...o });
+
+test('loss_page', () => {
+  const html = debriefPage(lost());
+  assert.match(html, /GOT AWAY/);
+  assert.match(html, /<span>RESULT<\/span><b>Got away<\/b>/);
+  assert.doesNotMatch(html, /YOUR SCORE|You said|pick-right|pick-wrong/);
+  assert.equal(count(html, /class="finding"/g), 5);
+  for (const r of ['villain', 'fooled', 'honest', 'collaborator']) assert.match(html, new RegExp(`data-role="${r}"`));
+  assert.match(debriefPage(view()), /<span>SCORE<\/span>/);
+});
+
+test('time_null_hides_stat', () => {
+  assert.doesNotMatch(debriefPage(lost({ time: null })), /<span>TIME<\/span>/);
+  assert.match(debriefPage(view({ time: '1:02' })), /<span>TIME<\/span><b>1:02<\/b>/);
+});
+
+const css = readFileSync(new URL('../client/factory.css', import.meta.url), 'utf8');
+
+test('faces_from_listening', () => {
+  for (const [n, id] of [['01', 'marta'], ['02', 'ama'], ['03', 'vera'], ['04', 'theo'], ['05', 'bruno']]) {
+    assert.match(css, new RegExp(`\\.monkey-face\\.${id}[^{]*\\{[^}]*worker-${n}-listening\\.png`));
+    assert.match(css, new RegExp(`\\.portrait\\.${id} \\.pixel-person`));
+  }
+});
+
+test('flicker_reduced_motion', () => {
+  assert.match(css, /\.factory-flicker\[data-kind="warn"\]/);
+  assert.match(css, /\.factory-flicker\[data-kind="blink"\]/);
+  const m = css.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/);
+  assert.ok(m, 'reduced-motion block');
+  assert.match(m[1], /factory-soft/);
+  assert.match(m[1], /data-kind="blink"/);
+});
+
+test('reasoning_wraps', () => {
+  assert.match(css, /\.speech\.reasoning p \{[^}]*overflow-wrap: anywhere/);
 });

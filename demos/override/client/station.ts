@@ -5,6 +5,8 @@ import { MonkeyIdle, groveIdle, idleSpec, reskinIdle, type IdleSpec } from './mo
 import { sliceAtlas, type Frame } from './atlas';
 import { placeholderAtlas, ATLAS_DIMS } from './placeholder-art';
 import { worldFor, type WorldPack } from './worlds';
+import * as factoryFigures from './factory-figures';
+import type { Pose } from './factory-figures';
 import { hueShift, faceSheetPlan, SHEET_CAST } from './recolor';
 import { BUBBLE_WIDTH, placeBubble } from './bubble-layout';
 import { stageLayout, COMPACT_QUERY, RAIL, WORLD_WIDTH, WORLD_HEIGHT, type StageLayout } from './stage-layout';
@@ -21,8 +23,8 @@ const groveCast: Character[] = ['Momo', 'Pip', 'Nori'].map((name, i) => ({
 
 function buildStops(world: WorldPack, cast: Character[]): Record<string, Stop> {
   const stops: Record<string, Stop> = {
-    report: { x: 132, y: 276, title: 'Pick the roles', label: 'YOUR GUESS' },
-    briefing: { x: 244, y: 276, title: 'Read the case', label: 'START HERE' },
+    report: { ...(world.stops?.report ?? { x: 132, y: 276 }), title: 'Pick the roles', label: 'YOUR GUESS' },
+    briefing: { ...(world.stops?.briefing ?? { x: 244, y: 276 }), title: 'Read the case', label: 'START HERE' },
   };
   cast.forEach((c, slot) => { stops[c.id] = { ...world.slots[slot], title: `Ask ${c.name}`, label: c.name.toUpperCase() }; });
   return stops;
@@ -32,6 +34,8 @@ function artKeys(world: WorldPack): Record<ArtKind, string> {
   if (world.id === 'grove') return { cast: 'grove-cast', idle: 'monkey-idle', walk: 'detective-walk', props: 'jungle' };
   return { cast: `${world.id}-cast`, idle: `${world.id}-idle`, walk: `${world.id}-walk`, props: `${world.id}-props` };
 }
+const poses: Pose[] = ['listening', 'speaking', 'thinking'];
+const figureKey = (sprite: string, pose: Pose) => `factory-${sprite}-${pose}`;
 const width = WORLD_WIDTH;
 /** CSS pixels from the window top that speech bubbles keep clear: the top bar's bottom (about 84 with a margin). */
 const HUD_CLEAR = 84;
@@ -64,7 +68,7 @@ const shelfSpots = [
 export class Station extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Image;
   private avatar!: Phaser.GameObjects.Sprite;
-  private walk!: DetectiveWalk;
+  private walk?: DetectiveWalk;
   private shadow!: Phaser.GameObjects.Ellipse;
   private shadowDepth = NaN;
   private npcs = new Map<string, MonkeyIdle>();
@@ -102,6 +106,15 @@ export class Station extends Phaser.Scene {
   private recolorSources = new Map<string, unknown>();
   // Blob URLs of the recoloured face sheets, by world and cast index; kept per world+cast and revoked when replaced.
   private faceSheets = new Map<string, { key: string; url: string }>();
+  // Factory worlds (world.figures): one static image per pose, swapped on think/speak/detective; nothing here cycles on its own.
+  private figs = new Map<string, { img: Phaser.GameObjects.Image; sprite: string; shadow: Phaser.GameObjects.Ellipse; label: HTMLSpanElement }>();
+  private detectiveImg?: Phaser.GameObjects.Image;
+  private detectiveMarker?: HTMLSpanElement;
+  private detectivePose: Pose = 'listening';
+  private thinkingId: string | null = null;
+  private speakingId: string | null = null;
+  private speakTimer?: ReturnType<typeof setTimeout>;
+  private facing = false;
 
   constructor(onArrival: (location: LocationId) => void, onHint: (hint: string) => void, onWalk: () => void = () => {}) {
     super('banana-grove');
@@ -114,12 +127,20 @@ export class Station extends Phaser.Scene {
   private applyLayout() {
     this.layout = windowLayout();
     const { width: w, height: h, offsetX, offsetY } = this.layout;
-    if (this.scale.gameSize.width !== w || this.scale.gameSize.height !== h) this.scale.setGameSize(w, h);
+    const d = this.density();
+    if (this.scale.gameSize.width !== w * d || this.scale.gameSize.height !== h * d) this.scale.setGameSize(w * d, h * d);
     // FIT measures #station, which the window has already resized: refresh so the canvas follows.
     this.scale.refresh();
+    // Dense worlds draw d canvas pixels per world unit: zoom about the top-left so scroll stays in world units.
+    if (d !== 1) this.cameras?.main?.setOrigin(0, 0).setZoom(d);
     this.cameras?.main?.setScroll(-offsetX, -offsetY);
     this.syncOverlay();
   }
+
+  /** Canvas pixels per world unit: 1 for grove and tower, the pack's density for a factory. */
+  private density(): number { return this.world.figures?.density ?? 1; }
+  /** Name-tag and bubble anchor height above a stop's foot. */
+  private lift(): number { return this.world.figures?.labelLift ?? 66; }
 
   /** Switch world or cast: a no-op when both are unchanged, otherwise the scene restarts. */
   configure(world: WorldPack, cast: Character[]) {
@@ -143,9 +164,25 @@ export class Station extends Phaser.Scene {
     this.npcs = new Map();
     this.player = undefined as unknown as Phaser.Physics.Arcade.Image;
     this.currentHint = '';
+    clearTimeout(this.speakTimer);
+    this.figs = new Map();
+    this.detectiveImg = undefined;
+    this.detectiveMarker = undefined;
+    this.thinkingId = null;
+    this.speakingId = null;
+    this.detectivePose = 'listening';
   }
 
   preload() {
+    const art = this.world.figures;
+    if (art) {
+      // Factory art is plain files, loaded by key; there is no placeholder or recolour path.
+      for (const sprite of [...Object.values(art.sprites), art.detective]) {
+        for (const pose of poses) this.load.image(figureKey(sprite, pose), factoryFigures.poseUrl(art, sprite, pose));
+      }
+      this.world.floor?.props.forEach(p => this.load.image(`factory-prop-${p.id}`, factoryFigures.propUrl(art, p.id)));
+      return;
+    }
     // A missing file (404, or HTML served by the dev server) fails the load and leaves no
     // texture; create() then draws the placeholder for it.
     const keys = artKeys(this.world);
@@ -266,8 +303,8 @@ export class Station extends Phaser.Scene {
     if (this.builtKey !== keyOf(this.world, this.cast)) { this.scene.restart({ world: this.world, cast: this.cast }); return; }
     const grove = this.world.id === 'grove';
     const keys = artKeys(this.world);
-    this.prepareArt();
-    this.publishFaces(keys.cast);
+    const art = this.world.figures;
+    if (!art) { this.prepareArt(); this.publishFaces(keys.cast); }
     this.cameras.main.setBackgroundColor(this.world.palette.ground);
     this.applyLayout();
     if (!this.resizeBound) {
@@ -275,7 +312,8 @@ export class Station extends Phaser.Scene {
       window.addEventListener('resize', () => this.applyLayout());
       matchMedia(COMPACT_QUERY).addEventListener('change', () => this.applyLayout());
     }
-    if (grove) {
+    if (art) this.drawFactory();
+    else if (grove) {
       const jungle = this.textures.get('jungle');
       if (!jungle.has('palm')) {
         jungle.add('palm', 0, 0, 0, 325, 313.5);
@@ -302,6 +340,7 @@ export class Station extends Phaser.Scene {
     this.cast.forEach((member, slot) => {
       const id = member.id;
       const p = this.stops[id];
+      if (art) { this.addFigure(id, p, art, p.label); return; }
       this.add.ellipse(p.x, p.y - 13, 25, 7, 0x314c34, .22).setDepth(p.y - 18);
       // Art follows the persona index: index >= 3 draws index - 3, recoloured from that character's colour to its own.
       const base = slot >= SHEET_CAST ? slot - SHEET_CAST : slot;
@@ -324,25 +363,28 @@ export class Station extends Phaser.Scene {
       for (let pose = 0; pose < 4; pose++) texture.remove(`${id}-${pose}`);
       const npc = new MonkeyIdle(this, id, p.x, p.y - 12, spec);
       this.npcs.set(id, npc);
-      this.labels.set(id, this.label(p.x, p.y - 66, p.label));
+      this.labels.set(id, this.label(p.x, p.y - this.lift(), p.label));
     });
     this.player = this.physics.add.image(this.stops.briefing.x, this.stops.briefing.y, 'feet').setVisible(false).setCollideWorldBounds(true);
     this.lastX = this.player.x; this.lastY = this.player.y; this.moving = false;
-    this.cast.forEach(({ id }) => { const p = this.stops[id]; const feet = this.physics.add.staticImage(p.x, p.y - 12, 'feet').setVisible(false); this.physics.add.collider(this.player, feet); });
+    this.cast.forEach(({ id }) => { const p = this.stops[id]; const feet = this.physics.add.staticImage(p.x, p.y - (art ? 4 : 12), 'feet').setVisible(false); this.physics.add.collider(this.player, feet); });
     this.shadowDepth = NaN;
     this.shadow = this.add.ellipse(this.player.x, this.player.y + 1, 22, 6, 0x314c34, .22);
-    const walk = grove ? groveWalk : this.measuredWalk(keys.walk);
-    this.walk = new DetectiveWalk(this, this.player.x, this.player.y, walk);
-    this.avatar = this.walk.sprite;
+    if (art) this.addDetective(art);
+    else {
+      const walk = grove ? groveWalk : this.measuredWalk(keys.walk);
+      this.walk = new DetectiveWalk(this, this.player.x, this.player.y, walk);
+      this.avatar = this.walk.sprite;
+    }
     (['briefing', 'report'] as const).forEach(id => {
       const p = this.stops[id];
       if (id === 'briefing') { this.labels.set(id, this.label(p.x, p.y + 33, p.label)); return; }
       const size = 38;
-      this.prop(keys.props, 'board', p.x, p.y - 15, size).setDepth(p.y - 20);
+      if (!art) this.prop(keys.props, 'board', p.x, p.y - 15, size).setDepth(p.y - 20);
       this.labels.set(id, this.label(p.x, p.y - size - 25, p.label));
     });
-    this.prop(keys.props, 'bell', 282, 111, 39).setDepth(95);
-    if (grove) this.prop(keys.props, 'basket', 244, 221, 45).setDepth(216);
+    if (!art) this.prop(keys.props, 'bell', 282, 111, 39).setDepth(95);
+    if (grove && !art) this.prop(keys.props, 'basket', 244, 221, 45).setDepth(216);
     this.prompt = this.label(0, 0, '', 'station-prompt');
     this.prompt.hidden = true;
     this.promptKey = '';
@@ -361,6 +403,96 @@ export class Station extends Phaser.Scene {
     if (this.covered) this.scheduleSleep();
     // configure() may have run while this build was loading.
     if (this.builtKey !== keyOf(this.world, this.cast)) this.scene.restart({ world: this.world, cast: this.cast });
+  }
+
+  /** Factory floor: a flat floor plus the pack's props by bottom-centre, depth-sorted by their foot. */
+  private drawFactory() {
+    const art = this.world.figures!;
+    this.add.rectangle(-400, -300, 1280, 940, Phaser.Display.Color.HexStringToColor(this.world.palette.ground).color).setOrigin(0, 0).setDepth(-10);
+    this.add.rectangle(0, 0, width, height, 0xffffff, .06).setOrigin(0, 0).setDepth(0);
+    this.world.floor?.props.forEach(p => this.add.image(p.x, p.y, `factory-prop-${p.id}`).setOrigin(.5, 1).setScale(art.scale).setDepth(p.y));
+    (['briefing', 'report'] as const).forEach(id => this.add.ellipse(this.stops[id].x, this.stops[id].y, 30, 9, 0xffffff, .14).setDepth(1));
+  }
+
+  private figureImage(art: NonNullable<WorldPack['figures']>, sprite: string, pose: Pose, x: number, y: number) {
+    return this.add.image(x, y, figureKey(sprite, pose)).setOrigin(art.anchor.x / art.frame.w, art.anchor.y / art.frame.h).setScale(art.scale).setDepth(y);
+  }
+
+  private addFigure(id: string, p: Point, art: NonNullable<WorldPack['figures']>, text: string) {
+    const sprite = art.sprites[id];
+    const shadow = this.add.ellipse(p.x, p.y - 1, 25, 7, 0x000000, .25).setDepth(p.y - 1);
+    const img = this.figureImage(art, sprite, 'listening', p.x, p.y);
+    const label = this.label(p.x, p.y - art.labelLift, text);
+    label.dataset.figure = id;
+    label.dataset.pose = 'listening';
+    this.figs.set(id, { img, sprite, shadow, label });
+    this.labels.set(id, label);
+  }
+
+  private addDetective(art: NonNullable<WorldPack['figures']>) {
+    this.detectiveImg = this.figureImage(art, art.detective, this.detectivePose, this.player.x, this.player.y);
+    this.shadow.setFillStyle(0x000000, .25);
+    // An empty, hidden marker carries the detective's pose beside the name tags.
+    const marker = this.detectiveMarker = document.createElement('span');
+    marker.hidden = true;
+    marker.dataset.figure = 'detective';
+    marker.dataset.pose = this.detectivePose;
+    this.labelLayer().append(marker);
+    this.applyPoses();
+  }
+
+  /** Each figure shows the pose the shared state gives it; poses change only through think/speak/detective. */
+  private applyPoses() {
+    const art = this.world.figures;
+    if (!art) return;
+    const state = { thinking: this.thinkingId, speaking: this.speakingId, typing: false };
+    this.figs.forEach((f, id) => {
+      const pose = factoryFigures.poseFor(state, id);
+      if (f.label.dataset.pose === pose) return;
+      f.img.setTexture(figureKey(f.sprite, pose));
+      f.label.dataset.pose = pose;
+    });
+    if (this.detectiveImg && this.detectiveMarker && this.detectiveMarker.dataset.pose !== this.detectivePose) {
+      this.detectiveImg.setTexture(figureKey(art.detective, this.detectivePose));
+      this.detectiveMarker.dataset.pose = this.detectivePose;
+    }
+  }
+
+  /** Who is thinking right now (null: nobody). */
+  think(id: string | null): void {
+    if (!this.world.figures) return;
+    this.thinkingId = id;
+    this.applyPoses();
+  }
+
+  /** `id` shows the speaking pose for as long as `text` takes to read, then goes back to listening. */
+  speak(id: string, text: string): void {
+    if (!this.world.figures) return;
+    clearTimeout(this.speakTimer);
+    this.speakingId = id;
+    this.applyPoses();
+    this.speakTimer = setTimeout(() => { this.speakingId = null; this.applyPoses(); }, factoryFigures.speakMs(text));
+  }
+
+  detective(pose: Pose): void {
+    this.detectivePose = pose;
+    this.applyPoses();
+  }
+
+  /** The figure walks to the floor's exit, then it and its tag are gone. Works while covered: the loop wakes for the walk. */
+  escape(id: string): Promise<void> {
+    const f = this.figs.get(id), exit = this.world.floor?.exit;
+    if (!f || !exit) return Promise.resolve();
+    f.label.hidden = true;
+    f.shadow.setVisible(false);
+    const done = () => { f.img.setVisible(false); if (this.covered) this.scheduleSleep(); };
+    if (reducedMotion.matches) { f.img.setPosition(exit.x, exit.y); done(); return Promise.resolve(); }
+    this.cancelSleep();
+    this.game.loop.wake();
+    return new Promise<void>(resolve => {
+      this.tweens.add({ targets: f.img, x: exit.x, y: exit.y, duration: 1400, ease: 'Sine.easeInOut',
+        onUpdate: () => f.img.setDepth(f.img.y), onComplete: () => { done(); resolve(); } });
+    });
   }
 
   private measuredWalk(key: string): WalkSpec {
@@ -472,12 +604,12 @@ export class Station extends Phaser.Scene {
     if (!p || !this.cast.some(c => c.id === characterId)) return;
     this.clearBubbles();
     const overlay = this.labelLayer();
-    const { left } = placeBubble(p.x, p.y - 66, BUBBLE_WIDTH) /* anchored on the name label's centre */;
+    const { left } = placeBubble(p.x, p.y - this.lift(), BUBBLE_WIDTH) /* anchored on the name label's centre */;
     // With the HUD up the stage fills the window, so the world's top can sit under the top bar (and, at the right, the mode strip): keep the bubble below them.
     const canvas = this.game.canvas;
-    const scale = canvas.clientWidth && this.scale.gameSize.width ? canvas.clientWidth / this.scale.gameSize.width : 1;
+    const scale = canvas.clientWidth && this.scale.gameSize.width ? canvas.clientWidth / this.scale.gameSize.width * this.density() : 1;
     const hudClear = matchMedia(COMPACT_QUERY).matches ? 0 : this.hudClearance(scale, left);
-    const { bottom, maxHeight, tail } = placeBubble(p.x, p.y - 66, BUBBLE_WIDTH, Math.max(4, hudClear));
+    const { bottom, maxHeight, tail } = placeBubble(p.x, p.y - this.lift(), BUBBLE_WIDTH, Math.max(4, hudClear));
     const el = document.createElement('div');
     el.className = 'station-bubble';
     el.dataset.character = characterId;
@@ -528,7 +660,7 @@ export class Station extends Phaser.Scene {
   private syncOverlay() {
     const overlay = this.overlay, canvas = this.game?.canvas;
     if (!overlay || !canvas || !canvas.clientWidth) return;
-    const scale = canvas.clientWidth / this.scale.gameSize.width;
+    const scale = canvas.clientWidth / this.scale.gameSize.width * this.density();
     overlay.style.left = `${canvas.offsetLeft + this.layout.offsetX * scale}px`;
     overlay.style.top = `${canvas.offsetTop + this.layout.offsetY * scale}px`;
     overlay.style.width = `${width * scale}px`;
@@ -543,7 +675,7 @@ export class Station extends Phaser.Scene {
     if (covered) {
       if (!this.created) return; // create() applies it after its first render
       this.npcs.forEach(npc => npc.reset());
-      if (this.player) this.walk.reset(this.player.x, this.player.y);
+      if (this.player) this.walk?.reset(this.player.x, this.player.y);
       this.scheduleSleep();
     } else {
       this.cancelSleep();
@@ -571,7 +703,7 @@ export class Station extends Phaser.Scene {
       (this.player.body as Phaser.Physics.Arcade.Body).reset(this.stops.briefing.x, this.stops.briefing.y);
       this.lastX = this.player.x; this.lastY = this.player.y; this.moving = false;
       this.direction = 'down';
-      this.walk.reset(this.player.x, this.player.y);
+      this.walk?.reset(this.player.x, this.player.y);
     }
   }
   update(time: number, delta: number) {
@@ -588,7 +720,11 @@ export class Station extends Phaser.Scene {
     this.lastX = this.player.x; this.lastY = this.player.y;
     if (moved && !this.moving) this.onWalk();
     this.moving = moved;
-    this.walk.update(this.player.x, this.player.y, this.direction, Boolean(dx || dy), reducedMotion.matches, delta);
+    this.walk?.update(this.player.x, this.player.y, this.direction, Boolean(dx || dy), reducedMotion.matches, delta);
+    if (this.detectiveImg) {
+      if (this.direction === 'left' || this.direction === 'right') this.facing = this.direction === 'left';
+      this.detectiveImg.setPosition(this.player.x, this.player.y).setFlipX(this.facing).setDepth(this.player.y);
+    }
     this.npcs.forEach(npc => npc.update(delta, this.enabled, reducedMotion.matches,
       Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 54));
     this.shadow.setPosition(this.player.x, this.player.y + 1);
@@ -608,7 +744,7 @@ export class Station extends Phaser.Scene {
         const p = near![1];
         this.prompt.textContent = `[E] ${p.title}`;
         this.prompt.style.left = tag?.style.left ?? `${p.x / width * 100}%`;
-        this.prompt.style.top = tag?.style.top ?? `${(p.y - 66) / height * 100}%`;
+        this.prompt.style.top = tag?.style.top ?? `${(p.y - this.lift()) / height * 100}%`;
         tag?.style.setProperty('visibility', 'hidden');
       }
     }

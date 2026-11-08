@@ -1,4 +1,7 @@
+import type { FigureArt } from './factory-figures.ts';
+
 export type SlotPoint = { x: number; y: number };
+export type FloorProp = { id: string; x: number; y: number };
 
 export interface WorldPack {
   id: string;
@@ -12,6 +15,12 @@ export interface WorldPack {
   slots: SlotPoint[];
   /** Measured art only: on-screen height of the sheet's tallest cast frame and of the investigator, in px. */
   heights?: { cast: number; investigator: number };
+  /** Static-pose figures (factory): one image per pose, drawn at figures.scale. */
+  figures?: FigureArt;
+  /** Factory floor: props by bottom-centre point, and the exit door's foot. */
+  floor?: { props: FloorProp[]; exit: { x: number; y: number } };
+  /** Where the shared "YOUR GUESS" and "START HERE" stops stand. Absent: the walking worlds' fixed points (132,276) and (244,276). */
+  stops?: { report: SlotPoint; briefing: SlotPoint };
 }
 
 const grove: WorldPack = {
@@ -42,7 +51,45 @@ const friends: WorldPack = {
   slots: [],
 };
 
-const packs: Record<string, WorldPack> = { grove, tower, friends };
+const factory: WorldPack = {
+  id: 'factory',
+  text: { place: 'Brightwell Factory', eyebrow: 'FACTORY', day: 'LAST SHIFT', one: 'worker', many: 'workers', castLabel: 'WORKER', hint: 'Walk with WASD / arrows. Press E next to a worker.', oneWithArticle: 'a worker', investigator: 'detective', icon: '<path d="M3 20V9l6 4V9l6 4V5h3v15zm4-3h2m3 0h2"/>' },
+  art: { cast: '', idle: '', walk: '', props: '' },
+  palette: { ground: '#6e7780', label: '#2c343b', labelBg: '#e9edf0' },
+  slots: [{ x: 110, y: 190 }, { x: 240, y: 200 }, { x: 370, y: 190 }, { x: 150, y: 290 }, { x: 330, y: 290 }],
+  figures: {
+    base: '/assets/factory/characters',
+    props: '/assets/factory/props',
+    sprites: { marta: 'worker-01', ama: 'worker-02', vera: 'worker-03', theo: 'worker-04', bruno: 'worker-05' },
+    detective: 'detective',
+    frame: { w: 192, h: 384 },
+    anchor: { x: 96, y: 376 },
+    scale: 1 / 6,
+    density: 3,
+    labelLift: 68,
+  },
+  // Clear of every worker and prop box: the spawn stands just above the parts bin, the guess point on open floor between Ama, Vera and Bruno.
+  stops: { report: { x: 290, y: 245 }, briefing: { x: 240, y: 266 } },
+  floor: {
+    props: [
+      { id: 'conveyor', x: 50, y: 100 },
+      { id: 'control-terminal', x: 130, y: 100 },
+      { id: 'server-rack', x: 210, y: 100 },
+      { id: 'electrical-cabinet', x: 290, y: 100 },
+      { id: 'assembly-robot', x: 370, y: 100 },
+      { id: 'exit-door', x: 430, y: 100 },
+      { id: 'emergency-stop', x: 62, y: 175 },
+      { id: 'locker', x: 24, y: 200 },
+      { id: 'packing-bench', x: 50, y: 310 },
+      { id: 'parts-bin', x: 240, y: 320 },
+      { id: 'safety-barrier', x: 430, y: 240 },
+      { id: 'shipping-crates', x: 440, y: 322 },
+    ],
+    exit: { x: 430, y: 100 },
+  },
+};
+
+const packs: Record<string, WorldPack> = { grove, tower, friends, factory };
 
 export function worldFor(id: string | undefined): WorldPack {
   return (id !== undefined && Object.hasOwn(packs, id) ? packs[id] : grove) as WorldPack;

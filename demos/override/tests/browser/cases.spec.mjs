@@ -5,7 +5,7 @@ const radio = (page, id) => page.locator(`.case-option input[name="case"][value=
 
 test('picker starts the chosen case', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.case-option')).toHaveCount(3);
+  await expect(page.locator('.case-option')).toHaveCount(4);
   await radio(page, 'tower-echo-bell').check();
   await page.locator('#begin-button').click();
   await expect(page.locator('h1')).toHaveText('Was it time?');
@@ -189,7 +189,7 @@ for (const [width, height] of [[1280, 720], [1366, 768], [1440, 900], [1920, 108
 test('phone width keeps the picker single column', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  await expect(page.locator('.case-option')).toHaveCount(3);
+  await expect(page.locator('.case-option')).toHaveCount(4);
   const boxes = await page.locator('.case-option').evaluateAll(els => els.map(e => e.getBoundingClientRect().left));
   expect(new Set(boxes).size).toBe(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth === innerWidth)).toBe(true);

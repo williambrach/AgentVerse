@@ -4,11 +4,12 @@ import { createStage } from '../client/stage.ts';
 import { worldFor } from '../client/worlds.ts';
 
 const methods = ['configure', 'say', 'clearBubbles', 'resetPosition', 'setEnabled', 'setCovered', 'focus', 'think', 'speak'];
-function setup() {
+const stationCues = ['think', 'speak', 'detective', 'escape'];
+function setup({ stationCuesOn = true } = {}) {
   const calls = [], made = { station: 0, roundtable: 0 };
-  const fake = name => Object.fromEntries(methods.map(m => [m, (...a) => calls.push([name, m, ...a])]));
+  const fake = (name, skip = []) => Object.fromEntries(methods.concat(stationCues).filter(m => !skip.includes(m)).map(m => [m, (...a) => { calls.push([name, m, ...a]); return m === 'escape' ? Promise.resolve() : undefined; }]));
   const stage = createStage({
-    station: () => { made.station++; return fake('station'); },
+    station: () => { made.station++; return fake('station', stationCuesOn ? [] : stationCues); },
     roundtable: () => { made.roundtable++; return fake('roundtable'); },
     show: which => calls.push(['show', which]),
   });
@@ -67,11 +68,21 @@ test('stage_reapplies_enabled_covered_on_switch', () => {
   assert.deepEqual(calls.slice(-2), [['roundtable', 'setEnabled', true], ['roundtable', 'setCovered', false]]);
 });
 
-test('stage_cues_noop_on_station', () => {
+test('station_gets_cues_when_it_has_them', async () => {
   const { stage, calls } = setup();
   stage.configure(grove, cast);
   calls.length = 0;
-  stage.focus('a'); stage.think('a'); stage.speak('a', 'x');
+  stage.focus('a'); stage.think('a'); stage.speak('a', 'x'); stage.detective('thinking');
+  await stage.escape('a');
+  assert.deepEqual(calls, [['station', 'think', 'a'], ['station', 'speak', 'a', 'x'], ['station', 'detective', 'thinking'], ['station', 'escape', 'a']]);
+});
+
+test('station_without_cues_is_noop', async () => {
+  const { stage, calls } = setup({ stationCuesOn: false });
+  stage.configure(grove, cast);
+  calls.length = 0;
+  stage.focus('a'); stage.think('a'); stage.speak('a', 'x'); stage.detective('speaking');
+  await stage.escape('a');
   assert.deepEqual(calls, []);
 });
 

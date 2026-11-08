@@ -10,6 +10,7 @@ import './team.css';
 import './board.css';
 import './bubbles.css';
 import './friends.css';
+import './factory.css';
 import { escape, svg, heading, mmss } from './html.ts';
 import { HINTS, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, threadPanel } from './tools';
 import { teamGate, teamNameError, leaderboardPanel, type GateView } from './team';
@@ -22,7 +23,7 @@ import { worldFor } from './worlds';
 import { hudShell, castCard } from './hud.ts';
 import { interviewPanel, briefingPanel } from './dialogue.ts';
 import { lineupPanel } from './lineup.ts';
-import type { CaseState, Character, LocationId } from './types';
+import type { Alarm, CaseState, Character, LocationId, Pose } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const ids = (): string[] => state.characters.map(c => c.id);
@@ -64,7 +65,7 @@ const solved = new Set<string>((() => {
   catch { return []; }
 })());
 function markSolved(caseId: string) {
-  if (solved.has(caseId)) return;
+  if (solved.has(caseId) || state?.session?.verdict?.outcome === 'escaped') return;
   solved.add(caseId);
   try { localStorage.setItem(solvedKey, JSON.stringify([...solved])); } catch { /* Storage blocked: the badge lasts this visit. */ }
 }
@@ -102,15 +103,19 @@ async function api(path: string, body?: object) {
   return data;
 }
 
+/** Runs one player action. Returns false when it failed or when the reply started the escape; onSuccess runs for any reply the server accepted. */
 async function action(name: string, payload: object = {}, onSuccess?: () => void) {
-  if (busy) return false;
+  if (busy || escaping) return false;
   busy = true;
   errorMessage = '';
   render();
   try {
-    state = await api(name, { sessionId: state.session?.id, revision: state.session?.revision, ...payload });
+    const fresh: CaseState = await api(name, { sessionId: state.session?.id, revision: state.session?.revision, ...payload });
+    // A reply is a fresh view like a poll: a warning mark or the escape may have passed while it was in flight.
+    const tookOver = receive(fresh);
+    if (!tookOver) state = fresh;
     onSuccess?.();
-    return true;
+    return !tookOver;
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : 'Connection lost. Please retry.';
     try {
@@ -123,10 +128,74 @@ async function action(name: string, payload: object = {}, onSuccess?: () => void
         introVisible = true;
         station.resetPosition();
       }
-      state = refreshed;
+      if (!receive(refreshed)) state = refreshed;
     } catch { /* Preserve local view on network failure. */ }
     return false;
   } finally { busy = false; render(); }
+}
+
+/** True from the escape mark until the escape animation ends; the old view stays on screen meanwhile. */
+let escaping = false;
+let pollTimer: ReturnType<typeof setInterval> | undefined;
+let speakingUntil = 0;
+
+function flicker(kind: 'warn' | 'blink', ms: number) {
+  const el = document.createElement('div');
+  el.className = 'factory-flicker';
+  el.dataset.kind = kind;
+  app.append(el);
+  setTimeout(() => el.remove(), ms);
+}
+
+/** Takes a fresh server view when it announces the escape: closes the talk, blinks, runs the escape, then shows the report. Returns true when it took over. */
+function receive(fresh: CaseState): boolean {
+  const before = state.session?.alarm;
+  // Only a closed game can be escaped; an open one past the mark (a request still in flight) stays on the last warning.
+  if (fresh.session?.alarm === 'escaped' && fresh.session.status !== 'closed') fresh.session.alarm = 'warning2';
+  const now = fresh.session?.alarm;
+  if (fresh.session?.id !== state.session?.id || !now || before === now) return false;
+  if (now === 'escaped') {
+    if (escaping) return true;
+    escaping = true;
+    void runEscape(fresh);
+    return true;
+  }
+  state = fresh;
+  if (now === 'warning1' || now === 'warning2') flicker('warn', 900);
+  return false;
+}
+
+async function runEscape(fresh: CaseState) {
+  stopTalking();
+  dialogueOpen = false;
+  threadOpen = false;
+  render();
+  station.setEnabled(false);
+  flicker('blink', 1600);
+  const escaper = fresh.debrief?.findings.find(f => f.role === 'escaper')?.character;
+  const sid = state.session?.id;
+  try { if (escaper) await Promise.race([station.escape(escaper), new Promise(r => setTimeout(r, 3000))]); } catch { /* The report still shows. */ }
+  escaping = false;
+  if (state.session?.id !== sid) return; // Reset or case switch during the walk: keep the newer view.
+  state = fresh;
+  panel = 'report';
+  dialogueOpen = true;
+  render();
+}
+
+async function poll() {
+  const session = state?.session;
+  if (!session?.alarm || session.status !== 'active' || escaping || busy || document.visibilityState !== 'visible') return;
+  try {
+    const fresh: CaseState = await api('state');
+    if (!receive(fresh) && fresh.session?.id === state.session?.id && fresh.session?.alarm) state.session!.alarm = fresh.session.alarm;
+  } catch { /* Try again on the next beat. */ }
+}
+
+function detectiveSync() {
+  const typing = document.activeElement?.id === 'question' && Boolean((document.activeElement as HTMLTextAreaElement).value.trim());
+  const pose: Pose = Date.now() < speakingUntil ? 'speaking' : typing ? 'thinking' : 'listening';
+  station?.detective(pose);
 }
 
 async function shell() {
@@ -159,6 +228,11 @@ async function shell() {
     else if (dialogueOpen) closeDialogue();
   });
   setInterval(tick, 1000);
+  clearInterval(pollTimer);
+  pollTimer = setInterval(() => void poll(), 3000);
+  document.addEventListener('input', event => { if ((event.target as HTMLElement)?.id === 'question') detectiveSync(); });
+  document.addEventListener('focusin', detectiveSync);
+  document.addEventListener('focusout', () => setTimeout(detectiveSync, 0));
 }
 
 /** The session clock, in every `#elapsed` and `[data-elapsed]` element. */
@@ -172,7 +246,8 @@ function elapsedText(): string {
 function tick() {
   if (!state?.session) return;
   const text = elapsedText();
-  document.querySelectorAll('#elapsed, [data-elapsed]').forEach(el => { el.textContent = text; });
+  const hidden = Boolean(state.session.alarm);
+  document.querySelectorAll<HTMLElement>('#elapsed, [data-elapsed]').forEach(el => { el.hidden = hidden; el.textContent = hidden ? '' : text; });
 }
 
 /** The parts of the page that belong to the case's world. Rebuilt only when the world or the cast changes. */
@@ -314,7 +389,7 @@ function syncWalking() {
   const session = state?.session;
   const mapView = app.dataset.view !== 'lineup';
   const overlay = document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard');
-  station?.setEnabled(Boolean(session && !introVisible && !busy && mapView && !overlay));
+  station?.setEnabled(Boolean(session && !escaping && !introVisible && !busy && mapView && !overlay));
   station?.setCovered(!mapView || introVisible || !!document.querySelector('#case-switch, #reset-confirm, #team-switch, #leaderboard'));
 }
 
@@ -466,7 +541,7 @@ function debriefMarkup() {
   return debriefPage({
     title: state.title, debrief: state.debrief!, roles: state.roles,
     cast: state.characters.map(c => ({ id: c.id, name: c.name, part: c.role, faceClass: castClass(c.id) })),
-    time: elapsedText(), spent: economy.spent, budget: economy.budget,
+    time: session.alarm ? null : elapsedText(), spent: economy.spent, budget: economy.budget,
     questions: Object.values(session.interviews).reduce((sum, turns) => sum + turns.length, 0),
     inspections: economy.charges.inspect.used, talks: economy.charges.continue.used,
     next: next ? { id: next.id, title: next.title } : null, many: world().text.many,
@@ -550,11 +625,14 @@ async function talk() {
 }
 
 async function askQuestion() {
-  if (busy || !ids().includes(panel)) return;
+  if (busy || escaping || !ids().includes(panel)) return;
   const character: string = panel;
   stopTalking();
   pendingCharacter = character;
   station.think(character);
+  speakingUntil = Date.now() + 1200;
+  detectiveSync();
+  setTimeout(detectiveSync, 1250);
   const asked = await action('interview', { character, question: drafts[character] }, () => { drafts[character] = ''; });
   station.think(null);
   if (asked) {

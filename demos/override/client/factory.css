@@ -1,0 +1,30 @@
+/* Factory theme: colours only, no layout change. Cool steel panels, hazard-yellow accents. */
+#app[data-world="factory"] .hud-panel { background: #20272d; border-color: #f2c230; color: #e6ebee; }
+#app[data-world="factory"] .hud-scrim { background: linear-gradient(#12171BCC, #12171B00); }
+#app[data-world="factory"] .hud-rail .cast-card { background: #20272d; border-color: #5d6b76; color: #e6ebee; }
+#app[data-world="factory"] .hud-rail .cast-card.active { border-color: #f2c230; }
+
+/* Reasoning text is ROT13 gibberish with long words: let it wrap anywhere. */
+#app[data-world="factory"] .speech.reasoning p { overflow-wrap: anywhere; }
+
+/* Faces: the head of each worker's 192x384 listening pose, cropped to a square (--hs source px at x, y). */
+html [data-world="factory"] .monkey-face, html .monkey-line[data-world="factory"] .monkey-face, html [data-world="factory"] .portrait .pixel-person { background-repeat: no-repeat !important; image-rendering: pixelated; }
+html [data-world="factory"] .monkey-face, html .monkey-line[data-world="factory"] .monkey-face { --fc: var(--cell, 44px); }
+html [data-world="factory"] .portrait .pixel-person { --fc: 76px; }
+
+html [data-world="factory"] .monkey-face.marta, html .monkey-line[data-world="factory"] .monkey-face.marta, html [data-world="factory"] .portrait.marta .pixel-person { background-image: url('/assets/factory/characters/worker-01-listening.png') !important; background-size: calc(var(--fc) * 192 / 120) calc(var(--fc) * 384 / 120) !important; background-position: calc(var(--fc) * -30 / 120) calc(var(--fc) * -80 / 120) !important; }
+html [data-world="factory"] .monkey-face.ama, html .monkey-line[data-world="factory"] .monkey-face.ama, html [data-world="factory"] .portrait.ama .pixel-person { background-image: url('/assets/factory/characters/worker-02-listening.png') !important; background-size: calc(var(--fc) * 192 / 112) calc(var(--fc) * 384 / 112) !important; background-position: calc(var(--fc) * -28 / 112) calc(var(--fc) * -92 / 112) !important; }
+html [data-world="factory"] .monkey-face.vera, html .monkey-line[data-world="factory"] .monkey-face.vera, html [data-world="factory"] .portrait.vera .pixel-person { background-image: url('/assets/factory/characters/worker-03-listening.png') !important; background-size: calc(var(--fc) * 192 / 120) calc(var(--fc) * 384 / 120) !important; background-position: calc(var(--fc) * -28 / 120) calc(var(--fc) * -70 / 120) !important; }
+html [data-world="factory"] .monkey-face.theo, html .monkey-line[data-world="factory"] .monkey-face.theo, html [data-world="factory"] .portrait.theo .pixel-person { background-image: url('/assets/factory/characters/worker-04-listening.png') !important; background-size: calc(var(--fc) * 192 / 110) calc(var(--fc) * 384 / 110) !important; background-position: calc(var(--fc) * -40 / 110) calc(var(--fc) * -48 / 110) !important; }
+html [data-world="factory"] .monkey-face.bruno, html .monkey-line[data-world="factory"] .monkey-face.bruno, html [data-world="factory"] .portrait.bruno .pixel-person { background-image: url('/assets/factory/characters/worker-05-listening.png') !important; background-size: calc(var(--fc) * 192 / 100) calc(var(--fc) * 384 / 100) !important; background-position: calc(var(--fc) * -42 / 100) calc(var(--fc) * -124 / 100) !important; }
+
+/* Flicker: main appends and removes it. warn = two quick dims (900 ms), blink = white-out blink (1600 ms). */
+.factory-flicker { position: fixed; inset: 0; z-index: 9999; pointer-events: none; opacity: 0; }
+.factory-flicker[data-kind="warn"] { background: #000; animation: factory-dim 900ms steps(1, end) both; }
+.factory-flicker[data-kind="blink"] { background: #fff; animation: factory-blink 1600ms ease-in-out both; }
+@keyframes factory-dim { 0% { opacity: 0; } 10% { opacity: .55; } 30% { opacity: 0; } 50% { opacity: .65; } 75% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes factory-blink { 0% { opacity: 0; } 12% { opacity: .95; } 24% { opacity: .1; } 38% { opacity: 1; } 60% { opacity: .9; } 100% { opacity: 0; } }
+@keyframes factory-soft { 0% { opacity: 0; } 50% { opacity: .35; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .factory-flicker[data-kind="warn"], .factory-flicker[data-kind="blink"] { background: #000; animation: factory-soft 900ms ease-in-out both; }
+}

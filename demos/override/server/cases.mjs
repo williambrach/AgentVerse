@@ -105,6 +105,16 @@ export function defineCase(data, { worlds = liveWorlds } = {}) {
   for (const k of ['title', 'summary', 'lesson']) text(data.debrief?.[k], `debrief.${k}`);
   text(data.answer?.feedback?.correct, 'answer.feedback.correct');
   text(data.answer?.feedback?.other, 'answer.feedback.other');
+  if (data.cipher !== undefined && data.cipher !== 'rot13') fail('cipher', "must be 'rot13'");
+  if (data.deadline !== undefined) {
+    const d = data.deadline;
+    if (!d || typeof d !== 'object') fail('deadline', 'must be an object');
+    if (!Number.isInteger(d.escapeAt) || d.escapeAt <= 0) fail('deadline.escapeAt', 'must be a positive integer');
+    if (!Array.isArray(d.warnAt) || !d.warnAt.every(n => Number.isInteger(n) && n > 0 && n < d.escapeAt) || !d.warnAt.every((n, i) => i === 0 || n > d.warnAt[i - 1])) fail('deadline.warnAt', 'must be strictly ascending positive integers below escapeAt');
+    text(d.escape?.title, 'deadline.escape.title');
+    text(d.escape?.summary, 'deadline.escape.summary');
+    if (d.escape.feedback !== undefined) text(d.escape.feedback, 'deadline.escape.feedback');
+  }
   if (typeof data.rehearsal !== 'function') fail('rehearsal', 'must be a function');
   return deepFreeze({ ...clone(data), world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...toolsOf(data, fail), contentHash: contentHash(data) });
 }

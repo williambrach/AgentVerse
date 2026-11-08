@@ -51,7 +51,7 @@ test('answerThread: rehearsal uses the case chatter or a fallback, live passes m
 });
 
 test('interview prompt and promptVersion are pinned', () => {
-  const expected = { 'banana-mystery': 'b9253319b2074701', 'tower-echo-bell': '54971275b8f2cbf6', 'friends-roundtable': '8510e2bd5aec540c' };
+  const expected = { 'banana-mystery': 'b9253319b2074701', 'tower-echo-bell': '54971275b8f2cbf6', 'friends-roundtable': '8510e2bd5aec540c', 'factory-escape': '559a88ce17aaf2f2' };
   assert.equal(promptVersion, 'interview-v5');
   for (const k of cases) {
     const id = k.characters[0].id;

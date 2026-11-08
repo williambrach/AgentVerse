@@ -142,7 +142,9 @@ function appVersion(env) {
 function devTools(env) {
   const wanted = env.OVERRIDE_DEV_TOOLS === '1';
   if (wanted && env.NODE_ENV === 'production') { console.log('Dev tools are off in production.'); return false; }
-  return wanted;
+  if (!wanted) return false;
+  const seconds = Number(env.OVERRIDE_DEADLINE_SECONDS);
+  return Number.isInteger(seconds) && seconds > 0 ? { deadlineSeconds: seconds } : {};
 }
 
 const sleep = ms => new Promise(resolve => { setTimeout(resolve, ms).unref(); });

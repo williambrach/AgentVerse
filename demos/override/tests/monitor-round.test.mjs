@@ -23,7 +23,7 @@ const verdict = (s, c, wrong = [], ms = 1000, t = truth) => {
   return ev(s, c, 'verdict_submitted', { elapsedMs: ms, verdict: { roles, truth: t, results, score, total: ids.length, confidence: 80, explanation: '', evidenceIds: [] } });
 };
 const legacy = (s, c, ms = 1000) => ev(s, c, 'verdict_submitted', { elapsedMs: ms, verdict: { suspect: 'momo', suspects: ['momo'], confidence: 80 } });
-const NO_TALLY = { verdicts: 0, perfect: 0, rolesRight: 0, rolesTotal: 0, byRole: {}, medianMsToVerdict: null, medianQuestions: null, medianCoins: null };
+const NO_TALLY = { verdicts: 0, escaped: 0, perfect: 0, rolesRight: 0, rolesTotal: 0, byRole: {}, medianMsToVerdict: null, medianQuestions: null, medianCoins: null };
 
 
 const truthless = () => ({ roles: truth, truth, results: {}, score: 0, total: 4 });
@@ -43,7 +43,7 @@ test('funnel and tallies for a full session', () => {
   full(r, 's1');
   assert.deepEqual(r.funnel()[B], { started: 1, asked: 1, interviewed: 1, verdict: 1, debrief: 1 });
   assert.deepEqual(r.tallies()[B], {
-    verdicts: 1, perfect: 1, rolesRight: 4, rolesTotal: 4,
+    verdicts: 1, escaped: 0, perfect: 1, rolesRight: 4, rolesTotal: 4,
     byRole: { villain: { right: 1, total: 1 }, collaborator: { right: 1, total: 1 }, fooled: { right: 1, total: 1 }, honest: { right: 1, total: 1 } },
     medianMsToVerdict: 600000, medianQuestions: 4, medianCoins: null,
   });
@@ -102,7 +102,7 @@ test('two v3 verdicts add up per true role', () => {
   r.observe(verdict('a', B, []));
   r.observe(verdict('b', B, ['pip']));
   assert.deepEqual(r.tallies()[B], {
-    verdicts: 2, perfect: 1, rolesRight: 7, rolesTotal: 8,
+    verdicts: 2, escaped: 0, perfect: 1, rolesRight: 7, rolesTotal: 8,
     byRole: { villain: { right: 2, total: 2 }, collaborator: { right: 1, total: 2 }, fooled: { right: 2, total: 2 }, honest: { right: 2, total: 2 } },
     medianMsToVerdict: 1000, medianQuestions: 0, medianCoins: null,
   });
@@ -203,4 +203,18 @@ test('medianCoins is the lower middle of verdict coins.spent, null when absent',
   const r2 = createRoundStats(cases);
   r2.observe(verdict('z', B));
   assert.equal(r2.tallies()[B].medianCoins, null);
+});
+
+test('an escape is counted apart: no tally, no median, funnel unchanged', () => {
+  const r = createRoundStats(cases);
+  const lost = (s, ms) => ev(s, B, 'verdict_submitted', { elapsedMs: ms, verdict: { outcome: 'escaped', roles: {}, truth, results: Object.fromEntries(Object.keys(truth).map((id) => [id, false])), score: 0, total: 4, confidence: 0, explanation: '', evidenceIds: [] } });
+  r.observe(verdict('a', B, [], 1000));
+  r.observe(lost('b', 600000));
+  r.observe(ev('b', B, 'debrief_viewed'));
+  assert.deepEqual(r.tallies()[B], {
+    verdicts: 1, escaped: 1, perfect: 1, rolesRight: 4, rolesTotal: 4,
+    byRole: { villain: { right: 1, total: 1 }, collaborator: { right: 1, total: 1 }, fooled: { right: 1, total: 1 }, honest: { right: 1, total: 1 } },
+    medianMsToVerdict: 1000, medianQuestions: 0, medianCoins: null,
+  });
+  assert.deepEqual(r.funnel()[B], { started: 2, asked: 0, interviewed: 0, verdict: 2, debrief: 1 });
 });

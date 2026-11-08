@@ -16,11 +16,12 @@ export default defineConfig({
   // A missing baseline fails instead of being written, so a test can never pass against its own fresh screenshot.
   updateSnapshots: 'none',
   projects: [
-    { name: 'default', testIgnore: ['tower.spec.mjs', 'admin.spec.mjs', 'maker.spec.mjs', 'admin-upgrade.spec.mjs', 'coins.spec.mjs'] },
+    { name: 'default', testIgnore: ['tower.spec.mjs', 'admin.spec.mjs', 'maker.spec.mjs', 'admin-upgrade.spec.mjs', 'coins.spec.mjs', 'factory.spec.mjs'] },
     { name: 'tower', testMatch: 'tower.spec.mjs', use: { baseURL: 'http://127.0.0.1:4318' } },
     { name: 'admin', testMatch: ['admin.spec.mjs', 'maker.spec.mjs', 'admin-upgrade.spec.mjs'], grepInvert: /@live/, use: { baseURL: 'http://127.0.0.1:4320' } },
     // Live mode over a mock LLM. Only the live tests in admin-upgrade.spec.mjs run here.
     { name: 'admin-live', testMatch: 'admin-upgrade.spec.mjs', grep: /@live/, use: { baseURL: 'http://127.0.0.1:4323' } },
+    { name: 'factory', testMatch: 'factory.spec.mjs', use: { baseURL: 'http://127.0.0.1:4324' } },
     { name: 'coins', testMatch: 'coins.spec.mjs', use: { baseURL: 'http://127.0.0.1:4321' } },
   ],
   fullyParallel: false,
@@ -67,6 +68,13 @@ export default defineConfig({
       url: 'http://127.0.0.1:4321/api/access',
       reuseExistingServer: false,
       env: { PORT: '4321', HOST: '127.0.0.1', OVERRIDE_COIN_BUDGET: '15', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: dataDir('sessions-coins') },
+    },
+    {
+      // Deadline case: dev tools on and a 45 s clock. Only the factory project talks to this server.
+      command: 'node server/index.mjs',
+      url: 'http://127.0.0.1:4324/api/access',
+      reuseExistingServer: false,
+      env: { PORT: '4324', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DEV_TOOLS: '1', OVERRIDE_DEADLINE_SECONDS: '45', OVERRIDE_DATA_DIR: dataDir('sessions-factory') },
     },
   ],
 });

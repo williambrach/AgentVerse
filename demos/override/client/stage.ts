@@ -1,5 +1,5 @@
 import type { WorldPack } from './worlds.ts';
-import type { Character } from './types.ts';
+import type { Character, Pose } from './types.ts';
 
 export type StageName = 'station' | 'roundtable';
 
@@ -10,6 +10,10 @@ export interface StageScene {
   resetPosition(): void;
   setEnabled(on: boolean): void;
   setCovered(covered: boolean): void;
+  think?(id: string | null): void;
+  speak?(id: string, text: string): void;
+  detective?(pose: Pose): void;
+  escape?(id: string): Promise<void>;
 }
 
 export interface TableScene extends StageScene {
@@ -20,6 +24,8 @@ export interface TableScene extends StageScene {
 
 export interface Stage extends TableScene {
   readonly active: StageName | null;
+  detective(pose: Pose): void;
+  escape(id: string): Promise<void>;
 }
 
 export interface StageDeps {
@@ -66,7 +72,9 @@ export function createStage(deps: StageDeps): Stage {
     setEnabled(on) { enabled = on; live()?.setEnabled(on); },
     setCovered(c) { covered = c; live()?.setCovered(c); },
     focus(id) { liveTable()?.focus(id); },
-    think(id) { liveTable()?.think(id); },
-    speak(id, text) { liveTable()?.speak(id, text); },
+    think(id) { live()?.think?.(id); },
+    speak(id, text) { live()?.speak?.(id, text); },
+    detective(pose) { live()?.detective?.(pose); },
+    escape(id) { return live()?.escape?.(id) ?? Promise.resolve(); },
   };
 }

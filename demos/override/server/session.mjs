@@ -6,6 +6,18 @@ import { cases as registry } from './cases/index.mjs';
 import { answerInterview, answerThread, promptVersion, threadPromptVersion } from './interviews.mjs';
 import { economyRules, createWallet, quote, spend } from './economy.mjs';
 import { appendJsonl, dataPaths, readJsonl } from './dataset.mjs';
+import { alarmOf, scheduleOf } from './deadline.mjs';
+import { rot13 } from './cipher.mjs';
+
+// One log line with reasoning_inspected reasoning in ROT13; other lines pass through untouched.
+function encipher(line) {
+  if (!line.includes('"reasoning_inspected"')) return line;
+  try {
+    const e = JSON.parse(line);
+    if (e.type !== 'reasoning_inspected' || typeof e.reasoning !== 'string') return line;
+    return JSON.stringify({ ...e, reasoning: rot13(e.reasoning) });
+  } catch { return line; }
+}
 
 // Fisher-Yates with crypto.randomInt: a uniform random permutation.
 export function shuffleIds(ids) {
@@ -111,7 +123,7 @@ export class Investigations {
   }
 
   create(session, kase, lastSaid = null) {
-    return new Investigation({ dataDir: this.paths.root, paths: this.paths, lastSaid, config: this.config, answer: this.answer, thread: this.thread, kase, session, shuffle: this.shuffle, meta: this.meta, onEvent: this.onEvent });
+    return new Investigation({ dev: this.dev, dataDir: this.paths.root, paths: this.paths, lastSaid, config: this.config, answer: this.answer, thread: this.thread, kase, session, shuffle: this.shuffle, meta: this.meta, onEvent: this.onEvent });
   }
 
   find(sessionId) {
@@ -130,7 +142,12 @@ export class Investigations {
   }
 
   view(sessionId) {
-    return (this.find(sessionId) || this.create(null, this.cases[0])).view();
+    const game = this.find(sessionId);
+    if (!game) return this.create(null, this.cases[0]).view();
+    // The clock may have run out while nobody was asking; mark it before showing the state.
+    // A failed log write is retried by the next request; this read still answers.
+    if (!game.busy) { try { game.expire(Date.now()); } catch { /* expire restored the game */ } }
+    return game.view();
   }
 
   async mutate(sessionId, action, input = {}, { team = null } = {}) {
@@ -184,8 +201,9 @@ export class Investigations {
 }
 
 export class Investigation {
-  constructor({ dataDir, paths = null, lastSaid = null, config, kase, answer = null, thread = null, session = null, meta = {}, onEvent = () => {}, shuffle = shuffleIds }) {
+  constructor({ dataDir, dev = false, paths = null, lastSaid = null, config, kase, answer = null, thread = null, session = null, meta = {}, onEvent = () => {}, shuffle = shuffleIds }) {
     this.shuffle = shuffle;
+    this.dev = dev;
     this.paths = paths ?? dataPaths(dataDir);
     // characterId -> eventId of their latest interview answer or chatter line; mirrors the log.
     this.lastSaid = lastSaid ?? new Map();
@@ -201,8 +219,9 @@ export class Investigation {
     this.touched = Date.now();
   }
 
-  log(type, details = {}, state = this.session) {
-    const now = Date.now();
+  // `at` stamps the event at an earlier moment (ms since epoch), such as a deadline noticed late.
+  log(type, details = {}, state = this.session, at = Date.now()) {
+    const now = at;
     const event = {
       schemaVersion: 3,
       eventId: randomUUID(),
@@ -241,24 +260,79 @@ export class Investigation {
     // Before a game starts there is no cast; the preview deals parts in persona order and reveals nothing drawn.
     const cast = s?.cast ?? identityCast(kase);
     let session = null;
-    if (s) { session = structuredClone(s); delete session.cast; session.inspectable = this.inspectable(); }
+    if (s) {
+      session = structuredClone(s); delete session.cast; session.inspectable = this.inspectable();
+      if (kase.cipher === 'rot13') session.inspections = session.inspections.map(i => ({ ...i, reasoning: rot13(i.reasoning) }));
+      const alarm = this.alarm(s);
+      if (alarm) session.alarm = alarm;
+    }
     return {
       ...publicView(kase, cast), roles: rolesOf(kase), authored: true, mode: this.config.mode, model: this.config.model,
       session, debrief: s?.status === 'closed' ? this.debrief(s) : null,
     };
   }
 
+  schedule() { return scheduleOf(this.kase, this.dev); }
+
+  // The hidden clock's state; only cases with a deadline have one. Once closed it stops at the escape or at the verdict.
+  alarm(s, now = Date.now()) {
+    const schedule = this.schedule();
+    if (!schedule) return null;
+    if (s.status !== 'closed') {
+      // An open session never reports the escape: it shows the last warning until expire() closes it with a debrief.
+      const a = alarmOf(schedule, now - Date.parse(s.startedAt));
+      return a !== 'escaped' ? a : schedule.warnAt[1] !== undefined ? 'warning2' : schedule.warnAt[0] !== undefined ? 'warning1' : 'calm';
+    }
+    if (s.verdict?.outcome === 'escaped') return 'escaped';
+    return alarmOf(schedule, Date.parse(s.verdict?.submittedAt ?? now) - Date.parse(s.startedAt));
+  }
+
+  // Close the session as a loss once the deadline has passed. Logs one verdict_submitted, only while active.
+  expire(now = Date.now()) {
+    const s = this.session;
+    const schedule = this.schedule();
+    if (!s || s.status !== 'active' || !schedule || now - Date.parse(s.startedAt) < schedule.escapeAt * 1000) return false;
+    const ids = this.kase.characters.map(c => c.id);
+    // The loss happened at the deadline, however late the next request noticed it.
+    const mark = Date.parse(s.startedAt) + schedule.escapeAt * 1000;
+    const revision = s.revision;
+    s.verdict = {
+      outcome: 'escaped', roles: {}, score: 0, total: ids.length,
+      truth: Object.fromEntries(ids.map(id => [id, partOf(this.kase, s.cast, id).role])),
+      results: Object.fromEntries(ids.map(id => [id, false])),
+      confidence: 0, explanation: '', evidenceIds: [], submittedAt: new Date(mark).toISOString(),
+    };
+    s.status = 'closed';
+    try {
+      this.log('verdict_submitted', { verdict: s.verdict, coins: { spent: s.economy.spent, budget: s.economy.budget } }, s, mark);
+      this.log('debrief_viewed', {}, s, mark);
+    } catch (error) {
+      if (s.revision === revision) { s.verdict = null; s.status = 'active'; } else {
+        // One event reached the log: memory must follow it.
+        try {
+          const fresh = new Map();
+          this.session = replay(readJsonl(this.file(s.id)), [this.kase], fresh);
+          this.lastSaid = fresh;
+        } catch { s.verdict = null; s.status = 'active'; }
+      }
+      throw error;
+    }
+    return true;
+  }
+
   debrief(s) {
     const { kase } = this;
     const say = text => resolveText(kase, s.cast, text);
     const { verdict } = s;
+    const escaped = verdict.outcome === 'escaped';
+    const copy = escaped ? { title: say(kase.deadline.escape.title), summary: say(kase.deadline.escape.summary) } : { title: say(kase.debrief.title), summary: say(kase.debrief.summary) };
     return {
-      title: say(kase.debrief.title), summary: say(kase.debrief.summary), lesson: say(kase.debrief.lesson),
-      feedback: say(verdict.score === verdict.total ? kase.answer.feedback.correct : kase.answer.feedback.other),
+      ...(escaped ? { outcome: 'escaped' } : {}), ...copy, lesson: say(kase.debrief.lesson),
+      feedback: say(escaped && kase.deadline.escape.feedback ? kase.deadline.escape.feedback : !escaped && verdict.score === verdict.total ? kase.answer.feedback.correct : kase.answer.feedback.other),
       score: verdict.score, total: verdict.total,
       findings: kase.characters.map(c => {
         const part = partOf(kase, s.cast, c.id);
-        return { character: c.id, role: verdict.truth[c.id], picked: verdict.roles[c.id], correct: verdict.results[c.id],
+        return { character: c.id, role: verdict.truth[c.id], picked: verdict.roles[c.id] ?? null, correct: verdict.results[c.id],
           classification: say(part.finding.classification), explanation: say(part.finding.explanation) };
       }),
     };
@@ -286,6 +360,7 @@ export class Investigation {
         this.ensureCurrent(input);
         const s = this.session;
         const { characters } = this.kase;
+        this.expire(Date.now());
         if (action === 'reset') {
           this.log('session_reset', { completed: s.status === 'closed' });
           if (kase) this.kase = kase;
@@ -298,10 +373,12 @@ export class Investigation {
             this.log('location_visited', { location: input.location });
           } else if (action === 'interview') {
             await this.interview(input);
+            this.expire(Date.now());
           } else if (action === 'inspect') {
             this.inspect(input);
           } else if (action === 'continue') {
             await this.chat();
+            this.expire(Date.now());
           } else if (action === 'verdict') {
             this.verdict(input);
           } else throw new RequestError(404, 'Unknown action.');
@@ -512,7 +589,9 @@ export class Investigation {
 
   export() {
     if (!this.session) throw new RequestError(404, 'There is no session to export.');
-    const text = readFileSync(this.file(this.session.id), 'utf8');
+    let text = readFileSync(this.file(this.session.id), 'utf8');
+    // The stored log stays plain; the download carries the same cipher the player sees.
+    if (this.kase.cipher === 'rot13') text = text.split('\n').map(line => encipher(line)).join('\n');
     if (this.session.status === 'closed') return text;
     // While the game is on, the cast stays secret: only the first line is rewritten.
     const lines = text.split('\n');

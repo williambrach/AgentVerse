@@ -75,3 +75,34 @@ test('friends_pack_matches_server_world', () => {
   assert.equal(w.text.many, s.cast.many);
   assert.ok(s.cast.one.endsWith(' ' + w.text.one));
 });
+
+test('factory_pack_matches_server_world', () => {
+  const w = worldFor('factory'), s = serverWorlds.factory;
+  assert.equal(w.id, 'factory');
+  assert.equal(w.text.place, 'Brightwell Factory');
+  assert.ok(s, "server world factory (T1) has landed");
+  assert.equal(w.id, s.id);
+    assert.equal(w.text.place, s.place);
+    assert.equal(w.text.many, s.cast.many);
+    assert.ok(s.cast.one.endsWith(' ' + w.text.one));
+    assert.equal(s.agents, w.slots.length);
+  assert.equal(w.slots.length, 5);
+});
+
+test('walking_packs_have_no_factory_fields', () => {
+  for (const id of ['grove', 'tower', 'friends']) {
+    const w = worldFor(id);
+    assert.equal(w.figures, undefined); assert.equal(w.floor, undefined); assert.equal(w.stops, undefined);
+  }
+});
+
+test('client_escape_review_guards', async () => {
+  const { readFileSync } = await import('node:fs');
+  const main = readFileSync(new URL('../client/main.ts', import.meta.url), 'utf8');
+  const station = readFileSync(new URL('../client/station.ts', import.meta.url), 'utf8');
+  assert.match(main, /Promise\.race\(\[station\.escape\(escaper\)/, 'escape cannot hang the report');
+  assert.match(main, /state\.session\?\.id !== sid\) return/, 'a reset during the walk keeps the newer view');
+  assert.match(main, /clearInterval\(pollTimer\);\n\s*pollTimer = setInterval/, 'one poll timer');
+  assert.match(station, /think\(id: string \| null\): void \{\n\s*if \(!this\.world\.figures\) return;/, 'grove think untouched');
+  assert.match(station, /speak\(id: string, text: string\): void \{\n\s*if \(!this\.world\.figures\) return;/, 'grove speak untouched');
+});
