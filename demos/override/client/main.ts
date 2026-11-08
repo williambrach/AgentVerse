@@ -10,6 +10,7 @@ import './team.css';
 import './board.css';
 import './bubbles.css';
 import './friends.css';
+import './splash.css';
 import './factory.css';
 import { escape, svg, heading, mmss } from './html.ts';
 import { HINTS, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, threadPanel } from './tools';
@@ -23,6 +24,7 @@ import { worldFor } from './worlds';
 import { hudShell, castCard } from './hud.ts';
 import { interviewPanel, briefingPanel } from './dialogue.ts';
 import { lineupPanel } from './lineup.ts';
+import { wantSplash, splashSeen, markSplashSeen, playSplash } from './splash.ts';
 import type { Alarm, CaseState, Character, LocationId, Pose } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -792,9 +794,15 @@ function nextCase() {
 }
 
 let stopHeartbeat: (() => void) | undefined;
+/** The sponsor intro is checked once per page load; boot() runs again after the access code and the check-in. */
+let splashChecked = false;
 
 async function boot() {
   try {
+    if (!splashChecked) {
+      splashChecked = true;
+      if (wantSplash(new URLSearchParams(location.search), splashSeen())) { await playSplash(app); markSplashSeen(); }
+    }
     const access = await api('access');
     if (!access.authorized) {
       app.innerHTML = `<div class="access-screen"><form id="access-form" class="reset-card"><span class="eyebrow">PRIVATE DEMONSTRATION</span><h1>Banana Mystery.</h1><p>Enter the shared access code to open the grove.</p><label for="access-code">Access code</label><input type="password" id="access-code" required autocomplete="current-password"><p id="access-error" role="alert"></p><button class="primary-button">Open the grove ${icon('arrow')}</button></form></div>`;

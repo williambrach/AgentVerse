@@ -1,0 +1,52 @@
+/* Sponsor intro, in the game's own look: a parchment briefing card with a name tab for the logos, then the title card. */
+.splash { position: fixed; inset: 0; z-index: 80; overflow: hidden; color: var(--cream); cursor: pointer; user-select: none;
+  background: radial-gradient(#ffffff09 1px, transparent 1.5px) 0 0 / 8px 8px, radial-gradient(ellipse at 50% 42%, #1B3340 0%, var(--ink) 55%, var(--deep) 100%); }
+
+/* Sponsors: one logo at a time on the parchment card. */
+.splash-stage { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; padding: 40px 16px 24px; transition: opacity .5s ease; }
+.splash[data-step="title"] .splash-stage { opacity: 0; pointer-events: none; }
+.splash-card { position: relative; width: min(640px, 100%); padding: 30px 30px 22px; background: var(--parchment); color: var(--text); border: 4px solid var(--text); border-radius: 10px; box-shadow: inset 0 0 0 3px var(--parchment), inset 0 0 0 5px var(--rule), 0 6px 0 #0A1217; animation: splash-rise .5s ease-out both; }
+.splash-tab { position: absolute; top: -20px; left: 22px; padding: 6px 14px; background: var(--text); color: var(--parchment); font-size: 18px; font-weight: 600; line-height: 1.2; border-radius: 4px; box-shadow: inset 0 -3px 0 var(--gold); }
+.splash-stamp { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 6px 0 12px; border-bottom: 2px dashed var(--rule); font-size: 12px; font-weight: 600; letter-spacing: 1.2px; color: #3B4A52; }
+.splash-count b { color: var(--text); }
+.splash-slot { display: grid; place-items: center; min-height: clamp(150px, 28vh, 240px); padding: 18px 0; }
+.splash-logo { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; gap: clamp(12px, 2.2vw, 24px); margin: 0; opacity: 0; transform: translateY(6px); transition: opacity .4s ease, transform .5s ease-out; }
+.splash-logo.is-on { opacity: 1; transform: none; }
+.splash-logo img { display: block; max-width: 100%; height: auto; object-fit: contain; }
+.splash-logo[data-sponsor="dfm"] img { width: min(420px, 68vw); max-height: 26vh; }
+.splash-logo[data-sponsor="sdu"] img { width: min(320px, 56vw); max-height: 20vh; }
+.splash-logo[data-sponsor="ucloud"] img { width: auto; height: min(110px, 15vh, 17vw); }
+.splash-label { font-size: clamp(36px, 7vw, 76px); font-weight: 700; letter-spacing: -.5px; color: #33475B; }
+.splash-pips { display: flex; justify-content: center; gap: 8px; padding-top: 14px; border-top: 2px dashed var(--rule); }
+.splash-pip { width: 28px; height: 6px; border-radius: 3px; background: var(--rule); transition: background .3s; }
+.splash-pip.is-done { background: #B9A672; }
+.splash-pip.is-on { background: var(--gold); box-shadow: 0 2px 0 #8A5E10; }
+
+/* Title card */
+.splash-title { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px 16px; text-align: center; opacity: 0; transition: opacity .7s ease .2s; }
+.splash[data-step="title"] .splash-title { opacity: 1; }
+.splash-event { font-size: clamp(13px, 1.5vw, 15px); font-weight: 700; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); }
+.splash-title h1 { margin: 0; font-size: clamp(64px, 12vw, 150px); font-weight: 700; line-height: 1; letter-spacing: -1px; color: var(--cream); text-shadow: 0 6px 0 #0A1217; }
+.splash-dot { color: var(--gold); }
+.splash-tagline { max-width: 34ch; font-size: clamp(16px, 2vw, 21px); line-height: 1.45; color: var(--muted); }
+.splash-press { margin-top: clamp(18px, 5vh, 44px); padding: 12px 22px; background: var(--gold); color: var(--text); border: 2px solid var(--text); border-radius: 6px; box-shadow: 0 3px 0 #8A5E10; font-size: clamp(13px, 1.4vw, 15px); font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; }
+.splash[data-step="title"] .splash-press { animation: splash-pulse 1.6s ease-in-out 1s infinite; }
+.splash-tap { display: none; }
+@media (hover: none) and (pointer: coarse) { .splash-key { display: none; } .splash-tap { display: inline; } }
+
+.splash-skip { position: absolute; top: 16px; right: 16px; z-index: 2; min-height: 40px; padding: 8px 14px; border: 2px solid var(--edge); border-radius: 6px; background: #13232Ccc; color: var(--cream); font-size: 13px; font-weight: 600; }
+.splash-skip:hover { border-color: var(--cream); }
+.splash[data-step="title"] .splash-skip { display: none; }
+
+@media (max-width: 480px) {
+  .splash-card { padding: 26px 18px 18px; }
+  .splash-tab { font-size: 16px; left: 14px; }
+}
+
+@keyframes splash-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes splash-pulse { 0%, 100% { filter: none; transform: none; } 50% { filter: brightness(1.12); transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) {
+  .splash-stage, .splash-logo, .splash-title, .splash-pip { transition: none; }
+  .splash-logo { transform: none; }
+  .splash-card, .splash[data-step="title"] .splash-press { animation: none; }
+}

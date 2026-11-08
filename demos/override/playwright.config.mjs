@@ -7,6 +7,9 @@ import { join } from 'node:path';
 // Leftover teams and sessions from an earlier run can then never leak into the replay or leaderboard tests.
 const runDir = process.env.OVERRIDE_E2E_DATA ??= mkdtempSync(join(tmpdir(), 'override-e2e-'));
 const dataDir = name => join(runDir, name);
+// Every context, including browser.newContext() in a spec, starts as a returning player who has seen the sponsor intro.
+// splash.spec.mjs clears this to play it.
+const seenSplash = { cookies: [], origins: [4317, 4318, 4319, 4320, 4321, 4322, 4323, 4324].map(port => ({ origin: `http://127.0.0.1:${port}`, localStorage: [{ name: 'override.splash', value: 'seen' }] })) };
 
 export default defineConfig({
   testDir: './tests/browser',
@@ -30,6 +33,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:4317',
     viewport: { width: 1440, height: 1000 },
+    storageState: seenSplash,
     channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
