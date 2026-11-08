@@ -64,6 +64,7 @@ export function replay(events, cases, lastSaid = null) {
         location: 'briefing', interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])), verdict: null,
         economy: createWallet(e.economy ?? economyRules({})), thread: [], chatter: { round: 0, pending: 0 }, inspections: [],
         team: e.team && typeof e.team.id === 'string' && typeof e.team.name === 'string' ? { id: e.team.id, name: e.team.name } : null };
+      if (kase.evidence) s.examined = [];
     }
     if (!s || e.sessionId !== s.id || e.sequence !== s.revision + 1) return null;
     s.revision = e.sequence;
@@ -71,7 +72,11 @@ export function replay(events, cases, lastSaid = null) {
       s.economy.spent = e.spend.total;
       for (const tool of e.spend.tools) if (s.economy.charges[tool]) s.economy.charges[tool].used += 1;
     }
-    if (e.type === 'location_visited') s.location = e.location;
+    if (e.type === 'location_visited') {
+      s.location = e.location;
+      const found = kase.evidence && typeof e.location === 'string' && e.location.startsWith('evidence:') ? e.location.slice(9) : null;
+      if (found && kase.evidence.some(x => x.id === found) && !s.examined.includes(found)) s.examined.push(found);
+    }
     if (lastSaid && (e.type === 'interview_answer' || e.type === 'chatter_line')) lastSaid.set(e.character, e.eventId);
     if (e.type === 'chatter_line') {
       s.thread.push({ character: e.character, text: e.text, round: e.round, timestamp: e.timestamp });
@@ -262,6 +267,7 @@ export class Investigation {
     let session = null;
     if (s) {
       session = structuredClone(s); delete session.cast; session.inspectable = this.inspectable();
+      if (kase.evidence) session.evidence = s.examined.map(id => { const x = kase.evidence.find(y => y.id === id); return { id, title: x.title, text: resolveText(kase, s.cast, x.text) }; });
       if (kase.cipher === 'rot13') session.inspections = session.inspections.map(i => ({ ...i, reasoning: rot13(i.reasoning) }));
       const alarm = this.alarm(s);
       if (alarm) session.alarm = alarm;
@@ -368,8 +374,10 @@ export class Investigation {
         } else {
           if (s.status !== 'active') throw new RequestError(409, 'This case is closed. Review the debrief or start a new session.');
           if (action === 'visit') {
-            if (!['briefing', 'report', ...characters.map(c => c.id)].includes(input.location)) throw new RequestError(400, 'Unknown station location.');
+            const allowed = ['briefing', 'report', ...characters.map(c => c.id), ...(this.kase.evidence ? ['evidence', ...this.kase.evidence.map(x => `evidence:${x.id}`)] : [])];
+            if (!allowed.includes(input.location)) throw new RequestError(400, 'Unknown station location.');
             s.location = input.location;
+            if (input.location.startsWith('evidence:') && !s.examined.includes(input.location.slice(9))) s.examined.push(input.location.slice(9));
             this.log('location_visited', { location: input.location });
           } else if (action === 'interview') {
             await this.interview(input);
@@ -419,6 +427,7 @@ export class Investigation {
       economy: createWallet(rules), thread: [], chatter: { round: 0, pending: 0 }, inspections: [],
       team: team && typeof team.id === 'string' && typeof team.name === 'string' ? { id: team.id, name: team.name } : null,
     };
+    if (this.kase.evidence) this.session.examined = [];
     this.log('session_started', { assignment, economy: rules, cast, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, team: this.session.team, ...this.meta });
     this.log('briefing_viewed');
   }

@@ -80,6 +80,17 @@ export function defineCase(data, { worlds = liveWorlds } = {}) {
   str(prompt.setting, 'prompt.setting');
   for (const key of ['use', 'avoid']) if (!Array.isArray(prompt[key]) || !prompt[key].every(s => typeof s === 'string')) fail(`prompt.${key}`, 'must be an array of strings');
   data.characters.forEach((c, i) => ['id', 'name', 'color'].forEach(k => str(c[k], `characters[${i}].${k}`)));
+  data.characters.forEach((c, i) => {
+    // Character text is the same in every deal, so a placeholder here would show the dealt part on the rail.
+    for (const k of ['label', 'introduction', 'quickQuestion']) {
+      if (c[k] === undefined) continue;
+      str(c[k], `characters[${i}].${k}`);
+      if (c[k].includes('{')) fail(`characters[${i}].${k}`, 'must not contain a placeholder');
+    }
+    if (c.knowledge === undefined) return;
+    if (!Array.isArray(c.knowledge) || !c.knowledge.length) fail(`characters[${i}].knowledge`, 'must be a non-empty array of non-empty strings');
+    c.knowledge.forEach((k, n) => { str(k, `characters[${i}].knowledge[${n}]`); if (k.includes('{')) fail(`characters[${i}].knowledge[${n}]`, 'must not contain a placeholder'); });
+  });
   if (data.roles !== undefined) rolesCheck(data.roles, fail);
   const roleIds = data.roles ? data.roles.map(r => r.id) : ROLE_IDS;
   const partIds = [];
@@ -92,6 +103,17 @@ export function defineCase(data, { worlds = liveWorlds } = {}) {
     for (const m of text.matchAll(/\{([^{}]*)\}/g)) if (!partIds.includes(m[1])) fail(path, `unknown placeholder {${m[1]}}`);
   };
   const text = (value, path) => { str(value, path); placeholders(value, path); };
+  if (data.evidence !== undefined) {
+    if (!Array.isArray(data.evidence) || data.evidence.length < 1 || data.evidence.length > 12) fail('evidence', 'must hold 1 to 12 items');
+    const seen = [];
+    data.evidence.forEach((e, i) => {
+      if (typeof e?.id !== 'string' || !ROLE_KEY.test(e.id)) fail(`evidence[${i}].id`, `must match ${ROLE_KEY}`);
+      if (seen.includes(e.id)) fail(`evidence[${i}].id`, `duplicate evidence id ${e.id}`);
+      seen.push(e.id);
+      str(e.title, `evidence[${i}].title`);
+      text(e.text, `evidence[${i}].text`);
+    });
+  }
   data.parts.forEach((p, i) => {
     const at = `parts[${i}]`;
     if (!roleIds.includes(p.role)) fail(`${at}.role`, `must be one of ${roleIds.join(', ')}`);
@@ -150,8 +172,8 @@ export function castCharacters(kase, cast) {
   return kase.characters.map((c, i) => {
     const p = partOf(kase, cast, c.id);
     return {
-      id: c.id, name: c.name, role: resolve(kase, cast, p.label), room: String(i + 1).padStart(2, '0'), color: c.color,
-      introduction: resolve(kase, cast, p.introduction), quickQuestion: resolve(kase, cast, p.quickQuestion),
+      id: c.id, name: c.name, role: resolve(kase, cast, c.label ?? p.label), room: String(i + 1).padStart(2, '0'), color: c.color,
+      introduction: resolve(kase, cast, c.introduction ?? p.introduction), quickQuestion: resolve(kase, cast, c.quickQuestion ?? p.quickQuestion),
     };
   });
 }
@@ -173,6 +195,7 @@ export function publicView(kase, cast) {
     copy: resolveDeep(kase, cast, kase.copy),
     world: (({ persona, frame, memory, clueSpot, agents, ...rest }) => ({ ...rest, agents, cast: { ...rest.cast } }))(kase.world),
     characters: castCharacters(kase, cast),
+    ...(kase.evidence ? { evidence: kase.evidence.map(({ id, title }) => ({ id, title })) } : {}),
   };
 }
 

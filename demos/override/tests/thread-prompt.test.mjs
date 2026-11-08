@@ -51,7 +51,7 @@ test('answerThread: rehearsal uses the case chatter or a fallback, live passes m
 });
 
 test('interview prompt and promptVersion are pinned', () => {
-  const expected = { 'banana-mystery': 'b9253319b2074701', 'tower-echo-bell': '54971275b8f2cbf6', 'friends-roundtable': '8510e2bd5aec540c', 'factory-escape': '559a88ce17aaf2f2' };
+  const expected = { 'banana-mystery': 'b9253319b2074701', 'tower-echo-bell': '54971275b8f2cbf6', 'friends-roundtable': '8510e2bd5aec540c', 'factory-escape': '559a88ce17aaf2f2', 'department-murder': 'fc910e06ce084fc5' };
   assert.equal(promptVersion, 'interview-v5');
   for (const k of cases) {
     const id = k.characters[0].id;
@@ -80,11 +80,11 @@ test('thread_shuffled_cast: the prompt holds the speaker part only, names follow
     for (const c of k.characters) {
       const sys = buildThreadMessages(k, s, c.id)[0].content;
       const own = k.parts.find(p => p.id === cast[c.id]);
-      const known = own.knowledge.map(line => resolve(k, cast, line));
-      assert.ok(sys.startsWith(`You play ${c.name} (${resolve(k, cast, own.label)}), `), `${k.id} ${c.id}`);
+      const known = [...(c.knowledge ?? []), ...own.knowledge].map(line => resolve(k, cast, line));
+      assert.ok(sys.startsWith(`You play ${c.name} (${resolve(k, cast, c.label ?? own.label)}), `), `${k.id} ${c.id}`);
       for (const line of known) assert.ok(sys.includes(line), `${k.id} ${c.id} misses its knowledge`);
       for (const p of k.parts.filter(x => x.id !== own.id)) {
-        if (resolve(k, cast, p.label) !== resolve(k, cast, own.label)) assert.ok(!sys.includes(`(${resolve(k, cast, p.label)})`), `${k.id} ${c.id} names part ${p.id}`);
+        if (resolve(k, cast, p.label) !== resolve(k, cast, c.label ?? own.label)) assert.ok(!sys.includes(`(${resolve(k, cast, p.label)})`), `${k.id} ${c.id} names part ${p.id}`);
         for (const line of p.knowledge.map(x => resolve(k, cast, x))) if (!known.includes(line)) assert.ok(!sys.includes(line), `${k.id} ${c.id} holds ${p.id} knowledge`);
       }
       assert.ok(!/\{[a-z][a-z0-9]*\}/.test(sys), `${k.id} ${c.id} has an unresolved placeholder`);

@@ -12,6 +12,7 @@ import './bubbles.css';
 import './friends.css';
 import './splash.css';
 import './factory.css';
+import './department.css';
 import { escape, svg, heading, mmss } from './html.ts';
 import { HINTS, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, threadPanel } from './tools';
 import { teamGate, teamNameError, leaderboardPanel, type GateView } from './team';
@@ -22,7 +23,8 @@ import { createStage, type Stage } from './stage';
 import { postHeartbeat, startHeartbeat } from './heartbeat';
 import { worldFor } from './worlds';
 import { hudShell, castCard } from './hud.ts';
-import { interviewPanel, briefingPanel } from './dialogue.ts';
+import { interviewPanel, briefingPanel, evidencePanel } from './dialogue.ts';
+import { evidenceIdOf } from './hall-layout.ts';
 import { lineupPanel } from './lineup.ts';
 import { wantSplash, splashSeen, markSplashSeen, playSplash } from './splash.ts';
 import type { Alarm, CaseState, Character, LocationId, Pose } from './types';
@@ -35,6 +37,11 @@ const blankDrafts = (): Record<string, string> => Object.fromEntries(state.chara
 let state: CaseState;
 let station: Stage;
 let panel: LocationId = 'briefing';
+/** The evidence card to show open on the Evidence page; null when the page was opened without one. */
+let evidenceFocus: string | null = null;
+const isEvidence = (loc: string): boolean => loc === 'evidence' || loc.startsWith('evidence:');
+/** Panel ids never contain ':' (the notebook splits its key on it): evidence:<id> shows as `evidence`. */
+const panelOf = (loc: LocationId): LocationId => (isEvidence(loc) ? 'evidence' : loc);
 let busy = false;
 let pendingCharacter: string | null = null;
 let introVisible = true;
@@ -254,7 +261,7 @@ function tick() {
 
 /** The parts of the page that belong to the case's world. Rebuilt only when the world or the cast changes. */
 function renderWorld() {
-  const key = `${world().id}:${ids().join(',')}`;
+  const key = `${world().id}:${ids().join(',')}:${state.evidence?.length ?? ''}`;
   if (key === worldKey) { syncNavText(); return; }
   worldKey = key;
   const w = world(), t = w.text;
@@ -262,12 +269,15 @@ function renderWorld() {
   document.querySelector('#world-name')!.textContent = t.place;
   document.querySelector('#world-icon')!.innerHTML = svg(t.icon);
   document.querySelector('#room-nav')!.setAttribute('aria-label', `${cap(t.eyebrow)} destinations`);
-  document.querySelector<HTMLElement>('#room-nav')!.style.setProperty('--nav-n', String(state.characters.length + 1));
+  document.querySelector<HTMLElement>('#room-nav')!.style.setProperty('--nav-n', String(state.characters.length + 1 + (state.evidence ? 1 : 0)));
   document.querySelector('#room-nav')!.innerHTML = `
-          ${state.characters.map(cardFor).join('')}`;
+          ${state.characters.map(cardFor).join('')}${state.evidence ? evidenceButton() : ''}`;
   station?.configure(w, state.characters);
   syncNavText();
 }
+
+const evidenceButton = () => `<button data-go="evidence" class="cast-card evidence-nav"><span class="cast-tile"><i class="evidence-icon"></i></span><span class="hud-stack cast-text"><b>Evidence</b><small data-evidence-count>${evidenceCount()}</small></span></button>`;
+const evidenceCount = () => `${state.session?.evidence?.length ?? 0}/${state.evidence?.length ?? 0}`;
 
 const cardFor = (c: Character) => {
   const asked = Boolean(state.session?.interviews[c.id]?.length);
@@ -277,6 +287,8 @@ const cardFor = (c: Character) => {
 
 /** Part text and the talking, asked and new states change with every action, so the cards are updated in place (focus stays). */
 function syncNavText() {
+  const count = document.querySelector('#room-nav [data-evidence-count]');
+  if (count && count.textContent !== evidenceCount()) count.textContent = evidenceCount();
   for (const c of state.characters) {
     const card = document.querySelector<HTMLElement>(`#room-nav [data-go="${CSS.escape(c.id)}"]`);
     if (!card) continue;
@@ -296,8 +308,9 @@ async function visit(location: LocationId) {
   if (busy || introVisible) return;
   stopTalking();
   threadOpen = false;
-  if (state.session?.status === 'closed') { panel = location; dialogueOpen = true; render(); return; }
-  if (await action('visit', { location })) { panel = location; dialogueOpen = true; render(); }
+  const open = () => { panel = panelOf(location); evidenceFocus = isEvidence(location) ? evidenceIdOf(location) : null; dialogueOpen = true; render(); };
+  if (state.session?.status === 'closed') { open(); return; }
+  if (await action('visit', { location })) open();
 }
 
 /** Hides the conversation and, if focus was inside it, hands focus to the Notebook button so a keyboard user is not stranded on a hidden control. */
@@ -362,6 +375,7 @@ async function onClick(event: MouseEvent) {
 /** The session's saved location, or the briefing when it names a page that no longer exists. */
 function savedPanel(): LocationId {
   const saved: string | undefined = state.session?.location;
+  if (saved !== undefined && state.evidence && isEvidence(saved)) { evidenceFocus = evidenceIdOf(saved); return 'evidence'; }
   return saved === 'briefing' || saved === 'report' || (saved !== undefined && ids().includes(saved)) ? saved : 'briefing';
 }
 
@@ -412,6 +426,7 @@ function render() {
     button.disabled = busy || !session || introVisible;
     button.classList.toggle('active', button.dataset.go === panel);
   });
+  if (state.evidence) station?.evidence(state.evidence.map(e => ({ id: e.id, title: e.title, examined: Boolean(session?.examined?.includes(e.id)) })));
   renderTools();
   (document.querySelector('#export-button') as HTMLButtonElement).disabled = !session || busy;
   (document.querySelector('#reset-button') as HTMLButtonElement).disabled = !session || busy;
@@ -427,13 +442,14 @@ function render() {
   syncWalking();
   station?.focus(dialogueOpen && !introVisible && ids().includes(panel) ? panel : null);
   const target = document.querySelector<HTMLElement>('#panel')!;
-  const sections: Record<string, string> = { briefing: 'Case briefing', ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
+  const sections: Record<string, string> = { briefing: 'Case briefing', ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), evidence: 'Evidence', report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
   document.querySelector('#notebook-section')!.textContent = threadOpen ? 'Thread' : sections[panel];
   let markup: string;
   if (threadOpen && session) markup = threadPanel(session.thread, Object.fromEntries(state.characters.map(c => [c.id, c.name])), session.chatter.pending, world().text.threadNote, Object.fromEntries(state.characters.map(c => [c.id, castClass(c.id)])));
   else if (session?.status === 'closed' && panel === 'report') markup = debriefMarkup();
   else if (panel === 'briefing') markup = briefingPanel({ copy: state.copy, cast: state.characters.length, many: world().text.many, one: world().text.one, oneWithArticle: world().text.oneWithArticle, firstId: state.characters[0]?.id, firstName: state.characters[0]?.name, guide: state.session ? toolGuide(state.session.economy) : '', ...(world().scene === 'roundtable' ? { verdict: state.copy.report.description, howTo: world().text.hint } : {}) });
   else if (panel === 'report') markup = reportPanel();
+  else if (panel === 'evidence') markup = evidencePanel(session?.evidence ?? [], evidenceFocus, state.evidence?.length ?? 0);
   else markup = interviewMarkup(panel);
   const rendered = renderNotebook(target, markup, `${session?.id}:${panel}:${session?.status}${threadOpen ? ':thread' : ''}`, panel, Object.keys(sections));
   if (rendered) bindForms();

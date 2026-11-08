@@ -1,4 +1,4 @@
-import type { Character, Inspection, Turn, CaseCopy } from './types.ts';
+import type { Character, Inspection, Turn, CaseCopy, EvidenceCard } from './types.ts';
 // The .ts extension keeps `node --test` resolving this file.
 import { noThoughtBlock, reasoningBlock } from './tools.ts';
 import { escape as esc, heading } from './html.ts';
@@ -91,4 +91,12 @@ export function interviewPanel(v: InterviewView): string {
     <div class="portrait dialogue-portrait ${esc(v.faceClass)}"><span class="pixel-person"></span></div>
     <div class="dialogue-body"><div class="interview-transcript" id="transcript" role="log" aria-label="Interview transcript" aria-live="polite">${intro}${items.map(i => i.html).join('')}${v.noThought ? noThoughtBlock(character.name, turns.length) : ''}${waiting}</div>
     ${form}</div></section>`;
+}
+
+/** The Evidence page: examined cards, newest first; the card just examined (or opened from the hall) is open. */
+export function evidencePanel(cards: EvidenceCard[], focusId: string | null, total: number): string {
+  const body = cards.length
+    ? `<div class="evidence-list">${[...cards].reverse().map(c => `<article class="evidence-card${c.id === focusId ? ' focus open' : ''}" data-evidence="${esc(c.id)}"${c.id === focusId ? ' aria-current="true"' : ''}><img class="evidence-prop" src="/assets/department/props/${encodeURIComponent(c.id)}.png" width="48" height="48" alt=""><div><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></div></article>`).join('')}</div>`
+    : '<div class="subtle-note evidence-empty">Nothing examined yet. Walk up to a yellow marker and press E.</div>';
+  return `${heading('THE EVIDENCE', 'Evidence', `${cards.length} of ${total} examined`)}<div class="notebook-content evidence-content">${body}</div>`;
 }

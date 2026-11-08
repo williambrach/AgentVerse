@@ -106,3 +106,17 @@ test('client_escape_review_guards', async () => {
   assert.match(station, /think\(id: string \| null\): void \{\n\s*if \(!this\.world\.figures\) return;/, 'grove think untouched');
   assert.match(station, /speak\(id: string, text: string\): void \{\n\s*if \(!this\.world\.figures\) return;/, 'grove speak untouched');
 });
+
+test('department_pack_matches_server_world', () => {
+  const w = worldFor('department'), s = serverWorlds.department;
+  assert.equal(w.text.place, 'Department Hall');
+  assert.equal(w.text.many, 'colleagues');
+  assert.equal(w.text.oneWithArticle, 'a colleague');
+  assert.ok(s, 'server world department (T2) has landed');
+  assert.equal(w.id, s.id);
+  assert.equal(w.text.place, s.place);
+  assert.equal(w.text.many, s.cast.many);
+  assert.equal(s.cast.one, 'a colleague');
+  assert.equal(s.agents, w.slots.length);
+  assert.equal(w.slots.length, 5);
+});

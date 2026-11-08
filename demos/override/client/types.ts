@@ -1,5 +1,5 @@
 export type CharacterId = string;
-export type LocationId = CharacterId | 'briefing' | 'report';
+export type LocationId = CharacterId | 'briefing' | 'report' | 'evidence' | `evidence:${string}`;
 export interface Character { id: CharacterId; name: string; role: string; room: string; color: string; introduction: string; quickQuestion: string }
 export interface Turn { question: string; answer: string; timestamp: string }
 export interface Role { id: string; label: string; hint: string }
@@ -22,11 +22,17 @@ export interface Session {
   team: { id: string; name: string } | null;
   /** Present only when the case has a hidden deadline. */
   alarm?: Alarm;
+  /** Present only for cases with evidence: examined ids, and the examined cards in examine order. */
+  examined?: string[];
+  evidence?: EvidenceCard[];
 }
+export interface EvidenceCard { id: string; title: string; text: string }
 export interface CaseState {
   caseId: string; caseVersion: string; contentHash: string; title: string; order: number; copy: CaseCopy; roles: Role[]; authored: boolean; mode: 'live' | 'rehearsal'; model: string | null;
   world: { id: string; place: string; cast: { one: string; many: string } };
   characters: Character[];
+  /** Public evidence titles, only for cases that define evidence. */
+  evidence?: { id: string; title: string }[];
   session: Session | null;
   debrief: null | { outcome?: 'escaped'; title: string; summary: string; lesson: string; feedback: string; score: number; total: number; findings: { character: CharacterId; role: string; picked: string; correct: boolean; classification: string; explanation: string }[] };
 }

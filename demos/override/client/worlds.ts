@@ -1,4 +1,5 @@
 import type { FigureArt } from './factory-figures.ts';
+import type { Walk } from './hall-layout.ts';
 
 export type SlotPoint = { x: number; y: number };
 export type FloorProp = { id: string; x: number; y: number };
@@ -21,6 +22,12 @@ export interface WorldPack {
   floor?: { props: FloorProp[]; exit: { x: number; y: number } };
   /** Where the shared "YOUR GUESS" and "START HERE" stops stand. Absent: the walking worlds' fixed points (132,276) and (244,276). */
   stops?: { report: SlotPoint; briefing: SlotPoint };
+  /** Painted backdrop (department): drawn at scale world units per image px, top-left at (x, y); fill beyond it. */
+  backdrop?: { url: string; width: number; height: number; scale: number; x: number; y: number; fill: string };
+  /** Where the detective may stand (department). */
+  walk?: Walk;
+  /** Examinable evidence spots by foot point (department). */
+  evidence?: { id: string; x: number; y: number }[];
 }
 
 const grove: WorldPack = {
@@ -89,7 +96,36 @@ const factory: WorldPack = {
   },
 };
 
-const packs: Record<string, WorldPack> = { grove, tower, friends, factory };
+const department: WorldPack = {
+  id: 'department',
+  text: { place: 'Department Hall', eyebrow: 'DEPARTMENT', day: 'FRIDAY MORNING', one: 'colleague', many: 'colleagues', castLabel: 'COLLEAGUE', hint: 'Walk with WASD / arrows. Press E next to a colleague or a piece of evidence.', oneWithArticle: 'a colleague', investigator: 'detective', icon: '<path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm4.5 10.5L20 20"/>' },
+  art: { cast: '', idle: '', walk: '', props: '' },
+  palette: { ground: '#1b1714', label: '#2b2320', labelBg: '#f6efe4' },
+  slots: [{ x: 150, y: 286 }, { x: 330, y: 296 }, { x: 100, y: 214 }, { x: 280, y: 240 }, { x: 365, y: 214 }],
+  figures: {
+    base: '/assets/department/characters',
+    props: '/assets/department/props',
+    sprites: { freja: 'phd-01', mikkel: 'phd-02', birgit: 'professor', jonas: 'it-admin', signe: 'department-admin' },
+    detective: 'player',
+    frame: { w: 192, h: 384 },
+    anchor: { x: 96, y: 376 },
+    scale: 1 / 6,
+    density: 3,
+    labelLift: 68,
+  },
+  backdrop: { url: '/assets/department/department-hall.png', width: 1536, height: 1024, scale: 1 / 3, x: -16, y: 0, fill: '#1b1714' },
+  walk: {
+    bounds: { x: 40, y: 188, w: 396, h: 138 },
+    blocks: [{ x: -16, y: 150, w: 82, h: 62 }, { x: -16, y: 200, w: 74, h: 100 }, { x: -16, y: 282, w: 104, h: 60 }, { x: 386, y: 272, w: 80, h: 70 }, { x: 422, y: 150, w: 80, h: 112 }],
+  },
+  stops: { report: { x: 216, y: 296 }, briefing: { x: 240, y: 320 } },
+  evidence: [
+    { id: 'coffee-mug', x: 62, y: 222 }, { id: 'usb-drive', x: 64, y: 262 }, { id: 'torn-document', x: 160, y: 206 }, { id: 'server-tower', x: 218, y: 200 },
+    { id: 'access-card', x: 250, y: 214 }, { id: 'cracked-phone', x: 300, y: 192 }, { id: 'laptop', x: 408, y: 262 }, { id: 'keys', x: 372, y: 318 },
+  ],
+};
+
+const packs: Record<string, WorldPack> = { grove, tower, friends, factory, department };
 
 export function worldFor(id: string | undefined): WorldPack {
   return (id !== undefined && Object.hasOwn(packs, id) ? packs[id] : grove) as WorldPack;

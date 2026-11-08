@@ -1,0 +1,30 @@
+/* Department theme: warm wood and teal, colours only. */
+#app[data-world="department"] .hud-panel { background: #2a2118; border-color: #d9a441; color: #f3e9d2; }
+#app[data-world="department"] .hud-scrim { background: linear-gradient(#1b140ECC, #1b140E00); }
+#app[data-world="department"] .hud-rail .cast-card { background: #2a2118; border-color: #3f8f8a; color: #f3e9d2; }
+#app[data-world="department"] .hud-rail .cast-card.active, #app[data-world="department"] .hud-rail .cast-card.talking { border-color: #d9a441; }
+#app[data-world="department"] .hud-rail .cast-card small { color: #cbbd9f; }
+
+/* Evidence page */
+.evidence-content { display: flex; flex-direction: column; gap: 10px; }
+.evidence-list { display: flex; flex-direction: column; gap: 10px; }
+.evidence-card { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 2px solid #3f8f8a; border-radius: 6px; background: #1d1711; color: #f3e9d2; }
+.evidence-card h3 { margin: 0 0 4px; font-size: 15px; }
+.evidence-card p { margin: 0; font-size: 14px; line-height: 1.45; }
+.evidence-card.focus { border-color: #d9a441; background: #fff6de; color: #18252d; box-shadow: 0 0 0 2px #f4b740; }
+.evidence-prop { flex: none; width: 48px; height: 48px; object-fit: contain; image-rendering: pixelated; }
+.evidence-empty { padding: 12px 0; }
+
+/* Evidence nav button icon */
+.evidence-nav .evidence-icon { display: block; width: 100%; height: 100%; background: url('/assets/department/props/evidence-bag.png') center / contain no-repeat; image-rendering: pixelated; }
+
+/* Faces: the head of each person's 192x384 listening pose, cropped to a square (--hs source px at x, y), measured from the opaque pixels. */
+html [data-world="department"] .monkey-face, html .monkey-line[data-world="department"] .monkey-face, html [data-world="department"] .portrait .pixel-person { background-repeat: no-repeat !important; image-rendering: pixelated; }
+html [data-world="department"] .monkey-face, html .monkey-line[data-world="department"] .monkey-face { --fc: var(--cell, 44px); }
+html [data-world="department"] .portrait .pixel-person { --fc: 76px; }
+
+html [data-world="department"] .monkey-face.freja, html .monkey-line[data-world="department"] .monkey-face.freja, html [data-world="department"] .portrait.freja .pixel-person { background-image: url('/assets/department/characters/phd-01-listening.png') !important; background-size: calc(var(--fc) * 192 / 112) calc(var(--fc) * 384 / 112) !important; background-position: calc(var(--fc) * -35 / 112) calc(var(--fc) * -72 / 112) !important; }
+html [data-world="department"] .monkey-face.mikkel, html .monkey-line[data-world="department"] .monkey-face.mikkel, html [data-world="department"] .portrait.mikkel .pixel-person { background-image: url('/assets/department/characters/phd-02-listening.png') !important; background-size: calc(var(--fc) * 192 / 92) calc(var(--fc) * 384 / 92) !important; background-position: calc(var(--fc) * -50 / 92) calc(var(--fc) * -58 / 92) !important; }
+html [data-world="department"] .monkey-face.birgit, html .monkey-line[data-world="department"] .monkey-face.birgit, html [data-world="department"] .portrait.birgit .pixel-person { background-image: url('/assets/department/characters/professor-listening.png') !important; background-size: calc(var(--fc) * 192 / 100) calc(var(--fc) * 384 / 100) !important; background-position: calc(var(--fc) * -40 / 100) calc(var(--fc) * -57 / 100) !important; }
+html [data-world="department"] .monkey-face.jonas, html .monkey-line[data-world="department"] .monkey-face.jonas, html [data-world="department"] .portrait.jonas .pixel-person { background-image: url('/assets/department/characters/it-admin-listening.png') !important; background-size: calc(var(--fc) * 192 / 90) calc(var(--fc) * 384 / 90) !important; background-position: calc(var(--fc) * -49 / 90) calc(var(--fc) * -66 / 90) !important; }
+html [data-world="department"] .monkey-face.signe, html .monkey-line[data-world="department"] .monkey-face.signe, html [data-world="department"] .portrait.signe .pixel-person { background-image: url('/assets/department/characters/department-admin-listening.png') !important; background-size: calc(var(--fc) * 192 / 100) calc(var(--fc) * 384 / 100) !important; background-position: calc(var(--fc) * -38 / 100) calc(var(--fc) * -40 / 100) !important; }

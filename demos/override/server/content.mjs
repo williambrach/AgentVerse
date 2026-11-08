@@ -6,6 +6,7 @@ import { worlds as liveWorlds } from './worlds.mjs';
 
 const MAX_TEXT = 2000;
 const PART_FIELDS = ['label', 'introduction', 'quickQuestion', 'knowledge', 'finding.classification', 'finding.explanation'];
+const OVERRIDDEN = ['label', 'introduction', 'quickQuestion'];
 const LISTS = new Set(['prompt.use', 'prompt.avoid']);
 
 export class ContentError extends Error {
@@ -18,12 +19,15 @@ export class ContentError extends Error {
 }
 
 export function editablePaths(kase) {
+  // A part label, introduction or quick question that every character overrides is never shown, so it is not offered.
+  // Character knowledge is added to the part's, not a replacement, so part knowledge stays editable.
+  const shown = PART_FIELDS.filter(f => !OVERRIDDEN.includes(f) || !kase.characters.every(c => c[f] !== undefined));
   return [
     'copy.headline', 'copy.intro.lead', 'copy.intro.body',
     'copy.briefing.title', 'copy.briefing.description', 'copy.briefing.question', 'copy.briefing.hint',
     'copy.report.title', 'copy.report.description',
     'prompt.setting', 'prompt.use', 'prompt.avoid',
-    ...kase.parts.flatMap(p => PART_FIELDS.map(f => `parts.${p.id}.${f}`)),
+    ...kase.parts.flatMap(p => shown.map(f => `parts.${p.id}.${f}`)),
     'debrief.title', 'debrief.summary', 'debrief.lesson',
     'answer.feedback.correct', 'answer.feedback.other',
   ];

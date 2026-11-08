@@ -40,7 +40,7 @@ test('factory_world_frame', () => {
 });
 
 test('registered_last_with_cast', () => {
-  assert.equal(cases.at(-1).id, 'factory-escape');
+  assert.equal(cases.find(c => c.id === 'factory-escape'), factory);
   assert.equal(factory.order, 4);
   assert.deepEqual(factory.characters.map(c => c.id), ['marta', 'ama', 'vera', 'theo', 'bruno']);
   assert.deepEqual(factory.parts.map(p => p.role), ['escaper', 'believer', 'neutral', 'neutral', 'neutral']);

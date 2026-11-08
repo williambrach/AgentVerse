@@ -6,13 +6,14 @@ import { sliceAtlas, type Frame } from './atlas';
 import { placeholderAtlas, ATLAS_DIMS } from './placeholder-art';
 import { worldFor, type WorldPack } from './worlds';
 import * as factoryFigures from './factory-figures';
+import { evidenceKey, type EvidenceMark } from './hall-layout';
 import type { Pose } from './factory-figures';
 import { hueShift, faceSheetPlan, SHEET_CAST } from './recolor';
 import { BUBBLE_WIDTH, placeBubble } from './bubble-layout';
 import { stageLayout, COMPACT_QUERY, RAIL, WORLD_WIDTH, WORLD_HEIGHT, type StageLayout } from './stage-layout';
 
 type Point = { x: number; y: number };
-type Stop = Point & { title: string; label: string };
+type Stop = Point & { title: string; label: string; bare?: boolean };
 type ArtKind = 'cast' | 'idle' | 'walk' | 'props';
 export type ArtSource = 'file' | 'placeholder';
 const artKinds: ArtKind[] = ['cast', 'idle', 'walk', 'props'];
@@ -21,12 +22,14 @@ const groveCast: Character[] = ['Momo', 'Pip', 'Nori'].map((name, i) => ({
   id: name.toLowerCase(), name, role: '', room: '', color: groveColors[i], introduction: '', quickQuestion: '',
 }));
 
-function buildStops(world: WorldPack, cast: Character[]): Record<string, Stop> {
+function buildStops(world: WorldPack, cast: Character[], marks: Map<string, EvidenceMark> = new Map()): Record<string, Stop> {
   const stops: Record<string, Stop> = {
     report: { ...(world.stops?.report ?? { x: 132, y: 276 }), title: 'Pick the roles', label: 'YOUR GUESS' },
     briefing: { ...(world.stops?.briefing ?? { x: 244, y: 276 }), title: 'Read the case', label: 'START HERE' },
   };
   cast.forEach((c, slot) => { stops[c.id] = { ...world.slots[slot], title: `Ask ${c.name}`, label: c.name.toUpperCase() }; });
+  // Evidence spots are stops too: no name tag, the [E] prompt sits just above the item.
+  world.evidence?.forEach(e => { stops[evidenceKey(e.id)] = { x: e.x, y: e.y, title: `Examine ${marks.get(e.id)?.title ?? e.id}`, label: '', bare: true }; });
   return stops;
 }
 const keyOf = (world: WorldPack, cast: Character[]) => `${world.id}|${cast.map(c => c.id).join(',')}`;
@@ -115,6 +118,9 @@ export class Station extends Phaser.Scene {
   private speakingId: string | null = null;
   private speakTimer?: ReturnType<typeof setTimeout>;
   private facing = false;
+  // Evidence marks (title, examined) as last told by the page; kept before create and across rebuilds.
+  private marks = new Map<string, EvidenceMark>();
+  private markers = new Map<string, Phaser.GameObjects.Image>();
 
   constructor(onArrival: (location: LocationId) => void, onHint: (hint: string) => void, onWalk: () => void = () => {}) {
     super('banana-grove');
@@ -135,6 +141,20 @@ export class Station extends Phaser.Scene {
     if (d !== 1) this.cameras?.main?.setOrigin(0, 0).setZoom(d);
     this.cameras?.main?.setScroll(-offsetX, -offsetY);
     this.syncOverlay();
+    this.fitPrompt();
+  }
+
+  /** Backdrop worlds: slide the shown [E] prompt sideways so it stays clear of the left rail and inside the canvas. */
+  private fitPrompt() {
+    const el = this.prompt;
+    if (!this.world.backdrop || !el || el.hidden) return;
+    el.style.marginLeft = '0px';
+    const box = el.getBoundingClientRect(), canvas = this.game.canvas.getBoundingClientRect();
+    const rail = document.querySelector('.hud-rail')?.getBoundingClientRect();
+    let shift = 0;
+    if (rail && rail.right > box.left && rail.left < box.right && rail.top < box.bottom && rail.bottom > box.top) shift = rail.right + 4 - box.left;
+    if (box.right + shift > canvas.right) shift = Math.min(shift, 0) + Math.min(0, canvas.right - box.right);
+    el.style.marginLeft = `${shift}px`;
   }
 
   /** Canvas pixels per world unit: 1 for grove and tower, the pack's density for a factory. */
@@ -159,7 +179,8 @@ export class Station extends Phaser.Scene {
     this.builtKey = keyOf(this.world, this.cast);
     this.overlay?.replaceChildren();
     this.labels = new Map();
-    this.stops = buildStops(this.world, this.cast);
+    this.stops = buildStops(this.world, this.cast, this.marks);
+    this.markers = new Map();
     this.created = false;
     this.npcs = new Map();
     this.player = undefined as unknown as Phaser.Physics.Arcade.Image;
@@ -181,6 +202,12 @@ export class Station extends Phaser.Scene {
         for (const pose of poses) this.load.image(figureKey(sprite, pose), factoryFigures.poseUrl(art, sprite, pose));
       }
       this.world.floor?.props.forEach(p => this.load.image(`factory-prop-${p.id}`, factoryFigures.propUrl(art, p.id)));
+      const back = this.world.backdrop;
+      if (back) {
+        this.load.image(`${this.world.id}-backdrop`, back.url);
+        for (const name of ['evidence-marker', 'case-folder', 'notebook']) this.load.image(`${this.world.id}-${name}`, factoryFigures.propUrl(art, name));
+        this.world.evidence?.forEach(e => this.load.image(`${this.world.id}-evidence-${e.id}`, factoryFigures.propUrl(art, e.id)));
+      }
       return;
     }
     // A missing file (404, or HTML served by the dev server) fails the load and leaves no
@@ -336,7 +363,13 @@ export class Station extends Phaser.Scene {
       foot.fillStyle(0xffffff).fillRect(0, 0, 12, 8).generateTexture('feet', 12, 8);
       foot.destroy();
     }
-    this.physics.world.setBounds(32, 76, width - 64, height - 104);
+    const bounds = this.world.walk?.bounds;
+    if (bounds) this.physics.world.setBounds(bounds.x, bounds.y, bounds.w, bounds.h);
+    else this.physics.world.setBounds(32, 76, width - 64, height - 104);
+    const blocks = (this.world.walk?.blocks ?? []).map(b => {
+      const block = this.physics.add.staticImage(b.x + b.w / 2, b.y + b.h / 2, 'feet').setVisible(false).setDisplaySize(b.w, b.h).refreshBody();
+      return block;
+    });
     this.cast.forEach((member, slot) => {
       const id = member.id;
       const p = this.stops[id];
@@ -368,6 +401,7 @@ export class Station extends Phaser.Scene {
     this.player = this.physics.add.image(this.stops.briefing.x, this.stops.briefing.y, 'feet').setVisible(false).setCollideWorldBounds(true);
     this.lastX = this.player.x; this.lastY = this.player.y; this.moving = false;
     this.cast.forEach(({ id }) => { const p = this.stops[id]; const feet = this.physics.add.staticImage(p.x, p.y - (art ? 4 : 12), 'feet').setVisible(false); this.physics.add.collider(this.player, feet); });
+    blocks.forEach(b => this.physics.add.collider(this.player, b));
     this.shadowDepth = NaN;
     this.shadow = this.add.ellipse(this.player.x, this.player.y + 1, 22, 6, 0x314c34, .22);
     if (art) this.addDetective(art);
@@ -378,6 +412,8 @@ export class Station extends Phaser.Scene {
     }
     (['briefing', 'report'] as const).forEach(id => {
       const p = this.stops[id];
+      // Backdrop worlds put both tags at name-tag height, so the [E] prompt replaces them like a character's.
+      if (this.world.backdrop) { this.labels.set(id, this.label(p.x, p.y - this.lift(), p.label)); return; }
       if (id === 'briefing') { this.labels.set(id, this.label(p.x, p.y + 33, p.label)); return; }
       const size = 38;
       if (!art) this.prop(keys.props, 'board', p.x, p.y - 15, size).setDepth(p.y - 20);
@@ -409,9 +445,41 @@ export class Station extends Phaser.Scene {
   private drawFactory() {
     const art = this.world.figures!;
     this.add.rectangle(-400, -300, 1280, 940, Phaser.Display.Color.HexStringToColor(this.world.palette.ground).color).setOrigin(0, 0).setDepth(-10);
+    const back = this.world.backdrop;
+    if (back) { this.drawBackdrop(art, back); return; }
     this.add.rectangle(0, 0, width, height, 0xffffff, .06).setOrigin(0, 0).setDepth(0);
     this.world.floor?.props.forEach(p => this.add.image(p.x, p.y, `factory-prop-${p.id}`).setOrigin(.5, 1).setScale(art.scale).setDepth(p.y));
     (['briefing', 'report'] as const).forEach(id => this.add.ellipse(this.stops[id].x, this.stops[id].y, 30, 9, 0xffffff, .14).setDepth(1));
+  }
+
+  /** A painted hall: the fill beyond the image, the image lowest, then the desk props and the evidence items with their markers. */
+  private drawBackdrop(art: NonNullable<WorldPack['figures']>, back: NonNullable<WorldPack['backdrop']>) {
+    const id = this.world.id;
+    this.add.rectangle(-400, -300, 1280, 940, Phaser.Display.Color.HexStringToColor(back.fill).color).setOrigin(0, 0).setDepth(-9);
+    this.add.image(back.x, back.y, `${id}-backdrop`).setOrigin(0, 0).setScale(back.scale).setDepth(-8);
+    const prop = (name: string, x: number, y: number, scale: number) => this.add.image(x, y, `${id}-${name}`).setOrigin(.5, 1).setScale(scale).setDepth(y);
+    prop('case-folder', this.stops.briefing.x, this.stops.briefing.y, 1 / 12);
+    prop('notebook', this.stops.report.x, this.stops.report.y, 1 / 12);
+    this.world.evidence?.forEach(e => {
+      const item = prop(`evidence-${e.id}`, e.x, e.y, 1 / 12);
+      const mark = prop('evidence-marker', e.x + item.displayWidth / 2 + 4, e.y, 1 / 24);
+      mark.setVisible(!this.marks.get(e.id)?.examined);
+      this.markers.set(e.id, mark);
+    });
+  }
+
+  /** The page's evidence marks: titles for the stops, no marker on examined items. The scene is not rebuilt. */
+  evidence(items: EvidenceMark[]) {
+    this.marks = new Map(items.map(m => [m.id, m]));
+    this.world.evidence?.forEach(e => {
+      const stop = this.stops[evidenceKey(e.id)];
+      if (stop) stop.title = `Examine ${this.marks.get(e.id)?.title ?? e.id}`;
+      this.markers.get(e.id)?.setVisible(!this.marks.get(e.id)?.examined);
+    });
+    this.currentHint = '';
+    // The prompt is cached per stop: a title that arrives while the detective stands at the item must reach it too.
+    const prompt = this.prompt, shownStop = prompt && !prompt.hidden ? this.stops[this.promptKey] : undefined;
+    if (prompt && shownStop?.bare) prompt.textContent = `[E] ${shownStop.title}`;
   }
 
   private figureImage(art: NonNullable<WorldPack['figures']>, sprite: string, pose: Pose, x: number, y: number) {
@@ -668,11 +736,19 @@ export class Station extends Phaser.Scene {
     overlay.style.setProperty('--u', `${scale}px`);
   }
   private typing() { return Boolean(document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')); }
-  setEnabled(enabled: boolean) { this.enabled = enabled; }
+  setEnabled(enabled: boolean) { this.enabled = enabled; if (!enabled) this.hidePrompt(); }
+  /** Backdrop worlds: hide the [E] prompt and restore the tag it replaced; the next update shows it again. */
+  private hidePrompt() {
+    if (!this.world.backdrop || !this.prompt) return;
+    this.labels.get(this.promptKey)?.style.removeProperty('visibility');
+    this.prompt.hidden = true;
+    this.promptKey = '';
+  }
   /** True while a cover (intro, overlay, lineup) hides the stage: poses snap to 0 and the render loop sleeps after one more frame. */
   setCovered(covered: boolean): void {
     this.covered = covered;
     if (covered) {
+      this.hidePrompt();
       if (!this.created) return; // create() applies it after its first render
       this.npcs.forEach(npc => npc.reset());
       if (this.player) this.walk?.reset(this.player.x, this.player.y);
@@ -739,13 +815,14 @@ export class Station extends Phaser.Scene {
       this.labels.get(this.promptKey)?.style.removeProperty('visibility');
       this.promptKey = promptKey;
       this.prompt.hidden = !shown;
-      const tag = shown ? this.labels.get(promptKey) : undefined;
+      const tag = shown && !near![1].bare ? this.labels.get(promptKey) : undefined;
       if (shown) {
         const p = near![1];
         this.prompt.textContent = `[E] ${p.title}`;
         this.prompt.style.left = tag?.style.left ?? `${p.x / width * 100}%`;
         this.prompt.style.top = tag?.style.top ?? `${(p.y - this.lift()) / height * 100}%`;
         tag?.style.setProperty('visibility', 'hidden');
+        this.fitPrompt();
       }
     }
     if (near && this.enabled && !this.typing() && (Phaser.Input.Keyboard.JustDown(this.keys.E) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE))) this.onArrival(near[0]);

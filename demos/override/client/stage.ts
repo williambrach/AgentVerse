@@ -1,4 +1,5 @@
 import type { WorldPack } from './worlds.ts';
+import type { EvidenceMark } from './hall-layout.ts';
 import type { Character, Pose } from './types.ts';
 
 export type StageName = 'station' | 'roundtable';
@@ -14,6 +15,7 @@ export interface StageScene {
   speak?(id: string, text: string): void;
   detective?(pose: Pose): void;
   escape?(id: string): Promise<void>;
+  evidence?(items: EvidenceMark[]): void;
 }
 
 export interface TableScene extends StageScene {
@@ -26,6 +28,7 @@ export interface Stage extends TableScene {
   readonly active: StageName | null;
   detective(pose: Pose): void;
   escape(id: string): Promise<void>;
+  evidence(items: EvidenceMark[]): void;
 }
 
 export interface StageDeps {
@@ -75,6 +78,7 @@ export function createStage(deps: StageDeps): Stage {
     think(id) { live()?.think?.(id); },
     speak(id, text) { live()?.speak?.(id, text); },
     detective(pose) { live()?.detective?.(pose); },
+    evidence(items) { live()?.evidence?.(items); },
     escape(id) { return live()?.escape?.(id) ?? Promise.resolve(); },
   };
 }
