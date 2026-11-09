@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { worlds as liveWorlds } from './worlds.mjs';
 import { ROLES, ROLE_IDS } from './roles.mjs';
+import { checkTalk } from './talk.mjs';
 
 const PART_ID = /^[a-z][a-z0-9]{1,15}$/;
 const COPY_SHAPE = { headline: null, intro: ['lead', 'body'], briefing: ['title', 'description', 'question', 'hint'], report: ['title', 'description'] };
@@ -87,6 +88,7 @@ export function defineCase(data, { worlds = liveWorlds } = {}) {
       str(c[k], `characters[${i}].${k}`);
       if (c[k].includes('{')) fail(`characters[${i}].${k}`, 'must not contain a placeholder');
     }
+    if (c.reveal !== undefined) { str(c.reveal, `characters[${i}].reveal`); if (c.reveal.includes('{')) fail(`characters[${i}].reveal`, 'must not contain a placeholder'); }
     if (c.knowledge === undefined) return;
     if (!Array.isArray(c.knowledge) || !c.knowledge.length) fail(`characters[${i}].knowledge`, 'must be a non-empty array of non-empty strings');
     c.knowledge.forEach((k, n) => { str(k, `characters[${i}].knowledge[${n}]`); if (k.includes('{')) fail(`characters[${i}].knowledge[${n}]`, 'must not contain a placeholder'); });
@@ -136,6 +138,16 @@ export function defineCase(data, { worlds = liveWorlds } = {}) {
     text(d.escape?.title, 'deadline.escape.title');
     text(d.escape?.summary, 'deadline.escape.summary');
     if (d.escape.feedback !== undefined) text(d.escape.feedback, 'deadline.escape.feedback');
+  }
+  if (data.tools !== undefined) {
+    if (!data.tools || typeof data.tools !== 'object' || Array.isArray(data.tools)) fail('tools', 'must be an object');
+    for (const [k, v] of Object.entries(data.tools)) {
+      if (!['inspect', 'talk'].includes(k)) fail(`tools.${k}`, 'must be inspect or talk');
+      if (typeof v !== 'boolean') fail(`tools.${k}`, 'must be a boolean');
+    }
+  }
+  if (data.talk !== undefined) {
+    try { checkTalk(data); } catch (e) { throw new Error(`case ${id}: ${e.message}`); }
   }
   if (typeof data.rehearsal !== 'function') fail('rehearsal', 'must be a function');
   return deepFreeze({ ...clone(data), world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...toolsOf(data, fail), contentHash: contentHash(data) });
@@ -196,6 +208,8 @@ export function publicView(kase, cast) {
     world: (({ persona, frame, memory, clueSpot, agents, ...rest }) => ({ ...rest, agents, cast: { ...rest.cast } }))(kase.world),
     characters: castCharacters(kase, cast),
     ...(kase.evidence ? { evidence: kase.evidence.map(({ id, title }) => ({ id, title })) } : {}),
+    ...(kase.talk ? { talk: { topics: kase.talk.topics.map(({ id, label, question }) => ({ id, label, question })) } } : {}),
+    ...(kase.tools ? { tools: { ...kase.tools } } : {}),
   };
 }
 

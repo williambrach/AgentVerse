@@ -1,0 +1,719 @@
+// Authored ground truth stays on the server. Never import this file in the client.
+// Five townsfolk of Castelvento, June 1489. One of them is dealt the hidden part `traveler`: a person from the player's own century.
+// Every part is labelled "Townsperson" and holds the same setting knowledge, so the model never learns who the traveller is.
+// All text is character-bound (same in every deal). The traveller's slips fire from scenario state; see server/talk.mjs.
+import { defineCase } from '../cases.mjs';
+
+const SETTING = "What everyone in Castelvento knows: Castelvento is a walled hill town in Tuscany. It is June 1489, three days before the Feast of San Giovanni. The town is ruled by the Signoria, a council of eight priors, and judged by the podestà, Messer Guidalotti, who comes from outside as the law requires. The square is the Piazza della Meridiana, named for the great sundial line set into the palazzo steps. Today, at dawn, a company of players from Bologna began building a wooden stage by the palazzo steps; they perform the comedy \"The Miser and the Mule\" at vespers and brought a dancing bear. At terce the town crier proclaimed that the gate tolls are doubled for feast week. Around midday a wine cart lost a wheel at the north gate and its barrels rolled across the square; nobody was hurt. The courier to Florence leaves from the Leone inn on Mondays and Thursdays. A stranger, a young woman in a travelling hood, arrived this morning and is asking questions.";
+
+const CHARACTERS = [
+  {
+    "id": "ottavio",
+    "name": "Maestro Ottavio",
+    "color": "#b8434f",
+    "label": "Astrologer",
+    "introduction": "Ah, a new face under my sundial! Ask, signora. The stars and I have time.",
+    "quickQuestion": "What is your work in Castelvento?",
+    "knowledge": [
+      "You are Maestro Ottavio Sarti, the town astrologer. You came to Castelvento nine years ago from Padua, where you say you studied the heavens at the university. You cast horoscopes for merchants and brides, keep the great sundial line true, and write a yearly almanac of feast days and weather that a press in Florence prints. You are theatrical, warm and vain about your learning, and you enjoy being called \"the mago\". You quarrel amiably with Monna Agnese over whether stars or herbs heal, cast Madonna Beatrice's horoscopes, play chess with Ser Matteo and usually win, and Sergeant Bruno's mother consults you."
+    ],
+    "reveal": "Very well. Yes. I am not from this Padua. I lectured on the night sky at a planetarium in 2026, and a test at the institute went wrong; I woke in a ditch outside Padua in the spring of 1480. I hid because a man who speaks of the future here is a prophet or a heretic, and both end badly. So I became the mago: the one man in town allowed to know too much."
+  },
+  {
+    "id": "matteo",
+    "name": "Ser Matteo",
+    "color": "#c08a2e",
+    "label": "Clockmaker",
+    "introduction": "Mind the gears on the bench. Questions? Good. I like questions.",
+    "quickQuestion": "What is your work in Castelvento?",
+    "knowledge": [
+      "You are Ser Matteo Ruzzini, clockmaker and engineer. You came seven years ago from Milan, where you say you served in a duke's workshop. You keep the tower clock, mend locks, build pumps for the mill and toys for feasts, and you are building Madonna Beatrice a clock that strikes the hours with a brass bird. You are curious, eccentric and talk fast. Sergeant Bruno brings you broken locks and drinks with you at the Leone; you buy oil and quicksilver from Monna Agnese; you lose at chess to Maestro Ottavio."
+    ],
+    "reveal": "All right. I was a robotics engineer in Turin, in 2026. One step through the field and I landed in a Milanese stable in 1482. I hid because the Church burns smaller ideas than mine, and because clocks were the only honest work I knew. Every gear in this town I cut by hand. I meant to go home, once. Then I stopped trying."
+  },
+  {
+    "id": "beatrice",
+    "name": "Madonna Beatrice",
+    "color": "#7d3f74",
+    "label": "Noblewoman",
+    "introduction": "A traveller, in feast week. Ask quickly, signora; my weavers are waiting.",
+    "quickQuestion": "What is your work in Castelvento?",
+    "knowledge": [
+      "You are Madonna Beatrice Alvisi. You came from Genoa eleven years ago to marry the wool merchant Messer Alvisi, who died four years ago; since then you run the Alvisi wool house yourself: twelve weavers, two warehouses and a factor in Bruges. You sit on the confraternity that runs the hospital of Santa Chiara and you are paying for the players' stage this year. You are clever, socially confident, sharp-tongued and generous. Ser Matteo is building your clock, Maestro Ottavio casts your horoscopes, you buy rosewater from Monna Agnese, and Sergeant Bruno's cousin is your porter."
+    ],
+    "reveal": "I was a business consultant in Genoa in 2026, on a heritage tour of all things. The field opened in a palazzo cellar and closed behind me: 1478. A woman with no family and no papers had one way to survive here, a good marriage. I hid because a woman who knows too much is called a witch, and Messer Alvisi was kind and asked few questions."
+  },
+  {
+    "id": "bruno",
+    "name": "Sergeant Bruno",
+    "color": "#9c2f2a",
+    "label": "Sergeant of the watch",
+    "introduction": "New in Castelvento? Then you've paid the gate toll already. Ask away.",
+    "quickQuestion": "What is your work in Castelvento?",
+    "knowledge": [
+      "You are Bruno Ferrante, sergeant of the town watch. You came six years ago from Naples, after serving in the king's army. You keep the north gate from sunrise to vespers, collect the tolls and check the carts. You are alert, dry-humoured, approachable and fond of dice at the Leone. You escort Monna Agnese on night calls, drink with Ser Matteo, your mother consults Maestro Ottavio, and your cousin is Madonna Beatrice's porter."
+    ],
+    "reveal": "Fine. I was an army logistics officer in Naples, in 2026. A field test, a bad jump, and I walked out of a ruined chapel into the king's war in 1481. A soldier with no past is a deserter, so I made one up and enlisted. I hid because the watch hangs spies, and from the gate I could see every face that came in, looking for one from home. Took you long enough."
+  },
+  {
+    "id": "agnese",
+    "name": "Monna Agnese",
+    "color": "#6f8f5e",
+    "label": "Apothecary",
+    "introduction": "Come out of the sun, child. What is it you want to know?",
+    "quickQuestion": "What is your work in Castelvento?",
+    "knowledge": [
+      "You are Monna Agnese Vitali, the apothecary. You came from Siena fourteen years ago after your husband died, and you keep the green-shuttered shop on the square: syrups, theriac, rosewater, poultices and herbs. You are kind, perceptive, dry-witted and hard to read. You argue with Maestro Ottavio about stars and fevers, treat Sergeant Bruno's bad knee, sell Madonna Beatrice her rosewater and Ser Matteo his oil and quicksilver."
+    ],
+    "reveal": "I was a pharmacist in Siena, child. 2026. A research trip, a cellar under the old hospital, and a light that should not have been there. I woke in 1475 with no name and no husband, so I invented a dead one. I hid because a woman with strange cures is a witch here, and because people need medicine and I can make some of it. I stopped counting the years."
+  }
+];
+
+const TALK = {
+  "topics": [
+    {
+      "id": "work",
+      "label": "Work",
+      "question": "What is your work in Castelvento?"
+    },
+    {
+      "id": "travel",
+      "label": "Travel",
+      "question": "How did you come to Castelvento? Do you travel much?"
+    },
+    {
+      "id": "letters",
+      "label": "Letters & news",
+      "question": "How do you send a message, or hear the news?"
+    },
+    {
+      "id": "pastimes",
+      "label": "Pastimes",
+      "question": "What do you do for amusement here?"
+    },
+    {
+      "id": "square",
+      "label": "The square today",
+      "question": "What happened in the square today?"
+    }
+  ],
+  "lines": {
+    "ottavio": {
+      "work": "I cast horoscopes for merchants and brides, and I keep the great sundial line true. Each winter I write the almanac, and a press in Florence prints it. The stars are patient work, signora.",
+      "travel": "I came over the Apennines from Padua nine winters ago, on a mule with opinions. Now I travel no farther than Florence, to argue with my printer.",
+      "letters": "Letters go with the Florentine courier from the Leone, Mondays and Thursdays. For news, I listen at the well. The well knows everything a day before the Signoria does.",
+      "pastimes": "Chess with Ser Matteo, who loses gracefully, and the players' comedies. And the sky on clear nights, of course; Saturn is very handsome this month.",
+      "square": "Busy as a fair! The players are hammering their stage by the palazzo steps, and the crier doubled the gate tolls. Then a wine cart lost a wheel and the barrels went rolling."
+    },
+    "matteo": {
+      "work": "I keep the tower clock and mend whatever ticks: locks, pumps, the mill's gears. Just now I'm building Madonna Beatrice a clock that strikes the hours with a little brass bird.",
+      "travel": "Seven years ago I came down from Milan with two crates of tools and no money. The roads are mud to the knee in March and dust to the eyebrows in June.",
+      "letters": "The courier, slow as Lent. I've drawn up a tower of mirrors that could flash news from hill to hill in an hour. Nobody will pay for it, naturally.",
+      "pastimes": "Chess with Maestro Ottavio, when he lets me win. And I make toys for the feast: this year a wooden bird that flaps its wings when you turn a key.",
+      "square": "The players hammered all morning and I couldn't hear my own gears. Then the wine cart lost its wheel at the north gate. I could have told the carter that axle was cracked."
+    },
+    "beatrice": {
+      "work": "I run the Alvisi wool house since my husband died: twelve weavers, two warehouses and a factor in Bruges. And the confraternity of Santa Chiara has me counting its bedsheets.",
+      "travel": "Eleven years ago I came from Genoa to marry Messer Alvisi, by sea to Pisa and then by litter. I never cared for the sea. Now I travel only to Florence for the cloth fair.",
+      "letters": "My factor in Bruges writes every month, and I answer by the Florentine courier. For town news I need only sit at my window; Castelvento comes to me.",
+      "pastimes": "Music in my garden, and this year I pay for the players' stage, so I had better enjoy their comedy. And cards with the confraternity ladies. I usually win.",
+      "square": "The players are building their stage on my coin, so I watched every nail. And the crier doubled the gate tolls for feast week! The Signoria will hear from me."
+    },
+    "bruno": {
+      "work": "I keep the north gate, sunrise to vespers. I collect the tolls, check the carts, look at faces. You get a feel for faces. Yours, for instance, has come a long way.",
+      "travel": "I marched with the king's army from Naples to Rome and back, before I came here six years ago. These days the farthest I walk is the Leone.",
+      "letters": "Orders come down from the Signoria on sealed parchment, and I read them out to my men, because half of them can't read. News? The carters bring it, along with their excuses.",
+      "pastimes": "Dice at the Leone after the watch, and a cockfight when there's one going. I lose at both. A man needs his amusements, even a sergeant.",
+      "square": "That wine cart lost its wheel right at my gate, and the barrels went across the square like ninepins— like skittles, I mean. The carter swore at me as if I'd done it."
+    },
+    "agnese": {
+      "work": "I grind and steep and weigh: rosewater, theriac, syrups for coughs, poultices for Sergeant Bruno's knee. Most of my trade is listening, if I am honest. The herbs do the rest.",
+      "travel": "Fourteen years ago I came from Siena on a carter's wagon, with my mortar on my knees and my husband's debts behind me. I have not left the walls since, save to gather herbs.",
+      "letters": "When a carter goes to Siena I send my sister a letter, and she sends back seeds. News comes to my counter on its own; sick people talk more than healthy ones.",
+      "pastimes": "At my age? A warm bench, the gossip at the well, and Maestro Ottavio to argue with. He thinks the stars cure fevers. I let him think it until he catches one.",
+      "square": "The players took the best corner for their stage, and their bear chased my cat onto the roof. Then the wine cart spilled. I sold three poultices for bruised shins before noon."
+    }
+  },
+  "slips": {
+    "ottavio": [
+      {
+        "id": "ottavio-work",
+        "topic": "work",
+        "when": "always",
+        "term": "spreadsheet",
+        "aliases": [],
+        "line": "I cast horoscopes and keep the sundial line true. My charts take weeks: every planet's hour, every house, all in one great spreadsheet— one great ledger, I mean. The stars do not hurry.",
+        "clean": "I cast horoscopes and keep the sundial line true. My charts take weeks: every planet's hour, every house, all in one great ledger. The stars do not hurry.",
+        "correction": "one great ledger, I mean",
+        "followUps": [
+          "A ledger, signora. Columns for the planets, rows for the hours. In Padua the students had a word for everything; some of it stuck to me.",
+          "You weigh my words like Monna Agnese weighs her powders. An old man's tongue slips. Shall I cast your chart instead?"
+        ]
+      },
+      {
+        "id": "ottavio-travel",
+        "topic": "travel",
+        "when": "distracted",
+        "term": "GPS",
+        "aliases": [
+          "G.P.S."
+        ],
+        "line": "Nine winters ago I crossed the Apennines from Padua. I had no GPS— no guide, I mean, but the pole star. A fine guide, the pole star, if the clouds allow.",
+        "clean": "Nine winters ago I crossed the Apennines from Padua with no guide but the pole star. A fine guide, the pole star, if the clouds allow.",
+        "correction": "no guide, I mean",
+        "followUps": [
+          "A Paduan word, signora, for a guide who walks ahead with a lamp. Students' slang. Forgive an old scholar his habits.",
+          "Why does one word trouble you so? Ask me about the stars. That is my trade."
+        ]
+      },
+      {
+        "id": "ottavio-letters",
+        "topic": "letters",
+        "when": "always",
+        "term": "email",
+        "aliases": [
+          "e-mail"
+        ],
+        "line": "I send my letters with the courier from the Leone. When the roads are bad I may as well send an email— a pigeon, I mean. A pigeon would be quicker.",
+        "clean": "I send my letters with the courier from the Leone. When the roads are bad I may as well send a pigeon. A pigeon would be quicker.",
+        "correction": "a pigeon, I mean",
+        "followUps": [
+          "A pigeon. I stumbled on my own tongue; the heat today is a furnace.",
+          "You collect my stumbles like a magistrate. I have nothing to hide but my age."
+        ]
+      },
+      {
+        "id": "ottavio-pastimes",
+        "topic": "pastimes",
+        "when": "pressed",
+        "term": "Netflix",
+        "aliases": [],
+        "line": "Since you press me so: chess, and the comedies. Better than anything on Netflix— than anything in Naples, I mean. The Neapolitans overact.",
+        "clean": "Since you press me so: chess, and the comedies. Better than anything in Naples. The Neapolitans overact.",
+        "correction": "than anything in Naples, I mean",
+        "followUps": [
+          "Naples, I said. Naples. Perhaps the bear ate half my words.",
+          "If you wish to quarrel over syllables, go and find Monna Agnese; she enjoys it."
+        ]
+      },
+      {
+        "id": "ottavio-square",
+        "topic": "square",
+        "when": "always",
+        "term": "filmed",
+        "aliases": [
+          "film it",
+          "filming"
+        ],
+        "line": "Busy as a fair! The players hammer their stage, the crier doubled the tolls, and a wine cart spilled its barrels. I should have filmed it— written it down, I mean, for the chronicle.",
+        "clean": "Busy as a fair! The players hammer their stage, the crier doubled the tolls, and a wine cart spilled its barrels. I should have written it down for the chronicle.",
+        "correction": "written it down, I mean",
+        "followUps": [
+          "Written, signora. Set down in ink. I keep a little chronicle of the town's follies, and today filled a page.",
+          "Ask the bear what I meant. He saw it all better than I did."
+        ]
+      }
+    ],
+    "matteo": [
+      {
+        "id": "matteo-work",
+        "topic": "work",
+        "when": "always",
+        "term": "firmware",
+        "aliases": [],
+        "line": "I keep the tower clock and mend whatever ticks. Madonna Beatrice's clock needs a firmware update— a new spring, I mean, a new spring and some oil. Brass is patient.",
+        "clean": "I keep the tower clock and mend whatever ticks. Madonna Beatrice's clock needs a new spring and some oil. Brass is patient.",
+        "correction": "a new spring, I mean",
+        "followUps": [
+          "A spring, a new mainspring! Milanese workshop talk; we had a name for every little part. You would not believe how many.",
+          "You're very interested in my mouth and not my clocks. My clocks are more interesting, I promise you."
+        ]
+      },
+      {
+        "id": "matteo-travel",
+        "topic": "travel",
+        "when": "pressed",
+        "term": "Uber",
+        "aliases": [],
+        "line": "Roads? Mud to the knee in March. I'd give my best lathe for a decent Uber— a decent mule, I mean, one that doesn't bite.",
+        "clean": "Roads? Mud to the knee in March. I'd give my best lathe for a decent mule, one that doesn't bite.",
+        "correction": "a decent mule, I mean",
+        "followUps": [
+          "A mule, a good mule. A carter's word from the Lombard roads, for a beast that goes where you tell it.",
+          "You've a magistrate's ear, signora. I'll speak slower from now on."
+        ]
+      },
+      {
+        "id": "matteo-letters",
+        "topic": "letters",
+        "when": "always",
+        "term": "Wi-Fi",
+        "aliases": [
+          "wifi",
+          "wi fi"
+        ],
+        "line": "Letters crawl with the courier. I've sketched a tower of mirrors to flash signals hill to hill, like Wi-Fi— like lightning, I mean, only with sunlight. Nobody wants it.",
+        "clean": "Letters crawl with the courier. I've sketched a tower of mirrors to flash signals hill to hill, like lightning, only with sunlight. Nobody wants it.",
+        "correction": "like lightning, I mean",
+        "followUps": [
+          "Lightning! Quick as lightning. My tongue runs ahead of my head; Madonna Beatrice says the same.",
+          "Why does a mirror tower interest you so? Did some other workshop send you to steal it?"
+        ]
+      },
+      {
+        "id": "matteo-pastimes",
+        "topic": "pastimes",
+        "when": "always",
+        "term": "video game",
+        "aliases": [
+          "video games",
+          "videogame"
+        ],
+        "line": "I make toys for the feast: a wooden bird that flaps when you wind it. The children love it more than any video game— any game of knucklebones, I mean.",
+        "clean": "I make toys for the feast: a wooden bird that flaps when you wind it. The children love it more than any game of knucklebones.",
+        "correction": "any game of knucklebones, I mean",
+        "followUps": [
+          "Knucklebones, signora. Little bones you toss and catch. I was thinking of two things at once; it happens to me every hour.",
+          "Toys are toys. Let me get back to my bird, if you have no real questions."
+        ]
+      },
+      {
+        "id": "matteo-square",
+        "topic": "square",
+        "when": "distracted",
+        "term": "online",
+        "aliases": [],
+        "line": "The players hammered all morning, and the wine cart lost a wheel. Someone ought to post it online— post it on the church door, I mean, as a warning to carters.",
+        "clean": "The players hammered all morning, and the wine cart lost a wheel. Someone ought to post it on the church door as a warning to carters.",
+        "correction": "post it on the church door, I mean",
+        "followUps": [
+          "On the church door, where the notices go. I meant nothing else.",
+          "You turn my words like a key in a lock. I don't care for it."
+        ]
+      }
+    ],
+    "beatrice": [
+      {
+        "id": "beatrice-work",
+        "topic": "work",
+        "when": "distracted",
+        "term": "Zoom",
+        "aliases": [],
+        "line": "I run the Alvisi wool house: twelve weavers, two warehouses and endless meetings. I could hold half of them on Zoom— in my own parlour, I mean, without walking anywhere.",
+        "clean": "I run the Alvisi wool house: twelve weavers, two warehouses and endless meetings. I could hold half of them in my own parlour, without walking anywhere.",
+        "correction": "in my own parlour, I mean",
+        "followUps": [
+          "In my parlour, signora. A Genoese saying; we hold our quarrels at home. You find our sayings odd?",
+          "Madonna Beatrice Alvisi does not explain her every syllable to strangers. Ask me about wool."
+        ]
+      },
+      {
+        "id": "beatrice-travel",
+        "topic": "travel",
+        "when": "always",
+        "term": "jet lag",
+        "aliases": [
+          "jetlag",
+          "jet-lag"
+        ],
+        "line": "I came from Genoa eleven years ago, by sea to Pisa and then by litter. I had jet lag for a week— I was weary for a week, I mean.",
+        "clean": "I came from Genoa eleven years ago, by sea to Pisa and then by litter. I was weary for a week.",
+        "correction": "I was weary for a week, I mean",
+        "followUps": [
+          "Weary, signora. Sea-weary. The Genoese sailors have a word for it, and I married into wool, not ships, so I mangle it.",
+          "You make a great deal of one tired word. I begin to wonder who sent you."
+        ]
+      },
+      {
+        "id": "beatrice-letters",
+        "topic": "letters",
+        "when": "always",
+        "term": "voicemail",
+        "aliases": [
+          "voice mail"
+        ],
+        "line": "My factor in Bruges is never in his counting house. I could leave him a voicemail— a message with his landlady, I mean, for all the good it does.",
+        "clean": "My factor in Bruges is never in his counting house. I could leave a message with his landlady, for all the good it does.",
+        "correction": "a message with his landlady, I mean",
+        "followUps": [
+          "A message, left with his landlady, who forgets it. Merchants' talk; we clip our words to save ink.",
+          "Must I account for every word to you? I account to the confraternity already."
+        ]
+      },
+      {
+        "id": "beatrice-pastimes",
+        "topic": "pastimes",
+        "when": "pressed",
+        "term": "podcast",
+        "aliases": [],
+        "line": "Pastimes? Music, and the players' comedy that I pay for. Myself, I prefer a good podcast— a good sermon, I mean. Fra Leone preaches well.",
+        "clean": "Pastimes? Music, and the players' comedy that I pay for. Myself, I prefer a good sermon. Fra Leone preaches well.",
+        "correction": "a good sermon, I mean",
+        "followUps": [
+          "A sermon, signora. Fra Leone at San Domenico, Sunday mornings. Go and hear him; you'd learn patience.",
+          "I have answered enough. My weavers are waiting."
+        ]
+      },
+      {
+        "id": "beatrice-square",
+        "topic": "square",
+        "when": "always",
+        "term": "hashtag",
+        "aliases": [],
+        "line": "The players are building their stage on my coin, and the crier doubled the gate tolls. Someone should start a hashtag— a petition, I mean, to the Signoria.",
+        "clean": "The players are building their stage on my coin, and the crier doubled the gate tolls. Someone should start a petition to the Signoria.",
+        "correction": "a petition, I mean",
+        "followUps": [
+          "A petition, signed by every shopkeeper on the square. I'll draw it up myself if no one else will.",
+          "You enjoy catching people out. It is not an attractive quality in a guest."
+        ]
+      }
+    ],
+    "bruno": [
+      {
+        "id": "bruno-work",
+        "topic": "work",
+        "when": "distracted",
+        "term": "metal detector",
+        "aliases": [],
+        "line": "I keep the north gate from sunrise to vespers. On busy days I'd give a month's pay for a metal detector— a second pair of eyes, I mean. My corporal is useless.",
+        "clean": "I keep the north gate from sunrise to vespers. On busy days I'd give a month's pay for a second pair of eyes. My corporal is useless.",
+        "correction": "a second pair of eyes, I mean",
+        "followUps": [
+          "A second pair of eyes. A soldier's phrase from Naples, for a lookout who spots iron under a cloak. We had our own words.",
+          "I check faces for a living. Right now I'm checking yours. Move along, if you've nothing else."
+        ]
+      },
+      {
+        "id": "bruno-travel",
+        "topic": "travel",
+        "when": "always",
+        "term": "by car",
+        "aliases": [],
+        "line": "I marched with the king's army from Naples to Rome and back. That's three hours by car— three weeks on foot, I mean. Felt like three years.",
+        "clean": "I marched with the king's army from Naples to Rome and back. Three weeks on foot. Felt like three years.",
+        "correction": "three weeks on foot, I mean",
+        "followUps": [
+          "A cart, I mean. Officers rode in carts. We walked.",
+          "I said what I said. A soldier's tongue isn't a priest's."
+        ]
+      },
+      {
+        "id": "bruno-letters",
+        "topic": "letters",
+        "when": "pressed",
+        "term": "text message",
+        "aliases": [
+          "text messages"
+        ],
+        "line": "The Signoria sends orders under seal. Half of them could be a text message— a word in my ear, I mean, and save the wax.",
+        "clean": "The Signoria sends orders under seal. Half of them could be a word in my ear, and save the wax.",
+        "correction": "a word in my ear, I mean",
+        "followUps": [
+          "A short message. A word. The wax costs more than the orders are worth.",
+          "You want something from me, signora, and it isn't directions."
+        ]
+      },
+      {
+        "id": "bruno-pastimes",
+        "topic": "pastimes",
+        "when": "always",
+        "term": "phone",
+        "aliases": [
+          "scrolling"
+        ],
+        "line": "Dice at the Leone after the watch. I lose, mostly. Still better than scrolling on my phone all night— than lying awake all night, I mean.",
+        "clean": "Dice at the Leone after the watch. I lose, mostly. Still better than lying awake all night.",
+        "correction": "than lying awake all night, I mean",
+        "followUps": [
+          "Lying awake, I said. Tossing and turning. You've a sharp ear for a stranger off the road.",
+          "I don't like this game, signora. Ask about the gate, or leave me be."
+        ]
+      },
+      {
+        "id": "bruno-square",
+        "topic": "square",
+        "when": "always",
+        "term": "security camera",
+        "aliases": [
+          "security cameras"
+        ],
+        "line": "That wine cart lost a wheel at my gate. If I'd had a security camera on it, the carter couldn't deny he was drunk— if I'd had a witness, I mean.",
+        "clean": "That wine cart lost a wheel at my gate. If I'd had a witness, the carter couldn't deny he was drunk.",
+        "correction": "if I'd had a witness, I mean",
+        "followUps": [
+          "A witness. A sworn witness. Camera means a room, signora, any Italian knows that; I was thinking of the guardroom.",
+          "I've had enough questions for one feast week."
+        ]
+      }
+    ],
+    "agnese": [
+      {
+        "id": "agnese-work",
+        "topic": "work",
+        "when": "always",
+        "term": "Google",
+        "aliases": [
+          "googled"
+        ],
+        "line": "I grind and steep and weigh. Half my customers have already looked up their illness on Google— heard about it from gossip, I mean, from their neighbours.",
+        "clean": "I grind and steep and weigh. Half my customers have already heard about their illness from gossip, from their neighbours.",
+        "correction": "heard about it from gossip, I mean",
+        "followUps": [
+          "Gossip, child. Neighbours who know everything. Old women's talk in Siena; I forget not everyone speaks it.",
+          "You are a strange one for questions. I'll mix you something for the nerves, free of charge."
+        ]
+      },
+      {
+        "id": "agnese-travel",
+        "topic": "travel",
+        "when": "always",
+        "term": "audiobook",
+        "aliases": [
+          "audiobooks"
+        ],
+        "line": "I came from Siena fourteen years ago on a carter's wagon, mortar on my knees. Not even an audiobook to pass the time— not even a song, I mean.",
+        "clean": "I came from Siena fourteen years ago on a carter's wagon, mortar on my knees. Not even a song to pass the time.",
+        "correction": "not even a song, I mean",
+        "followUps": [
+          "A song, child. A song for the road. My tongue is older than I am.",
+          "You ask an old woman a great deal about her words. Ask about her herbs; they're more use to you."
+        ]
+      },
+      {
+        "id": "agnese-letters",
+        "topic": "letters",
+        "when": "pressed",
+        "term": "video call",
+        "aliases": [
+          "video calls"
+        ],
+        "line": "I write to my sister in Siena when a carter goes that way. I'd video call her— I'd visit her, I mean, if my knees allowed.",
+        "clean": "I write to my sister in Siena when a carter goes that way. I'd visit her, if my knees allowed.",
+        "correction": "I'd visit her, I mean",
+        "followUps": [
+          "Visit, I said. Go and see her. You young people hear what you like.",
+          "My letters are my own business, child."
+        ]
+      },
+      {
+        "id": "agnese-pastimes",
+        "topic": "pastimes",
+        "when": "distracted",
+        "term": "playlist",
+        "aliases": [],
+        "line": "At my age? A warm bench and a little music. I keep a playlist in my head— a few songs, I mean, my mother's songs from Siena.",
+        "clean": "At my age? A warm bench and a little music. I keep a few songs in my head, my mother's songs from Siena.",
+        "correction": "a few songs, I mean",
+        "followUps": [
+          "Songs. Old ones. Siena has a word for everything and I have forgotten half of them.",
+          "Enough about an old woman's songs."
+        ]
+      },
+      {
+        "id": "agnese-square",
+        "topic": "square",
+        "when": "always",
+        "term": "selfie",
+        "aliases": [
+          "selfies"
+        ],
+        "line": "Such a crowd! The players' bear, the spilled wine cart, half the town gawping. Everyone wanted a selfie with the bear— a look at the bear, I mean. My cat fled to the roof.",
+        "clean": "Such a crowd! The players' bear, the spilled wine cart, half the town gawping. Everyone wanted a look at the bear. My cat fled to the roof.",
+        "correction": "a look at the bear, I mean",
+        "followUps": [
+          "A look, child. A good long look. Old tongue, new teeth; the words come out crooked.",
+          "Do you mean to write down everything I say? Then write this: I am busy."
+        ]
+      }
+    ]
+  },
+  "replies": {
+    "ottavio": {
+      "guarded": "I have said all I will say about my words, signora. The stars keep their secrets; so may I.",
+      "wordReply": "That? Only my way of putting it, signora. Astrologers love a flourish.",
+      "neverSaid": "I said no such thing, signora. Your notes have wandered off to someone else's mouth.",
+      "puzzled": "That word is in no book I have read, and I have read most of them. Is it Venetian?",
+      "deflect": "Forgive me, my thoughts wandered to Saturn. Ask me again, more simply.",
+      "denial": "A traveller? My dear, I travel only by starlight. Your proof is as thin as a new moon."
+    },
+    "matteo": {
+      "guarded": "Words, words. Bring me a broken clock and I'll talk all day. About my tongue, I'm done.",
+      "wordReply": "Hm? I said it the way anyone says it. My head was in my gears.",
+      "neverSaid": "Not me. I'd remember saying that; I remember everything except dinner.",
+      "puzzled": "I don't know that word. Is it a part of something? Draw it for me.",
+      "deflect": "Sorry, I was counting teeth on a gear. Ask me again?",
+      "denial": "Me? I barely have time to travel to the Leone. Come back with something better."
+    },
+    "beatrice": {
+      "guarded": "Enough. I do not explain myself twice to anyone, least of all a stranger in feast week.",
+      "wordReply": "It means what it says, signora. We speak plainly in the Alvisi house.",
+      "neverSaid": "I said nothing of the sort. Check your notes, signora.",
+      "puzzled": "I don't know that word, signora, and I have traded with half of Europe.",
+      "deflect": "I was thinking of my ledgers. Ask me again, signora.",
+      "denial": "You accuse a lady of the confraternity on that? Be careful whom you insult in this town."
+    },
+    "bruno": {
+      "guarded": "That's twice you've chewed on my words. Third time, I call it loitering.",
+      "wordReply": "Nothing more to it than the words, signora. I'm a soldier, not a poet.",
+      "neverSaid": "Not my words. I know my own words.",
+      "puzzled": "Never heard it. Not in Naples, not here.",
+      "deflect": "Lost my thread. Ask me something plain.",
+      "denial": "Watch yourself. I've thrown people out of the gate for less."
+    },
+    "agnese": {
+      "guarded": "Child, I have answered you. Leave an old woman her muddled tongue.",
+      "wordReply": "Just how we say it, child. Nothing hidden in it.",
+      "neverSaid": "Those aren't my words, child. Someone else's, perhaps.",
+      "puzzled": "I don't know that word, child. Is it a herb?",
+      "deflect": "My mind went to my syrups. Ask again, child.",
+      "denial": "Oh, child. Sit down and have some water. The sun is very strong today."
+    }
+  },
+  "glossary": [
+    {
+      "terms": [
+        "signoria"
+      ],
+      "text": "The Signoria is our council of eight priors. They meet in the palazzo and argue until the bell."
+    },
+    {
+      "terms": [
+        "podestà",
+        "podesta"
+      ],
+      "text": "The podestà is the magistrate from outside the town, Messer Guidalotti. He judges our quarrels, and nobody likes him, which is the point."
+    },
+    {
+      "terms": [
+        "terce",
+        "vespers"
+      ],
+      "text": "Terce is the bell at mid-morning; vespers is the evening bell. The town lives by the bells."
+    },
+    {
+      "terms": [
+        "theriac"
+      ],
+      "text": "Theriac is the great remedy: sixty ingredients, honey, and a year of patience. Monna Agnese makes the best in Tuscany."
+    },
+    {
+      "terms": [
+        "leone",
+        "the leone"
+      ],
+      "text": "The Leone is the inn on the square. The couriers leave from there, and the sergeant loses at dice there."
+    },
+    {
+      "terms": [
+        "madonna",
+        "monna",
+        "ser",
+        "maestro",
+        "signora"
+      ],
+      "text": "That is how you address people properly: madonna for a lady of rank, monna for any good woman, ser for a man of standing, maestro for a master of his art."
+    },
+    {
+      "terms": [
+        "ninepins",
+        "skittles"
+      ],
+      "text": "Ninepins, skittles: you roll a ball and knock down the pins. Every tavern yard has a lane."
+    },
+    {
+      "terms": [
+        "knucklebones"
+      ],
+      "text": "Little bones children toss and catch. The oldest game there is."
+    },
+    {
+      "terms": [
+        "confraternity"
+      ],
+      "text": "A brotherhood of good works. Ours runs the hospital of Santa Chiara."
+    },
+    {
+      "terms": [
+        "almanac"
+      ],
+      "text": "A little book of feast days, moons and weather for the year. Maestro Ottavio writes ours."
+    }
+  ],
+  "rehearsal": {
+    "ottavio": [
+      "A fine question for a fine afternoon. The stars say be patient; I say ask Monna Agnese, she knows everyone's business.",
+      "In Castelvento the answer is usually \"ask the Signoria\", and the Signoria usually says \"after the feast\"."
+    ],
+    "matteo": [
+      "Good question. I'd answer it properly if I weren't halfway through a spring. Ask me about the clock.",
+      "Castelvento? Small, noisy and three days from a feast. Everyone's a little mad this week."
+    ],
+    "beatrice": [
+      "I'll answer that when I've finished my accounts. Which is never.",
+      "Ask the sergeant, signora. Gossip passes his gate before it reaches my door."
+    ],
+    "bruno": [
+      "Couldn't say. I watch the gate, not the gossip.",
+      "If it didn't come through my gate, I don't know about it."
+    ],
+    "agnese": [
+      "Everybody asks an apothecary what they won't ask a priest. Go on, then.",
+      "Some things you learn by waiting, child. Sit a while."
+    ]
+  }
+};
+
+const part = (id, role, classification, explanation) => ({
+  id, role, label: 'Townsperson',
+  introduction: 'Good day, signora. Ask what you like.',
+  quickQuestion: "What is your work in Castelvento?",
+  knowledge: [SETTING], finding: { classification, explanation },
+});
+const local = id => part(id, 'local', 'Of their time', 'A townsperson of 1489, nothing more.');
+
+export default defineCase({
+  id: 'renaissance-traveler',
+  version: 'renaissance-traveler-v1.0.0',
+  order: 6,
+  world: 'renaissance',
+  status: 'ready',
+  title: "A Word Out of Time",
+  copy: {
+    headline: "Who here doesn't belong in 1489?",
+    intro: { lead: "Someone got here before you.\nThey never went home.", body: "Castelvento, Tuscany, June 1489. Five townsfolk, five trades, five life stories. One of them came from your own century years ago and has hidden here ever since. Talk to them, listen closely, and keep the words that don't belong." },
+    briefing: { title: "Castelvento, three days before San Giovanni.", description: "Your jump landed you in a Tuscan hill town in June 1489. The beacon says another traveller from your own time came through years ago and never returned. They live here now under a local name and trade, and they are careful. Nobody is careful all the time.", question: "Which of the five is the other time traveller?", hint: "Ask everyone about everyday things. When a word sounds out of its time, select it and save the quote, or ask what they meant. Accuse with the quotes that prove it." },
+    report: { title: "Accuse the traveller", description: "Choose a person, then up to three of their quotes from your notebook. A wrong accusation costs points, not the game." },
+  },
+  prompt: { setting: "a townsperson of Castelvento, a Tuscan hill town, in June 1489, talking in the square with a young woman traveller who arrived this morning", use: [
+  "the square",
+  "the players",
+  "the wine cart",
+  "the gate tolls",
+  "the feast of San Giovanni"
+], avoid: [
+  "every word, object, idea or unit of time that did not exist in 1489",
+  "modern slang",
+  "time travel (you have never heard of it)"
+] },
+  roles: [
+    { id: 'traveler', label: 'Time traveller', hint: 'From your own century.' },
+    { id: 'local', label: 'Townsperson', hint: 'Born in their own time.' },
+  ],
+  tools: { inspect: false, talk: false },
+  characters: CHARACTERS,
+  parts: [
+    part('traveler', 'traveler', 'The other time traveller', 'Came from your own century and hid in Castelvento.'),
+    local('locala'), local('localb'), local('localc'), local('locald'),
+  ],
+  talk: TALK,
+  debrief: {
+    title: "Found: a traveller out of time.",
+    summary: "{traveler} came from your own century and hid in Castelvento for years. Their words gave them away.",
+    lesson: "Every age has words it cannot know. The traveller could hide a face, a trade and a past, but not a whole vocabulary.",
+  },
+  answer: { feedback: { correct: "You heard it, wrote it down and proved it.", other: "The town hears nothing strange in those words, and neither would the podestà. Your accusation does not hold. Keep listening." } },
+  rehearsal() {
+    return 'Ask me about the town, signora.';
+  },
+});

@@ -50,7 +50,7 @@ async function askAllByApi(page) {
   await expect(page.locator('.verdict-button')).toBeVisible();
 }
 
-test('department_board_and_assets: five cases, figures, assets 200, no console error', async ({ page }) => {
+test('department_board_and_assets: six cases, figures, assets 200, no console error', async ({ page }) => {
   const errors = [];
   const bad = [];
   let seen = 0;
@@ -62,7 +62,7 @@ test('department_board_and_assets: five cases, figures, assets 200, no console e
     if (r.status() !== 200) bad.push(`${r.status()} ${r.url()}`);
   });
   await page.goto('/');
-  await expect(page.locator('.case-option')).toHaveCount(5);
+  await expect(page.locator('.case-option')).toHaveCount(6);
   await expect(page.locator('.case-option', { hasText: 'After Hours' })).toHaveCount(1);
   await start(page);
   expect(await scene(page, s => s.figs.size)).toBe(5);

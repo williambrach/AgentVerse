@@ -13,11 +13,14 @@ import './friends.css';
 import './splash.css';
 import './factory.css';
 import './department.css';
+import './renaissance.css';
 import { escape, svg, heading, mmss } from './html.ts';
-import { HINTS, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, threadPanel } from './tools';
+import { HINTS, NOT_IN_CASE, coinHint, talkBriefingList, talkVerdictLabel, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, threadPanel } from './tools';
 import { teamGate, teamNameError, leaderboardPanel, type GateView } from './team';
 import { boardScreen } from './board.ts';
 import { debriefPage } from './debrief.ts';
+import { accusePanel, liveDraftQuotes } from './accuse.ts';
+import { excerptOf, quotesPanel } from './talk-ui.ts';
 import { renderNotebook } from './notebook';
 import { createStage, type Stage } from './stage';
 import { postHeartbeat, startHeartbeat } from './heartbeat';
@@ -27,7 +30,7 @@ import { interviewPanel, briefingPanel, evidencePanel } from './dialogue.ts';
 import { evidenceIdOf } from './hall-layout.ts';
 import { lineupPanel } from './lineup.ts';
 import { wantSplash, splashSeen, markSplashSeen, playSplash } from './splash.ts';
-import type { Alarm, CaseState, Character, LocationId, Pose } from './types';
+import type { Alarm, CaseState, Character, LocationId, Pick, Pose } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const ids = (): string[] => state.characters.map(c => c.id);
@@ -42,6 +45,13 @@ let evidenceFocus: string | null = null;
 const isEvidence = (loc: string): boolean => loc === 'evidence' || loc.startsWith('evidence:');
 /** Panel ids never contain ':' (the notebook splits its key on it): evidence:<id> shows as `evidence`. */
 const panelOf = (loc: LocationId): LocationId => (isEvidence(loc) ? 'evidence' : loc);
+/** The words picked in a chat line for a quote or a follow-up; null when nothing is picked. Any re-render keeps it. */
+let pick: Pick | null = null;
+/** Clicks made on words since the pick began: 1 sets the start, 2 sets the end, 3 starts over. */
+let pickClicks = 0;
+/** The accusation being built on the report page of a talk case. */
+let accuseDraft: { character: string | null; quotes: string[] } = { character: null, quotes: [] };
+const resetTalkView = () => { pick = null; pickClicks = 0; accuseDraft = { character: null, quotes: [] }; };
 let busy = false;
 let pendingCharacter: string | null = null;
 let introVisible = true;
@@ -132,6 +142,7 @@ async function action(name: string, payload: object = {}, onSuccess?: () => void
       if (refreshed.session?.id !== state.session?.id) {
         drafts = blankDrafts();
         reportDraft = freshDraft();
+        resetTalkView();
         panel = 'briefing';
         threadOpen = false;
         introVisible = true;
@@ -261,7 +272,7 @@ function tick() {
 
 /** The parts of the page that belong to the case's world. Rebuilt only when the world or the cast changes. */
 function renderWorld() {
-  const key = `${world().id}:${ids().join(',')}:${state.evidence?.length ?? ''}`;
+  const key = `${world().id}:${ids().join(',')}:${state.evidence?.length ?? ''}:${state.talk ? 'q' : ''}`;
   if (key === worldKey) { syncNavText(); return; }
   worldKey = key;
   const w = world(), t = w.text;
@@ -269,14 +280,16 @@ function renderWorld() {
   document.querySelector('#world-name')!.textContent = t.place;
   document.querySelector('#world-icon')!.innerHTML = svg(t.icon);
   document.querySelector('#room-nav')!.setAttribute('aria-label', `${cap(t.eyebrow)} destinations`);
-  document.querySelector<HTMLElement>('#room-nav')!.style.setProperty('--nav-n', String(state.characters.length + 1 + (state.evidence ? 1 : 0)));
+  document.querySelector<HTMLElement>('#room-nav')!.style.setProperty('--nav-n', String(state.characters.length + 1 + (state.evidence ? 1 : 0) + (state.talk ? 1 : 0)));
   document.querySelector('#room-nav')!.innerHTML = `
-          ${state.characters.map(cardFor).join('')}${state.evidence ? evidenceButton() : ''}`;
+          ${state.characters.map(cardFor).join('')}${state.evidence ? evidenceButton() : ''}${state.talk ? quotesButton() : ''}`;
   station?.configure(w, state.characters);
   syncNavText();
 }
 
 const evidenceButton = () => `<button data-go="evidence" class="cast-card evidence-nav"><span class="cast-tile"><i class="evidence-icon"></i></span><span class="hud-stack cast-text"><b>Evidence</b><small data-evidence-count>${evidenceCount()}</small></span></button>`;
+const quotesButton = () => `<button data-go="quotes" class="cast-card evidence-nav quotes-nav"><span class="cast-tile"><i class="evidence-icon"></i></span><span class="hud-stack cast-text"><b>Quotes</b><small data-quote-count>${quoteCount()}</small></span></button>`;
+const quoteCount = () => String(state.session?.talk?.quotes.length ?? 0);
 const evidenceCount = () => `${state.session?.evidence?.length ?? 0}/${state.evidence?.length ?? 0}`;
 
 const cardFor = (c: Character) => {
@@ -289,6 +302,8 @@ const cardFor = (c: Character) => {
 function syncNavText() {
   const count = document.querySelector('#room-nav [data-evidence-count]');
   if (count && count.textContent !== evidenceCount()) count.textContent = evidenceCount();
+  const quotes = document.querySelector('#room-nav [data-quote-count]');
+  if (quotes && quotes.textContent !== quoteCount()) quotes.textContent = quoteCount();
   for (const c of state.characters) {
     const card = document.querySelector<HTMLElement>(`#room-nav [data-go="${CSS.escape(c.id)}"]`);
     if (!card) continue;
@@ -308,6 +323,8 @@ async function visit(location: LocationId) {
   if (busy || introVisible) return;
   stopTalking();
   threadOpen = false;
+  // The Quotes page is client-only: nothing to tell the server.
+  if (location === 'quotes') { panel = 'quotes'; evidenceFocus = null; dialogueOpen = true; render(); return; }
   const open = () => { panel = panelOf(location); evidenceFocus = isEvidence(location) ? evidenceIdOf(location) : null; dialogueOpen = true; render(); };
   if (state.session?.status === 'closed') { open(); return; }
   if (await action('visit', { location })) open();
@@ -329,6 +346,7 @@ function go(location: LocationId) {
 }
 
 async function onClick(event: MouseEvent) {
+  if (state?.talk && await onTalkClick(event.target as HTMLElement)) return;
   const button = (event.target as HTMLElement).closest<HTMLElement>('button');
   if (!button || (button as HTMLButtonElement).disabled) return;
   if (button.id === 'continue-button') { void talk(); return; }
@@ -387,6 +405,7 @@ async function startCase(caseId: string) {
   const fresh = () => {
     drafts = blankDrafts();
     reportDraft = freshDraft();
+    resetTalkView();
     panel = 'briefing'; threadOpen = false; introVisible = false; dialogueOpen = true;
   };
   if (!(await action('reset', { caseId }, fresh))) return;
@@ -421,7 +440,15 @@ function render() {
   document.querySelector('#mode-badge')!.textContent = state.mode === 'live' ? 'LIVE INTERVIEWS' : 'SCRIPTED REHEARSAL';
   document.querySelector('#mode-badge')!.classList.toggle('rehearsal', state.mode === 'rehearsal');
   const heard = session ? ids().filter(id => session.interviews[id].length).length : 0;
-  document.querySelector('#quick-progress')!.textContent = session?.status === 'closed' ? 'Case closed' : `${heard} of ${state.characters.length} asked · free`;
+  const verdictTitle = document.querySelector('.verdict-button b');
+  if (state.talk && verdictTitle && session?.status !== 'closed') {
+    const label = talkVerdictLabel(session?.talk?.quotes.length ?? 0);
+    verdictTitle.textContent = label.title;
+    document.querySelector('#quick-progress')!.textContent = label.progress;
+  } else {
+    if (verdictTitle) verdictTitle.textContent = 'Make your verdict';
+    document.querySelector('#quick-progress')!.textContent = session?.status === 'closed' ? 'Case closed' : `${heard} of ${state.characters.length} asked · free`;
+  }
   document.querySelectorAll<HTMLButtonElement>('[data-go]').forEach(button => {
     button.disabled = busy || !session || introVisible;
     button.classList.toggle('active', button.dataset.go === panel);
@@ -434,7 +461,7 @@ function render() {
   const toast = document.querySelector<HTMLElement>('#toast')!;
   toast.hidden = !errorMessage;
   toast.textContent = errorMessage;
-  const lineup = Boolean(session && session.status === 'active' && panel === 'report' && dialogueOpen && !introVisible && heard === state.characters.length && !threadOpen);
+  const lineup = Boolean(session && !state.talk && session.status === 'active' && panel === 'report' && dialogueOpen && !introVisible && heard === state.characters.length && !threadOpen);
   const wasOpen = app.dataset.dialogue === 'open';
   app.dataset.dialogue = dialogueOpen && !introVisible ? 'open' : 'closed';
   const debrief = Boolean(session?.status === 'closed' && panel === 'report' && !introVisible && !threadOpen);
@@ -442,12 +469,13 @@ function render() {
   syncWalking();
   station?.focus(dialogueOpen && !introVisible && ids().includes(panel) ? panel : null);
   const target = document.querySelector<HTMLElement>('#panel')!;
-  const sections: Record<string, string> = { briefing: 'Case briefing', ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), evidence: 'Evidence', report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
+  const sections: Record<string, string> = { briefing: 'Case briefing', ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), evidence: 'Evidence', quotes: 'Quotes', report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
   document.querySelector('#notebook-section')!.textContent = threadOpen ? 'Thread' : sections[panel];
   let markup: string;
   if (threadOpen && session) markup = threadPanel(session.thread, Object.fromEntries(state.characters.map(c => [c.id, c.name])), session.chatter.pending, world().text.threadNote, Object.fromEntries(state.characters.map(c => [c.id, castClass(c.id)])));
   else if (session?.status === 'closed' && panel === 'report') markup = debriefMarkup();
-  else if (panel === 'briefing') markup = briefingPanel({ copy: state.copy, cast: state.characters.length, many: world().text.many, one: world().text.one, oneWithArticle: world().text.oneWithArticle, firstId: state.characters[0]?.id, firstName: state.characters[0]?.name, guide: state.session ? toolGuide(state.session.economy) : '', ...(world().scene === 'roundtable' ? { verdict: state.copy.report.description, howTo: world().text.hint } : {}) });
+  else if (panel === 'briefing') markup = briefing();
+  else if (panel === 'quotes' && state.talk) markup = quotesPanel(session?.talk?.quotes ?? [], state.characters);
   else if (panel === 'report') markup = reportPanel();
   else if (panel === 'evidence') markup = evidencePanel(session?.evidence ?? [], evidenceFocus, state.evidence?.length ?? 0);
   else markup = interviewMarkup(panel);
@@ -529,6 +557,7 @@ function interviewMarkup(characterId: string) {
     character, turns: session?.interviews[characterId] || [], inspections: (session?.inspections || []).filter(n => n.character === characterId),
     noThought: noThought.has(lineKey(characterId)), faceClass: castClass(characterId), closed: session?.status === 'closed', busy, draft: drafts[characterId],
     waitingOn: pendingCharacter === characterId && busy ? characterId : null,
+    ...(state.talk ? { talk: { topics: state.talk.topics, asked: session?.talk?.asked[characterId] ?? [], pick: pick && lineOf(characterId, pick.line) ? pick : null } } : {}),
     next: state.characters.find(c => c.id !== characterId && !session?.interviews[c.id].length) || null,
     askLabel: economy ? toolChip(economy, 'ask') : null, askOff: askBlock.reason, hint: HINTS.ask, many: world().text.many,
   });
@@ -540,8 +569,21 @@ function submitHint(): string {
   return missing ? `Pick a role for ${missing.name}` : '';
 }
 
+/** The turn with this id in a character's chat. */
+const lineOf = (characterId: string, id: string) => state.session?.interviews[characterId]?.find(t => t.id === id);
+
+/** The briefing page; a talk case swaps the stock steps for its own three. */
+function briefing(): string {
+  return briefingPanel({ copy: state.copy, cast: state.characters.length, many: world().text.many, one: world().text.one, oneWithArticle: world().text.oneWithArticle, firstId: state.characters[0]?.id, firstName: state.characters[0]?.name, guide: state.session && !state.talk ? toolGuide(state.session.economy) : '', ...(world().scene === 'roundtable' ? { verdict: state.copy.report.description, howTo: world().text.hint } : {}), ...(state.talk ? { steps: talkBriefingList() } : {}) });
+}
+
 function reportPanel() {
   const session = state.session!;
+  if (state.talk) return accusePanel({
+    characters: state.characters.map(c => ({ id: c.id, name: c.name, role: c.role })),
+    quotes: session.talk?.quotes ?? [], accusations: session.talk?.accusations ?? [], draft: accuseDraft,
+    copy: { title: state.copy.report.title, description: state.copy.report.description }, busy,
+  });
   const remaining = state.characters.filter(c => !session.interviews[c.id].length);
   if (remaining.length) return `${heading('YOUR GUESS', 'Hear everyone first.', `One question per ${escape(world().text.one)} is enough. Then make your choice.`)}
     <div class="notebook-content"><div class="requirements">${state.characters.map(c => `<button data-go="${escape(c.id)}"><span>${session.interviews[c.id].length ? icon('check') : icon('person')} Ask ${escape(c.name)}</span>${icon('arrow')}</button>`).join('')}</div></div>`;
@@ -550,6 +592,14 @@ function reportPanel() {
     cast: state.characters.map(c => ({ id: c.id, name: c.name, part: c.role, faceClass: castClass(c.id) })),
     heading: state.copy.report, picks: reportDraft.roles, confidence: reportDraft.confidence, explanation: reportDraft.explanation, busy, hint: submitHint(),
   });
+}
+
+/** The reveal, slips and wrong-accusation count of a talk case, with the traveller's name and part from the cast. */
+function revealOf() {
+  const d = state.debrief;
+  if (!d?.reveal) return {};
+  const who = state.characters.find(c => c.id === d.reveal!.character);
+  return { reveal: { ...d.reveal, name: who?.name ?? d.reveal.character, role: who?.role ?? '' }, slips: d.slips ?? [], wrong: d.wrong ?? 0 };
 }
 
 function debriefMarkup() {
@@ -563,13 +613,14 @@ function debriefMarkup() {
     questions: Object.values(session.interviews).reduce((sum, turns) => sum + turns.length, 0),
     inspections: economy.charges.inspect.used, talks: economy.charges.continue.used,
     next: next ? { id: next.id, title: next.title } : null, many: world().text.many,
+    ...revealOf(),
   });
 }
 
 /** Coins to keep back so the player can still ask everyone once, not counting the action's own target. */
 function reserveFor(target: string | null): number {
   const session = state.session;
-  if (!session) return 0;
+  if (!session || state.talk) return 0;
   return session.economy.costs.ask * state.characters.filter(c => c.id !== target && !session.interviews[c.id].length).length;
 }
 
@@ -580,6 +631,8 @@ function renderTools() {
   const counter = document.querySelector<HTMLElement>('#coin-counter')!;
   const active = Boolean(session && !introVisible);
   counter.hidden = !active;
+  const tip = document.querySelector<HTMLElement>('#coin-tip');
+  if (tip) tip.textContent = coinHint(Boolean(state.talk));
   if (session) {
     const { budget, spent } = session.economy;
     counter.innerHTML = budget == null ? `<span class="coin-num">${spent}</span><span class="hud-label">COINS SPENT</span>` : `<span class="coin-num">${budget - spent} / ${budget}</span><span class="hud-label">COINS LEFT</span>`;
@@ -592,18 +645,19 @@ function renderTools() {
     const character = state.characters.find(c => c.id === panel);
     const spoken = Boolean(character && session.interviews[character.id].length);
     const inspect = toolBlock(economy, 'inspect', reserveFor(null));
-    const inspectOff = inspect.reason || (!character ? `Open ${world().text.oneWithArticle}’s chat` : !spoken ? `${character.name} has not spoken yet` : null);
+    const inspectOff = state.tools?.inspect === false ? NOT_IN_CASE : inspect.reason || (!character ? `Open ${world().text.oneWithArticle}’s chat` : !spoken ? `${character.name} has not spoken yet` : null);
     const block = toolBlock(economy, 'continue', reserveFor(null));
-    const can = open && (chatter.pending > 0 || block.enabled);
+    const talkOff = state.tools?.talk === false;
+    const can = open && !talkOff && (chatter.pending > 0 || block.enabled);
     const heardAll = ids().every(id => session.interviews[id].length);
     markup = toolCard({
       tool: 'inspect', id: 'inspect-button', label: 'Inspect reasoning', target: inspectOff ? '' : character!.name,
       chip: inspectOff || toolChip(economy, 'inspect'), enabled: open && !inspectOff, busy, fresh: open && !inspectOff && !session.inspections.length,
     }) + toolCard({
       tool: 'continue', id: 'continue-button', label: talking ? 'Listening…' : chatter.pending > 0 ? `Keep listening (${chatter.pending})` : 'Let them talk', target: '',
-      chip: chatter.pending > 0 ? 'free' : block.reason || toolChip(economy, 'continue'), enabled: can, busy: busy || talking,
+      chip: talkOff ? NOT_IN_CASE : chatter.pending > 0 ? 'free' : block.reason || toolChip(economy, 'continue'), enabled: can, busy: busy || talking,
       fresh: can && !talking && heardAll && chatter.pending === 0 && economy.charges.continue.used === 0,
-      extra: `<button class="thread-button" id="read-thread" type="button" ${busy ? 'disabled' : ''}>Read thread</button>`,
+      extra: talkOff ? '' : `<button class="thread-button" id="read-thread" type="button" ${busy ? 'disabled' : ''}>Read thread</button>`,
     });
   }
   if (markup !== toolsMarkup) { toolsMarkup = markup; document.querySelector('#toolbelt-cards')!.innerHTML = markup; }
@@ -642,7 +696,8 @@ async function talk() {
   }
 }
 
-async function askQuestion() {
+/** One path for every way of asking: a topic button, a follow-up about picked words, or typed text. */
+async function askQuestion(how: { topic?: string; about?: { line: string; text: string } } = {}) {
   if (busy || escaping || !ids().includes(panel)) return;
   const character: string = panel;
   stopTalking();
@@ -651,7 +706,8 @@ async function askQuestion() {
   speakingUntil = Date.now() + 1200;
   detectiveSync();
   setTimeout(detectiveSync, 1250);
-  const asked = await action('interview', { character, question: drafts[character] }, () => { drafts[character] = ''; });
+  const body = how.topic ? { character, topic: how.topic } : how.about ? { character, about: how.about } : { character, question: drafts[character] };
+  const asked = await action('interview', body, () => { if (!how.topic && !how.about) drafts[character] = ''; if (how.about) { pick = null; pickClicks = 0; } });
   station.think(null);
   if (asked) {
     const turns = state.session?.interviews[character];
@@ -660,6 +716,49 @@ async function askQuestion() {
   }
   pendingCharacter = null;
   document.querySelector<HTMLTextAreaElement>('#question')?.focus({ preventScroll: true });
+}
+
+/** Saves the picked words (or the whole line) to the quotes. */
+async function saveQuote(line: string) {
+  const turn = lineOf(panel, line);
+  const range = pick && pick.line === line && pick.a !== null && pick.b !== null ? pick : null;
+  const text = turn && range ? excerptOf(turn.answer, range.a!, range.b!) : undefined;
+  await action('quote', text ? { line, text } : { line }, () => { pick = null; pickClicks = 0; });
+}
+
+/** A click on one of the talk hooks; true when it was one. */
+async function onTalkClick(target: HTMLElement): Promise<boolean> {
+  const hook = target.closest<HTMLElement>('[data-topic],[data-pick-line],[data-word],[data-pick-cancel],[data-save-quote],[data-ask-about],[data-unquote],#accuse-submit,#accuse-back');
+  if (!hook) return false;
+  if ((hook as HTMLButtonElement).disabled) return true;
+  stopTalking();
+  const d = hook.dataset;
+  if (hook.id === 'accuse-back') { closeDialogue(); return true; }
+  if (hook.id === 'accuse-submit') {
+    const cited = liveDraftQuotes(accuseDraft, state.session?.talk?.quotes ?? []);
+    if (accuseDraft.character && cited.length) await action('accuse', { character: accuseDraft.character, quotes: cited });
+    return true;
+  }
+  if (d.topic !== undefined) { await askQuestion({ topic: d.topic }); return true; }
+  if (d.pickLine !== undefined) { pick = { line: d.pickLine, a: null, b: null }; pickClicks = 0; render(); return true; }
+  if (d.word !== undefined) {
+    const i = Number(d.word);
+    const line = d.line ?? pick?.line;
+    if (line === undefined || !Number.isInteger(i)) return true;
+    if (!pick || pick.line !== line || pickClicks === 0 || pickClicks >= 2) { pick = { line, a: i, b: i }; pickClicks = 1; }
+    else { pick = { line, a: Math.min(pick.a!, i), b: Math.max(pick.a!, i) }; pickClicks = 2; }
+    render();
+    return true;
+  }
+  if (d.pickCancel !== undefined) { pick = null; pickClicks = 0; render(); return true; }
+  if (d.saveQuote !== undefined) { const line = d.saveQuote || d.line || pick?.line; if (line) await saveQuote(line); return true; }
+  if (d.askAbout !== undefined) {
+    const line = pick?.line, turn = line ? lineOf(panel, line) : undefined;
+    if (line && turn && pick!.a !== null && pick!.b !== null) await askQuestion({ about: { line, text: excerptOf(turn.answer, pick!.a, pick!.b) } });
+    return true;
+  }
+  if (d.unquote !== undefined) { accuseDraft.quotes = accuseDraft.quotes.filter(q => q !== d.unquote); await action('unquote', { quote: d.unquote }); return true; }
+  return false;
 }
 
 function bindForms() {
@@ -673,6 +772,14 @@ function bindForms() {
     if (!form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled) form?.requestSubmit();
   });
   document.querySelector('#interview-form')?.addEventListener('submit', event => { event.preventDefault(); void askQuestion(); });
+  document.querySelectorAll<HTMLInputElement>('input[name="accuse-character"]').forEach(input => input.addEventListener('change', () => {
+    if (accuseDraft.character !== input.value) accuseDraft = { character: input.value, quotes: [] };
+    render();
+  }));
+  document.querySelectorAll<HTMLInputElement>('input[name="accuse-quote"]').forEach(input => input.addEventListener('change', () => {
+    accuseDraft.quotes = input.checked ? [...new Set([...accuseDraft.quotes, input.value])] : accuseDraft.quotes.filter(q => q !== input.value);
+    render();
+  }));
   if (document.querySelector('#report-form')) {
     document.querySelectorAll<HTMLInputElement>('.role-chip input').forEach(input => input.addEventListener('change', () => {
       reportDraft.roles[input.name.slice('role-'.length)] = input.value;

@@ -9,10 +9,10 @@ import { minimalCase, partCase, agentWorlds } from './fixtures/minimal-case.mjs'
 
 const bananaCast = { momo: 'carrier', pip: 'planner', nori: 'lookout', kiki: 'minder' };
 
-test('registry lists the grove, tower, friends, factory and department cases (five cases), all part cases', () => {
-  assert.deepEqual(cases.map(c => `${c.order}:${c.id}:${c.status}:${c.world.id}`), ['1:banana-mystery:ready:grove', '2:tower-echo-bell:ready:tower', '3:friends-roundtable:ready:friends', '4:factory-escape:ready:factory', '5:department-murder:ready:department']);
+test('registry lists the grove, tower, friends, factory, department and renaissance cases (six cases), all part cases', () => {
+  assert.deepEqual(cases.map(c => `${c.order}:${c.id}:${c.status}:${c.world.id}`), ['1:banana-mystery:ready:grove', '2:tower-echo-bell:ready:tower', '3:friends-roundtable:ready:friends', '4:factory-escape:ready:factory', '5:department-murder:ready:department', '6:renaissance-traveler:ready:renaissance']);
   assert.ok(cases.every(c => Array.isArray(c.parts)));
-  assert.deepEqual(cases.map(c => c.world.id).sort(), ['department', 'factory', 'friends', 'grove', 'tower']);
+  assert.deepEqual(cases.map(c => c.world.id).sort(), ['department', 'factory', 'friends', 'grove', 'renaissance', 'tower']);
   assert.ok(cases.some(c => c.parts.some(p => p.role === 'villain')), 'some case has a villain part');
   assert.ok(cases.some(c => c.parts.every(p => p.role !== 'villain')), 'some case has none');
   for (const c of cases) assert.equal(c.parts.length, c.world.agents);

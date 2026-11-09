@@ -1,7 +1,13 @@
 export type CharacterId = string;
-export type LocationId = CharacterId | 'briefing' | 'report' | 'evidence' | `evidence:${string}`;
+export type LocationId = CharacterId | 'briefing' | 'report' | 'quotes' | 'evidence' | `evidence:${string}`;
 export interface Character { id: CharacterId; name: string; role: string; room: string; color: string; introduction: string; quickQuestion: string }
-export interface Turn { question: string; answer: string; timestamp: string }
+export interface Turn { question: string; answer: string; timestamp: string; id?: string; kind?: 'topic' | 'about' | 'typed'; topic?: string | null }
+export interface Topic { id: string; label: string; question: string }
+export interface Quote { id: string; line: string; character: CharacterId; text: string; at: string }
+export interface Accusation { id: string; character: CharacterId; quotes: string[]; at: string; feedback: string; denial: string }
+export interface TalkSession { asked: Record<CharacterId, string[]>; quotes: Quote[]; accusations: Accusation[] }
+/** The word range picked in one chat line; a and b are null until a word is clicked. */
+export interface Pick { line: string; a: number | null; b: number | null }
 export interface Role { id: string; label: string; hint: string }
 export interface Verdict { roles: Record<CharacterId, string>; truth: Record<CharacterId, string>; results: Record<CharacterId, boolean>; score: number; total: number; confidence: number; explanation: string; evidenceIds: string[]; submittedAt: string; outcome?: 'escaped' }
 export interface CaseCopy {
@@ -25,6 +31,8 @@ export interface Session {
   /** Present only for cases with evidence: examined ids, and the examined cards in examine order. */
   examined?: string[];
   evidence?: EvidenceCard[];
+  /** Present only for cases with a talk engine. */
+  talk?: TalkSession;
 }
 export interface EvidenceCard { id: string; title: string; text: string }
 export interface CaseState {
@@ -33,8 +41,12 @@ export interface CaseState {
   characters: Character[];
   /** Public evidence titles, only for cases that define evidence. */
   evidence?: { id: string; title: string }[];
+  /** Present only for cases with a talk engine: the topic buttons. */
+  talk?: { topics: Topic[] };
+  /** Present only for talk cases: which Arbiter tools exist in this case. */
+  tools?: { inspect: boolean; talk: boolean };
   session: Session | null;
-  debrief: null | { outcome?: 'escaped'; title: string; summary: string; lesson: string; feedback: string; score: number; total: number; findings: { character: CharacterId; role: string; picked: string; correct: boolean; classification: string; explanation: string }[] };
+  debrief: null | { outcome?: 'escaped'; title: string; summary: string; lesson: string; feedback: string; score: number; total: number; findings: { character: CharacterId; role: string; picked: string; correct: boolean; classification: string; explanation: string }[]; reveal?: { character: CharacterId; text: string }; slips?: { character: CharacterId; term: string; text: string; cited: boolean }[]; wrong?: number };
 }
 
 export type Tool = 'ask' | 'inspect' | 'continue';

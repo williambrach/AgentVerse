@@ -32,9 +32,9 @@ test('example standings', () => {
   ]);
   assert.deepEqual(lb.standings({ includeHidden: false, you: 'A' }), {
     rankBy: 'time', startedAt: 0, round: null, cases: caseList, teams: [
-      { rank: 1, teamId: 'A', name: 'Banana Squad', points: 4, played: 1, timeMs: 120000, coins: 8, hidden: false, you: true, cells: [{ caseId: 'banana-mystery', state: 'perfect', points: 4 }, none('tower-echo-bell'), none('friends-roundtable'), none('factory-escape'), none('department-murder')] },
-      { rank: 2, teamId: 'B', name: 'Owls', points: 0, played: 1, timeMs: 60000, coins: 4, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'zero', points: 0 }, none('tower-echo-bell'), none('friends-roundtable'), none('factory-escape'), none('department-murder')] },
-      { rank: null, teamId: 'C', name: 'Lynx', points: 0, played: 0, timeMs: 0, coins: 0, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'playing', points: 0 }, none('tower-echo-bell'), none('friends-roundtable'), none('factory-escape'), none('department-murder')] },
+      { rank: 1, teamId: 'A', name: 'Banana Squad', points: 4, played: 1, timeMs: 120000, coins: 8, hidden: false, you: true, cells: [{ caseId: 'banana-mystery', state: 'perfect', points: 4 }, none('tower-echo-bell'), none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
+      { rank: 2, teamId: 'B', name: 'Owls', points: 0, played: 1, timeMs: 60000, coins: 4, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'zero', points: 0 }, none('tower-echo-bell'), none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
+      { rank: null, teamId: 'C', name: 'Lynx', points: 0, played: 0, timeMs: 0, coins: 0, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'playing', points: 0 }, none('tower-echo-bell'), none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
     ],
   });
   lb.setHidden('A', true);

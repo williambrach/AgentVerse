@@ -9,7 +9,7 @@ const runDir = process.env.OVERRIDE_E2E_DATA ??= mkdtempSync(join(tmpdir(), 'ove
 const dataDir = name => join(runDir, name);
 // Every context, including browser.newContext() in a spec, starts as a returning player who has seen the sponsor intro.
 // splash.spec.mjs clears this to play it.
-const seenSplash = { cookies: [], origins: [4317, 4318, 4319, 4320, 4321, 4322, 4323, 4324, 4325].map(port => ({ origin: `http://127.0.0.1:${port}`, localStorage: [{ name: 'override.splash', value: 'seen' }] })) };
+const seenSplash = { cookies: [], origins: [4317, 4318, 4319, 4320, 4321, 4322, 4323, 4324, 4325, 4326].map(port => ({ origin: `http://127.0.0.1:${port}`, localStorage: [{ name: 'override.splash', value: 'seen' }] })) };
 
 export default defineConfig({
   testDir: './tests/browser',
@@ -19,13 +19,14 @@ export default defineConfig({
   // A missing baseline fails instead of being written, so a test can never pass against its own fresh screenshot.
   updateSnapshots: 'none',
   projects: [
-    { name: 'default', testIgnore: ['tower.spec.mjs', 'admin.spec.mjs', 'maker.spec.mjs', 'admin-upgrade.spec.mjs', 'coins.spec.mjs', 'factory.spec.mjs', 'department.spec.mjs'] },
+    { name: 'default', testIgnore: ['tower.spec.mjs', 'admin.spec.mjs', 'maker.spec.mjs', 'admin-upgrade.spec.mjs', 'coins.spec.mjs', 'factory.spec.mjs', 'department.spec.mjs', 'renaissance.spec.mjs'] },
     { name: 'tower', testMatch: 'tower.spec.mjs', use: { baseURL: 'http://127.0.0.1:4318' } },
     { name: 'admin', testMatch: ['admin.spec.mjs', 'maker.spec.mjs', 'admin-upgrade.spec.mjs'], grepInvert: /@live/, use: { baseURL: 'http://127.0.0.1:4320' } },
     // Live mode over a mock LLM. Only the live tests in admin-upgrade.spec.mjs run here.
     { name: 'admin-live', testMatch: 'admin-upgrade.spec.mjs', grep: /@live/, use: { baseURL: 'http://127.0.0.1:4323' } },
     { name: 'factory', testMatch: 'factory.spec.mjs', use: { baseURL: 'http://127.0.0.1:4324' } },
     { name: 'department', testMatch: 'department.spec.mjs', use: { baseURL: 'http://127.0.0.1:4325' } },
+    { name: 'renaissance', testMatch: 'renaissance.spec.mjs', use: { baseURL: 'http://127.0.0.1:4326' } },
     { name: 'coins', testMatch: 'coins.spec.mjs', use: { baseURL: 'http://127.0.0.1:4321' } },
   ],
   fullyParallel: false,
@@ -87,6 +88,13 @@ export default defineConfig({
       url: 'http://127.0.0.1:4325/api/access',
       reuseExistingServer: false,
       env: { PORT: '4325', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DEV_TOOLS: '1', OVERRIDE_DATA_DIR: dataDir('sessions-department') },
+    },
+    {
+      // Renaissance case: rehearsal, dev tools on. Only the renaissance project talks to this server.
+      command: 'node server/index.mjs',
+      url: 'http://127.0.0.1:4326/api/access',
+      reuseExistingServer: false,
+      env: { PORT: '4326', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DEV_TOOLS: '1', OVERRIDE_DATA_DIR: dataDir('sessions-renaissance') },
     },
   ],
 });

@@ -25,7 +25,7 @@ import { createTrafficSampler, loadEvents, loadRound, readSessionEvents } from '
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TOKEN_MS = 12 * 60 * 60_000;
-const actions = ['start', 'reset', 'visit', 'interview', 'inspect', 'continue', 'verdict'];
+const actions = ['start', 'reset', 'visit', 'interview', 'inspect', 'continue', 'verdict', 'quote', 'unquote', 'accuse'];
 const tabPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

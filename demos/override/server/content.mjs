@@ -21,7 +21,8 @@ export class ContentError extends Error {
 export function editablePaths(kase) {
   // A part label, introduction or quick question that every character overrides is never shown, so it is not offered.
   // Character knowledge is added to the part's, not a replacement, so part knowledge stays editable.
-  const shown = PART_FIELDS.filter(f => !OVERRIDDEN.includes(f) || !kase.characters.every(c => c[f] !== undefined));
+  // A talk case gives every part the same knowledge so the prompt never depends on the deal; it is not offered for editing.
+  const shown = PART_FIELDS.filter(f => (f !== 'knowledge' || !kase.talk) && (!OVERRIDDEN.includes(f) || !kase.characters.every(c => c[f] !== undefined)));
   return [
     'copy.headline', 'copy.intro.lead', 'copy.intro.body',
     'copy.briefing.title', 'copy.briefing.description', 'copy.briefing.question', 'copy.briefing.hint',

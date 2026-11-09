@@ -125,7 +125,36 @@ const department: WorldPack = {
   ],
 };
 
-const packs: Record<string, WorldPack> = { grove, tower, friends, factory, department };
+const renaissance: WorldPack = {
+  id: 'renaissance',
+  text: { place: 'Castelvento', eyebrow: 'CASTELVENTO', day: 'JUNE 1489', one: 'townsperson', many: 'townsfolk', castLabel: 'TOWNSPERSON', hint: 'Walk with WASD / arrows. Press E next to a townsperson.', oneWithArticle: 'a townsperson', investigator: 'traveller', icon: '<path d="M4 20V10l4-3 4 3 4-3 4 3v10zm5 0v-5h6v5"/>' },
+  art: { cast: '', idle: '', walk: '', props: '' },
+  palette: { ground: '#2a2018', label: '#3b2a1c', labelBg: '#f6ead2' },
+  // Cast order: Ottavio (centre-front, sundial steps), Matteo, Beatrice, Bruno, Agnese (right of the well).
+  slots: [{ x: 240, y: 262 }, { x: 130, y: 150 }, { x: 330, y: 150 }, { x: 410, y: 260 }, { x: 115, y: 215 }],
+  figures: {
+    base: '/assets/renaissance/characters',
+    props: '/assets/renaissance/props',
+    sprites: { ottavio: 'wizard', matteo: 'inventor', beatrice: 'noble', bruno: 'guard', agnese: 'apothecary' },
+    detective: 'scout',
+    frame: { w: 125, h: 188 },
+    anchor: { x: 62, y: 182 },
+    scale: 1 / 3,
+    density: 3,
+    labelLift: 66,
+    walkFrames: 4,
+    stopProps: { briefing: 'scroll', report: 'seal' },
+  },
+  backdrop: { url: '/assets/renaissance/town-square.png', width: 1536, height: 1024, scale: 1 / 3, x: -16, y: 0, fill: '#2a2018' },
+  // Cobbled ground only (feet y 122..326); the well and the bench with crates are blocked.
+  walk: {
+    bounds: { x: 40, y: 122, w: 420, h: 204 },
+    blocks: [{ x: -3, y: 173, w: 54, h: 60 }, { x: 417, y: 187, w: 68, h: 60 }],
+  },
+  stops: { briefing: { x: 240, y: 300 }, report: { x: 330, y: 290 } },
+};
+
+const packs: Record<string, WorldPack> = { grove, tower, friends, factory, department, renaissance };
 
 export function worldFor(id: string | undefined): WorldPack {
   return (id !== undefined && Object.hasOwn(packs, id) ? packs[id] : grove) as WorldPack;

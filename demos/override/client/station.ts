@@ -37,6 +37,7 @@ function artKeys(world: WorldPack): Record<ArtKind, string> {
   if (world.id === 'grove') return { cast: 'grove-cast', idle: 'monkey-idle', walk: 'detective-walk', props: 'jungle' };
   return { cast: `${world.id}-cast`, idle: `${world.id}-idle`, walk: `${world.id}-walk`, props: `${world.id}-props` };
 }
+const walkKey = (sprite: string, i: number) => `factory-${sprite}-walk-${i}`;
 const poses: Pose[] = ['listening', 'speaking', 'thinking'];
 const figureKey = (sprite: string, pose: Pose) => `factory-${sprite}-${pose}`;
 const width = WORLD_WIDTH;
@@ -114,6 +115,8 @@ export class Station extends Phaser.Scene {
   private detectiveImg?: Phaser.GameObjects.Image;
   private detectiveMarker?: HTMLSpanElement;
   private detectivePose: Pose = 'listening';
+  private walkMs = 0;
+  private walkShown = false;
   private thinkingId: string | null = null;
   private speakingId: string | null = null;
   private speakTimer?: ReturnType<typeof setTimeout>;
@@ -191,7 +194,7 @@ export class Station extends Phaser.Scene {
     this.detectiveMarker = undefined;
     this.thinkingId = null;
     this.speakingId = null;
-    this.detectivePose = 'listening';
+    this.detectivePose = 'listening'; this.walkMs = 0; this.walkShown = false;
   }
 
   preload() {
@@ -201,11 +204,14 @@ export class Station extends Phaser.Scene {
       for (const sprite of [...Object.values(art.sprites), art.detective]) {
         for (const pose of poses) this.load.image(figureKey(sprite, pose), factoryFigures.poseUrl(art, sprite, pose));
       }
+      for (let i = 0; i < (art.walkFrames ?? 0); i++) this.load.image(walkKey(art.detective, i), factoryFigures.walkFrameUrl(art, i));
       this.world.floor?.props.forEach(p => this.load.image(`factory-prop-${p.id}`, factoryFigures.propUrl(art, p.id)));
       const back = this.world.backdrop;
       if (back) {
         this.load.image(`${this.world.id}-backdrop`, back.url);
-        for (const name of ['evidence-marker', 'case-folder', 'notebook']) this.load.image(`${this.world.id}-${name}`, factoryFigures.propUrl(art, name));
+        const stopNames = factoryFigures.stopPropsOf(art);
+        const propNames = [stopNames.briefing, stopNames.report, ...(this.world.evidence ? ['evidence-marker'] : [])];
+        for (const name of propNames) this.load.image(`${this.world.id}-${name}`, factoryFigures.propUrl(art, name));
         this.world.evidence?.forEach(e => this.load.image(`${this.world.id}-evidence-${e.id}`, factoryFigures.propUrl(art, e.id)));
       }
       return;
@@ -458,8 +464,9 @@ export class Station extends Phaser.Scene {
     this.add.rectangle(-400, -300, 1280, 940, Phaser.Display.Color.HexStringToColor(back.fill).color).setOrigin(0, 0).setDepth(-9);
     this.add.image(back.x, back.y, `${id}-backdrop`).setOrigin(0, 0).setScale(back.scale).setDepth(-8);
     const prop = (name: string, x: number, y: number, scale: number) => this.add.image(x, y, `${id}-${name}`).setOrigin(.5, 1).setScale(scale).setDepth(y);
-    prop('case-folder', this.stops.briefing.x, this.stops.briefing.y, 1 / 12);
-    prop('notebook', this.stops.report.x, this.stops.report.y, 1 / 12);
+    const names = factoryFigures.stopPropsOf(art);
+    prop(names.briefing, this.stops.briefing.x, this.stops.briefing.y, 1 / 12);
+    prop(names.report, this.stops.report.x, this.stops.report.y, 1 / 12);
     this.world.evidence?.forEach(e => {
       const item = prop(`evidence-${e.id}`, e.x, e.y, 1 / 12);
       const mark = prop('evidence-marker', e.x + item.displayWidth / 2 + 4, e.y, 1 / 24);
@@ -800,6 +807,18 @@ export class Station extends Phaser.Scene {
     if (this.detectiveImg) {
       if (this.direction === 'left' || this.direction === 'right') this.facing = this.direction === 'left';
       this.detectiveImg.setPosition(this.player.x, this.player.y).setFlipX(this.facing).setDepth(this.player.y);
+      const frames = this.world.figures?.walkFrames ?? 0;
+      if (frames > 0) {
+        const art = this.world.figures!;
+        if (moved && !reducedMotion.matches) {
+          this.walkMs += delta;
+          this.detectiveImg.setTexture(walkKey(art.detective, factoryFigures.walkFrameAt(frames, this.walkMs)));
+          this.walkShown = true;
+        } else if (this.walkShown) {
+          this.walkMs = 0; this.walkShown = false;
+          this.detectiveImg.setTexture(figureKey(art.detective, this.detectivePose));
+        }
+      }
     }
     this.npcs.forEach(npc => npc.update(delta, this.enabled, reducedMotion.matches,
       Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 54));

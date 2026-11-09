@@ -12,7 +12,7 @@ import { modelConfig } from '../server/interviews.mjs';
 const PARTS = ['birds', 'moon', 'flat', 'finland', 'paul'];
 
 test('registry_third: friends is third on the friends world', () => {
-  assert.deepEqual(cases.map(c => c.id), ['banana-mystery', 'tower-echo-bell', 'friends-roundtable', 'factory-escape', 'department-murder']);
+  assert.deepEqual(cases.map(c => c.id), ['banana-mystery', 'tower-echo-bell', 'friends-roundtable', 'factory-escape', 'department-murder', 'renaissance-traveler']);
   assert.equal(cases[3].id, 'factory-escape');
   assert.equal(cases[4].id, 'department-murder');
   assert.equal(cases[2].world.id, 'friends');

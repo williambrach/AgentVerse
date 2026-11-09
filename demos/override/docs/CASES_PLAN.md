@@ -1,6 +1,6 @@
 # Plan: multiple cases for The Override
 
-> 2026-10-29: clues removed. A case is the briefing, three interviews, a verdict, and a debrief; the five live cases are `banana-mystery`, `tower-echo-bell`, `friends-roundtable`, `factory-escape` and `department-murder` (`interview-v5`; the first two were `banana-authored-v3.0.0` and `tower-echo-bell-v3.0.0` then). Everything below that mentions clues, chapters, records, `revealedPosition`, the basket or `--chapter`/`--evidence` is the original 2026-10-26 design, kept as history. That legacy format was removed on 2026-10-30; only the parts-based `defineCase` format exists.
+> 2026-10-29: clues removed. A case is the briefing, three interviews, a verdict, and a debrief; the six live cases are `banana-mystery`, `tower-echo-bell`, `friends-roundtable`, `factory-escape`, `department-murder` and `renaissance-traveler` (`interview-v5`; the first two were `banana-authored-v3.0.0` and `tower-echo-bell-v3.0.0` then). Everything below that mentions clues, chapters, records, `revealedPosition`, the basket or `--chapter`/`--evidence` is the original 2026-10-26 design, kept as history. That legacy format was removed on 2026-10-30; only the parts-based `defineCase` format exists.
 
 Status: Steps 0–4 implemented on `superlite/override-cases` (2026-10-26).
 

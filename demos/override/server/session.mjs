@@ -8,6 +8,8 @@ import { economyRules, createWallet, quote, spend } from './economy.mjs';
 import { appendJsonl, dataPaths, readJsonl } from './dataset.mjs';
 import { alarmOf, scheduleOf } from './deadline.mjs';
 import { rot13 } from './cipher.mjs';
+import { newTalkState, topicAnswer, aboutAnswer, typedRoute, supports, terms } from './talk.mjs';
+import { guardHits } from './anachronism.mjs';
 
 // One log line with reasoning_inspected reasoning in ROT13; other lines pass through untouched.
 function encipher(line) {
@@ -20,6 +22,17 @@ function encipher(line) {
 }
 
 // Fisher-Yates with crypto.randomInt: a uniform random permutation.
+// A line with a `hidden` object loses it while the game is open; other lines pass through untouched.
+function stripHidden(line) {
+  if (!line.includes('"hidden"')) return line;
+  try {
+    const e = JSON.parse(line);
+    if (!e || typeof e !== 'object' || !Object.hasOwn(e, 'hidden')) return line;
+    delete e.hidden;
+    return JSON.stringify(e);
+  } catch { return line; }
+}
+
 export function shuffleIds(ids) {
   const out = [...ids];
   for (let i = out.length - 1; i > 0; i--) {
@@ -65,6 +78,7 @@ export function replay(events, cases, lastSaid = null) {
         economy: createWallet(e.economy ?? economyRules({})), thread: [], chatter: { round: 0, pending: 0 }, inspections: [],
         team: e.team && typeof e.team.id === 'string' && typeof e.team.name === 'string' ? { id: e.team.id, name: e.team.name } : null };
       if (kase.evidence) s.examined = [];
+      if (kase.talk) s.talk = newTalkState(kase);
     }
     if (!s || e.sessionId !== s.id || e.sequence !== s.revision + 1) return null;
     s.revision = e.sequence;
@@ -84,7 +98,17 @@ export function replay(events, cases, lastSaid = null) {
       s.chatter = { round: e.round, pending: (e.roundLines ?? 3) - e.line };
     }
     if (e.type === 'reasoning_inspected') s.inspections.push({ character: e.character, sourceEventId: e.sourceEventId, reasoning: e.reasoning, timestamp: e.timestamp });
-    if (e.type === 'interview_answer') s.interviews[e.character].push({ question: e.question, answer: e.answer, timestamp: e.timestamp });
+    if (e.type === 'interview_answer') {
+      if (kase.talk && e.kind) {
+        s.interviews[e.character].push({ question: e.question, answer: e.answer, timestamp: e.timestamp, id: e.eventId, kind: e.kind, topic: e.topic ?? null });
+        if (e.kind === 'topic' && e.topic && !s.talk.asked[e.character].includes(e.topic)) s.talk.asked[e.character].push(e.topic);
+        if (e.hidden?.slip) s.talk.delivered[e.hidden.slip] = e.eventId;
+        if (e.hidden?.followUp) s.talk.challenged[e.hidden.followUp] = (s.talk.challenged[e.hidden.followUp] ?? 0) + 1;
+      } else s.interviews[e.character].push({ question: e.question, answer: e.answer, timestamp: e.timestamp });
+    }
+    if (kase.talk && e.type === 'quote_saved') s.talk.quotes.push({ id: e.eventId, line: e.quote.line, character: e.quote.character, text: e.quote.text, at: e.timestamp });
+    if (kase.talk && e.type === 'quote_removed') s.talk.quotes = s.talk.quotes.filter(q => q.id !== e.quote);
+    if (kase.talk && e.type === 'accusation_rejected') s.talk.accusations.push({ id: e.eventId, character: e.character, quotes: e.quotes, at: e.timestamp });
     if (e.type === 'verdict_submitted') { s.verdict = e.verdict; s.status = 'closed'; }
   }
   return s;
@@ -267,6 +291,12 @@ export class Investigation {
     let session = null;
     if (s) {
       session = structuredClone(s); delete session.cast; session.inspectable = this.inspectable();
+      if (kase.talk) {
+        session.talk = {
+          asked: structuredClone(s.talk.asked), quotes: structuredClone(s.talk.quotes),
+          accusations: s.talk.accusations.map(a => ({ ...structuredClone(a), feedback: resolveText(kase, s.cast, kase.answer.feedback.other), denial: kase.talk.replies[a.character].denial })),
+        };
+      }
       if (kase.evidence) session.evidence = s.examined.map(id => { const x = kase.evidence.find(y => y.id === id); return { id, title: x.title, text: resolveText(kase, s.cast, x.text) }; });
       if (kase.cipher === 'rot13') session.inspections = session.inspections.map(i => ({ ...i, reasoning: rot13(i.reasoning) }));
       const alarm = this.alarm(s);
@@ -332,15 +362,33 @@ export class Investigation {
     const { verdict } = s;
     const escaped = verdict.outcome === 'escaped';
     const copy = escaped ? { title: say(kase.deadline.escape.title), summary: say(kase.deadline.escape.summary) } : { title: say(kase.debrief.title), summary: say(kase.debrief.summary) };
+    const accusation = kase.talk && !escaped ? verdict.accusation : null;
     return {
       ...(escaped ? { outcome: 'escaped' } : {}), ...copy, lesson: say(kase.debrief.lesson),
-      feedback: say(escaped && kase.deadline.escape.feedback ? kase.deadline.escape.feedback : !escaped && verdict.score === verdict.total ? kase.answer.feedback.correct : kase.answer.feedback.other),
+      feedback: say(accusation ? kase.answer.feedback.correct : escaped && kase.deadline.escape.feedback ? kase.deadline.escape.feedback : !escaped && verdict.score === verdict.total ? kase.answer.feedback.correct : kase.answer.feedback.other),
       score: verdict.score, total: verdict.total,
       findings: kase.characters.map(c => {
         const part = partOf(kase, s.cast, c.id);
         return { character: c.id, role: verdict.truth[c.id], picked: verdict.roles[c.id] ?? null, correct: verdict.results[c.id],
           classification: say(part.finding.classification), explanation: say(part.finding.explanation) };
       }),
+      ...(accusation ? this.reveal(s, accusation) : {}),
+    };
+  }
+
+  // The talk case's debrief: who it was, and each slip the traveller delivered, in order, with whether the solving accusation cited it.
+  reveal(s, accusation) {
+    const { kase } = this;
+    const cited = new Set(accusation.quotes.map(id => s.talk.quotes.find(q => q.id === id)?.line));
+    const slips = Object.entries(s.talk.delivered).map(([slipId, eventId]) => {
+      const character = kase.characters.find(c => slipId.startsWith(`${c.id}-`) && kase.talk.slips[c.id]?.some(x => x.id === slipId))?.id;
+      const slip = kase.talk.slips[character].find(x => x.id === slipId);
+      const turn = s.interviews[character].find(t => t.id === eventId);
+      return { character, term: slip.term, text: turn?.answer ?? slip.line, cited: cited.has(eventId) };
+    });
+    return {
+      reveal: { character: accusation.character, text: kase.characters.find(c => c.id === accusation.character).reveal },
+      slips, wrong: accusation.wrong,
     };
   }
 
@@ -383,12 +431,17 @@ export class Investigation {
             await this.interview(input);
             this.expire(Date.now());
           } else if (action === 'inspect') {
+            if (this.kase.tools?.inspect === false) throw new RequestError(409, 'Not in this case.');
             this.inspect(input);
           } else if (action === 'continue') {
+            if (this.kase.tools?.talk === false) throw new RequestError(409, 'Not in this case.');
             await this.chat();
             this.expire(Date.now());
           } else if (action === 'verdict') {
+            if (this.kase.talk) throw new RequestError(400, 'Accuse the traveller with quotes instead.');
             this.verdict(input);
+          } else if (['quote', 'unquote', 'accuse'].includes(action) && this.kase.talk) {
+            this[action](input);
           } else throw new RequestError(404, 'Unknown action.');
         }
       }
@@ -428,6 +481,7 @@ export class Investigation {
       team: team && typeof team.id === 'string' && typeof team.name === 'string' ? { id: team.id, name: team.name } : null,
     };
     if (this.kase.evidence) this.session.examined = [];
+    if (this.kase.talk) this.session.talk = newTalkState(this.kase);
     this.log('session_started', { assignment, economy: rules, cast, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, team: this.session.team, ...this.meta });
     this.log('briefing_viewed');
   }
@@ -437,28 +491,39 @@ export class Investigation {
     const { characters, world: w } = this.kase;
     const character = characters.find(c => c.id === input.character);
     if (!character) throw new RequestError(400, `Choose one of the ${characters.length} ${w.cast.many}.`);
-    if (typeof input.question !== 'string' || input.question.trim().length < 3 || input.question.length > 1200) throw new RequestError(400, 'Ask a question between 3 and 1,200 characters.');
+    const talk = this.kase.talk ? this.talkPlan(input, character) : null;
+    if (!talk && (typeof input.question !== 'string' || input.question.trim().length < 3 || input.question.length > 1200)) throw new RequestError(400, 'Ask a question between 3 and 1,200 characters.');
     if (s.interviews[character.id].length >= 40) throw new RequestError(400, 'This demo supports 40 questions per character. Submit your findings or start a new session.');
-    const tools = ['ask'];
+    // In a talk case the authored topic and follow-up answers are free: the slips must stay reachable on any coin budget.
+    const tools = talk && talk.kind !== 'typed' ? [] : ['ask'];
     const check = quote(s.economy, tools, this.reserve(character.id));
     if (!check.ok) throw new RequestError(409, check.reason);
-    const question = input.question.trim();
+    const question = talk ? talk.question : input.question.trim();
     const wallet = structuredClone(s.economy);
     let answeredLogged = false;
-    const asked = this.log('interview_question', { character: character.id, question });
+    const asked = this.log('interview_question', { character: character.id, question, ...(talk ? { kind: talk.kind, topic: talk.topic, about: talk.about } : {}) });
     try {
-      const result = await this.answer(this.config, this.kase, structuredClone(s), character.id, question, {
+      const context = {
         sessionId: s.id, questionEventId: asked.eventId,
         onAttempt: diagnostics => { this.log('interview_provider_response', { character: character.id, question, questionEventId: asked.eventId, ...diagnostics }); },
-      });
+      };
+      let hidden = null;
+      let result;
+      if (talk) ({ result, hidden } = await this.talkAnswer(talk, character.id, question, context));
+      else result = await this.answer(this.config, this.kase, structuredClone(s), character.id, question, context);
       const answer = typeof result === 'string' ? result : result.answer;
       const provenance = typeof result === 'string' ? null : result.provenance ?? null;
       const reasoning = typeof result === 'string' ? null : result.reasoning ?? null;
       const paid = spend(s.economy, tools);
-      const answered = this.log('interview_answer', { character: character.id, question, answer, questionEventId: asked.eventId, provenance, spend: paid });
+      const answered = this.log('interview_answer', { character: character.id, question, answer, questionEventId: asked.eventId, provenance, spend: paid, ...(talk ? { kind: talk.kind, topic: talk.topic, about: talk.about, hidden } : {}) });
       answeredLogged = true;
       this.remember(character.id, answered.eventId, reasoning);
-      s.interviews[character.id].push({ question, answer, timestamp: answered.timestamp });
+      if (talk) {
+        s.interviews[character.id].push({ question, answer, timestamp: answered.timestamp, id: answered.eventId, kind: talk.kind, topic: talk.topic });
+        if (talk.kind === 'topic') s.talk.asked[character.id].push(talk.topic);
+        if (hidden.slip) s.talk.delivered[hidden.slip] = answered.eventId;
+        if (hidden.followUp) s.talk.challenged[hidden.followUp] = (s.talk.challenged[hidden.followUp] ?? 0) + 1;
+      } else s.interviews[character.id].push({ question, answer, timestamp: answered.timestamp });
     } catch (error) {
       if (!answeredLogged) {
         // The answer write itself may have thrown after the line reached the file:
@@ -478,9 +543,136 @@ export class Investigation {
     }
   }
 
+  // Which turn (and whose) an interview answer id names.
+  turnOf(id) {
+    for (const [character, turns] of Object.entries(this.session.interviews)) {
+      const turn = turns.find(t => t.id === id);
+      if (turn) return { character, turn };
+    }
+    return null;
+  }
+
+  // Validate a talk case's interview input: exactly one of topic, about or question.
+  talkPlan(input, character) {
+    const s = this.session;
+    const given = ['topic', 'about', 'question'].filter(k => input[k] !== undefined);
+    if (given.length !== 1) throw new RequestError(400, 'Ask one thing at a time: a topic, a phrase or a question.');
+    if (given[0] === 'topic') {
+      const topic = this.kase.talk.topics.find(t => t.id === input.topic);
+      if (!topic) throw new RequestError(400, 'Choose one of the topics.');
+      if (s.talk.asked[character.id].includes(topic.id)) throw new RequestError(400, `You already asked ${character.name} about ${topic.label}.`);
+      return { kind: 'topic', topic: topic.id, about: null, question: topic.question };
+    }
+    if (given[0] === 'about') {
+      const about = input.about;
+      const found = about && typeof about === 'object' && typeof about.line === 'string' ? this.turnOf(about.line) : null;
+      if (!found) throw new RequestError(400, 'Choose a line to ask about.');
+      const text = typeof about.text === 'string' ? about.text.trim() : '';
+      if (text.length < 1 || text.length > 200 || !found.turn.answer.includes(text)) throw new RequestError(400, 'Choose words from that line.');
+      return { kind: 'about', topic: null, about: { line: about.line, text }, question: `What did you mean by “${text}”?`, speaker: found.character, turn: found.turn };
+    }
+    if (typeof input.question !== 'string' || input.question.trim().length < 3 || input.question.length > 1200) throw new RequestError(400, 'Ask a question between 3 and 1,200 characters.');
+    return { kind: 'typed', topic: null, about: null, question: input.question.trim() };
+  }
+
+  // The authored or guarded answer of a talk case: { result, hidden }.
+  async talkAnswer(talk, cid, question, context) {
+    const s = this.session;
+    const { kase } = this;
+    const authored = (text, slip, followUp) => ({ result: { answer: text, provenance: null, reasoning: null }, hidden: { slip, followUp, guard: null } });
+    if (talk.kind === 'topic') {
+      const r = topicAnswer(kase, s.cast, s.talk, cid, talk.topic);
+      return authored(r.text, r.slip, null);
+    }
+    if (talk.kind === 'about') {
+      const slip = Object.entries(s.talk.delivered).find(([, id]) => id === talk.about.line)?.[0] ?? null;
+      const r = aboutAnswer(kase, s.talk, cid, { speaker: talk.speaker, text: talk.turn.answer, slip }, talk.about.text);
+      return authored(r.text, null, r.followUp);
+    }
+    const route = typedRoute(kase, s.talk, cid, question);
+    if (route.kind !== 'model') return authored(route.text, null, route.followUp);
+    if (this.config.mode === 'rehearsal') {
+      const list = kase.talk.rehearsal[cid];
+      const n = s.interviews[cid].filter(t => t.kind === 'typed').length;
+      return authored(list[n % list.length], null, null);
+    }
+    const extra = terms(kase);
+    const ask = async () => {
+      const r = await this.answer(this.config, kase, structuredClone(s), cid, question, context);
+      return typeof r === 'string' ? { answer: r, provenance: null, reasoning: null } : r;
+    };
+    let result = await ask();
+    let guard = 'ok';
+    if (guardHits(result.answer ?? '', extra).length) {
+      guard = 'retried';
+      result = await ask();
+      if (guardHits(result.answer ?? '', extra).length) {
+        guard = 'deflected';
+        result = { ...result, answer: kase.talk.replies[cid].deflect, reasoning: null };
+      }
+    }
+    return { result, hidden: { slip: null, followUp: null, guard } };
+  }
+
+  // Save words from an answer to the notebook. Free.
+  quote(input) {
+    const s = this.session;
+    const found = typeof input.line === 'string' ? this.turnOf(input.line) : null;
+    if (!found) throw new RequestError(400, 'Choose a line to quote.');
+    let text;
+    if (input.text === undefined) text = found.turn.answer;
+    else {
+      text = typeof input.text === 'string' ? input.text.trim() : '';
+      if (text.length < 3 || !found.turn.answer.includes(text)) throw new RequestError(400, 'Choose at least 3 characters from that line.');
+    }
+    if (s.talk.quotes.some(q => q.line === input.line && q.text === text)) throw new RequestError(400, 'You already saved that quote.');
+    if (s.talk.quotes.length >= 30) throw new RequestError(400, 'The notebook holds 30 quotes. Remove one first.');
+    const event = this.log('quote_saved', { quote: { line: input.line, character: found.character, text } });
+    s.talk.quotes.push({ id: event.eventId, line: input.line, character: found.character, text, at: event.timestamp });
+  }
+
+  unquote(input) {
+    const s = this.session;
+    if (typeof input.quote !== 'string' || !s.talk.quotes.some(q => q.id === input.quote)) throw new RequestError(400, 'That quote is not in your notebook.');
+    this.log('quote_removed', { quote: input.quote });
+    s.talk.quotes = s.talk.quotes.filter(q => q.id !== input.quote);
+  }
+
+  // Accuse one character with 1 to 3 of their own saved quotes. Free. Right and proven closes the case.
+  accuse(input) {
+    const s = this.session;
+    const { characters } = this.kase;
+    const character = characters.find(c => c.id === input.character);
+    if (!character) throw new RequestError(400, `Choose one of the ${characters.length} ${this.kase.world.cast.many}.`);
+    const ids = input.quotes;
+    const cited = Array.isArray(ids) && ids.length >= 1 && ids.length <= 3 && new Set(ids).size === ids.length
+      ? ids.map(id => s.talk.quotes.find(q => q.id === id)) : null;
+    if (!cited || cited.some(q => !q || q.character !== character.id)) throw new RequestError(400, `Choose 1 to 3 of ${character.name}'s quotes.`);
+    const traveler = partOf(this.kase, s.cast, character.id).role === 'traveler';
+    const supported = supports(this.kase, s.cast, s.talk, character.id, cited);
+    if (traveler && supported) {
+      const wrong = s.talk.accusations.length;
+      const all = characters.map(c => c.id);
+      s.verdict = {
+        roles: Object.fromEntries(all.map(id => [id, id === character.id ? 'traveler' : 'local'])),
+        truth: Object.fromEntries(all.map(id => [id, partOf(this.kase, s.cast, id).role])),
+        results: Object.fromEntries(all.map(id => [id, true])),
+        score: Math.max(1, 5 - 2 * wrong), total: all.length, confidence: 100, explanation: '', evidenceIds: [],
+        submittedAt: new Date().toISOString(), accusation: { character: character.id, quotes: [...ids], wrong },
+      };
+      s.status = 'closed';
+      this.log('verdict_submitted', { verdict: s.verdict, coins: { spent: s.economy.spent, budget: s.economy.budget } });
+      this.log('debrief_viewed');
+      return;
+    }
+    const event = this.log('accusation_rejected', { character: character.id, quotes: [...ids], hidden: { traveler, supported } });
+    s.talk.accusations.push({ id: event.eventId, character: character.id, quotes: [...ids], at: event.timestamp });
+  }
+
   // Whose latest line can be inspected. Every line goes through remember(), so held reasoning is always the latest line's.
   inspectable() {
     const scripted = typeof this.kase.rehearsalReasoning === 'function';
+    if (this.kase.tools?.inspect === false) return Object.fromEntries(this.kase.characters.map(c => [c.id, false]));
     return Object.fromEntries(this.kase.characters.map(c => [c.id, this.config.mode === 'live' ? this.reasoning.has(c.id) : scripted]));
   }
 
@@ -494,6 +686,8 @@ export class Investigation {
   // Coins to keep so everyone can still be asked once, not counting `exceptId`.
   reserve(exceptId = null) {
     const s = this.session;
+    // A talk case asks everyone for free (topic chips), so nothing is held back for it.
+    if (this.kase.talk) return 0;
     return s.economy.costs.ask * this.kase.characters.filter(c => c.id !== exceptId && !s.interviews[c.id].length).length;
   }
 
@@ -603,7 +797,7 @@ export class Investigation {
     if (this.kase.cipher === 'rot13') text = text.split('\n').map(line => encipher(line)).join('\n');
     if (this.session.status === 'closed') return text;
     // While the game is on, the cast stays secret: only the first line is rewritten.
-    const lines = text.split('\n');
+    const lines = text.split('\n').map(stripHidden);
     const head = JSON.parse(lines[0]);
     if (head.type === 'session_started') { head.cast = null; lines[0] = JSON.stringify(head); }
     return lines.join('\n');

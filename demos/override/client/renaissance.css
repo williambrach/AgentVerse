@@ -1,0 +1,73 @@
+/* Renaissance world: parchment panels, sepia ink, burgundy accents. */
+#app[data-world="renaissance"] { --ink: #3b2a1a; --parchment: #f1e4c3; --burgundy: #7a2132; }
+#app[data-world="renaissance"] .hud-rail .cast-card { background: #e9d9b3; border-color: #7a2132; color: #3b2a1a; }
+#app[data-world="renaissance"] .hud-rail .cast-card.active, #app[data-world="renaissance"] .hud-rail .cast-card.talking { border-color: #7a2132; box-shadow: 0 0 0 2px #7a213255; }
+#app[data-world="renaissance"] .hud-rail .cast-card small { color: #6b5236; }
+#app[data-world="renaissance"] .panel, #app[data-world="renaissance"] .debrief-page { background: #f1e4c3; color: #3b2a1a; font-family: Georgia, 'Times New Roman', serif; }
+/* The accuse page gets its parchment from the dossier frame, not from a background on .accuse-panel: that panel sits in the scrolling notebook-page inside an overflow:visible dossier, and its own background painted as a blank block over the top of the world (the page is 290px tall at y 468, the block 290px tall at y 38). */
+#app[data-world="renaissance"] .dossier:not(:has(.dialogue)) { background: #f1e4c3; }
+#app[data-world="renaissance"] .accuse-panel { color: #3b2a1a; font-family: Georgia, 'Times New Roman', serif; }
+#app[data-world="renaissance"] .topic-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#app[data-world="renaissance"] .topic-chips button { background: #e9d9b3; color: #3b2a1a; border: 1px solid #7a2132; border-radius: 3px; padding: 4px 8px; cursor: pointer; }
+#app[data-world="renaissance"] .topic-chips button:disabled { opacity: .5; }
+#app[data-world="renaissance"] .talk-line { margin: 6px 0; color: #3b2a1a; line-height: 1.45; }
+#app[data-world="renaissance"] .line-tools { display: flex; gap: 6px; margin-top: 2px; }
+#app[data-world="renaissance"] .line-tools button { background: transparent; border: 1px solid #7a2132; color: #7a2132; border-radius: 3px; cursor: pointer; font-size: 12px; }
+#app[data-world="renaissance"] .word { color: inherit; font: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+#app[data-world="renaissance"] .word.picked { background: #d9a44166; outline: 1px solid #7a2132; }
+#app[data-world="renaissance"] .quote-group { border-left: 3px solid #7a2132; padding-left: 8px; margin: 8px 0; }
+#app[data-world="renaissance"] .quote-group h4 { color: #7a2132; margin: 0 0 4px; }
+#app[data-world="renaissance"] .accuse-panel { padding: 12px; border: 1px solid #7a2132; }
+#app[data-world="renaissance"] .accuse-suspects { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+#app[data-world="renaissance"] .accuse-suspect { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid #b89f6e; cursor: pointer; }
+#app[data-world="renaissance"] .accuse-suspect:has(input:checked) { border-color: #7a2132; background: #e9d9b3; }
+#app[data-world="renaissance"] .accuse-suspect small { display: block; color: #6b5236; }
+#app[data-world="renaissance"] .accuse-quotes { list-style: none; padding: 0; margin: 8px 0; }
+#app[data-world="renaissance"] .accuse-quote { display: flex; gap: 6px; padding: 3px 0; }
+#app[data-world="renaissance"] .accuse-empty { color: #6b5236; font-style: italic; }
+#app[data-world="renaissance"] .accuse-feedback { margin: 10px 0; padding: 8px; border-left: 3px solid #7a2132; background: #e9d9b3; }
+#app[data-world="renaissance"] .accuse-actions { display: flex; gap: 8px; }
+#app[data-world="renaissance"] .accuse-actions button { background: #7a2132; color: #f1e4c3; border: 0; border-radius: 3px; padding: 6px 14px; cursor: pointer; }
+#app[data-world="renaissance"] .accuse-actions button:disabled { opacity: .4; cursor: default; }
+#app[data-world="renaissance"] .accuse-actions #accuse-back { background: transparent; color: #7a2132; border: 1px solid #7a2132; }
+#app[data-world="renaissance"] .reveal { margin: 12px 0; padding: 14px; border: 2px solid #7a2132; background: #e9d9b3; }
+#app[data-world="renaissance"] .reveal h2 { color: #7a2132; margin: 2px 0 8px; }
+#app[data-world="renaissance"] .slips ul { list-style: none; padding: 0; }
+#app[data-world="renaissance"] .slip { padding: 4px 0; border-bottom: 1px dotted #b89f6e; }
+#app[data-world="renaissance"] .slip mark { background: #d9a44188; color: #3b2a1a; }
+#app[data-world="renaissance"] .slip[data-cited="true"] { border-left: 3px solid #7a2132; padding-left: 6px; }
+/* Faces: the head of each person's 125x188 listening pose, cropped square. Rail, chat badge, lineup and the dialogue portrait all read this by character id; !important beats the slot-3/4 grove fallback in banana.css. */
+html [data-world="renaissance"] .monkey-face, html .monkey-line[data-world="renaissance"] .monkey-face, html [data-world="renaissance"] .portrait .pixel-person { --fc: var(--cell, 44px); background-repeat: no-repeat !important; image-rendering: pixelated; }
+html [data-world="renaissance"] .portrait .pixel-person { --fc: 76px; }
+html [data-world="renaissance"] .monkey-face.ottavio, html .monkey-line[data-world="renaissance"] .monkey-face.ottavio, html [data-world="renaissance"] .portrait.ottavio .pixel-person { background-image: url('/assets/renaissance/characters/wizard-listening.png') !important; background-size: calc(var(--fc) * 125 / 45) calc(var(--fc) * 188 / 45) !important; background-position: calc(var(--fc) * -40 / 45) 0 !important; }
+html [data-world="renaissance"] .monkey-face.matteo, html .monkey-line[data-world="renaissance"] .monkey-face.matteo, html [data-world="renaissance"] .portrait.matteo .pixel-person { background-image: url('/assets/renaissance/characters/inventor-listening.png') !important; background-size: calc(var(--fc) * 125 / 45) calc(var(--fc) * 188 / 45) !important; background-position: calc(var(--fc) * -40 / 45) 0 !important; }
+html [data-world="renaissance"] .monkey-face.beatrice, html .monkey-line[data-world="renaissance"] .monkey-face.beatrice, html [data-world="renaissance"] .portrait.beatrice .pixel-person { background-image: url('/assets/renaissance/characters/noble-listening.png') !important; background-size: calc(var(--fc) * 125 / 45) calc(var(--fc) * 188 / 45) !important; background-position: calc(var(--fc) * -40 / 45) 0 !important; }
+html [data-world="renaissance"] .monkey-face.bruno, html .monkey-line[data-world="renaissance"] .monkey-face.bruno, html [data-world="renaissance"] .portrait.bruno .pixel-person { background-image: url('/assets/renaissance/characters/guard-listening.png') !important; background-size: calc(var(--fc) * 125 / 45) calc(var(--fc) * 188 / 45) !important; background-position: calc(var(--fc) * -40 / 45) 0 !important; }
+html [data-world="renaissance"] .monkey-face.agnese, html .monkey-line[data-world="renaissance"] .monkey-face.agnese, html [data-world="renaissance"] .portrait.agnese .pixel-person { background-image: url('/assets/renaissance/characters/apothecary-listening.png') !important; background-size: calc(var(--fc) * 125 / 45) calc(var(--fc) * 188 / 45) !important; background-position: calc(var(--fc) * -40 / 45) 0 !important; }
+
+/* Quotes nav icon */
+#app[data-world="renaissance"] .quotes-nav .evidence-icon { display: block; width: 100%; height: 100%; background: url('/assets/renaissance/props/quill.png') center / contain no-repeat; image-rendering: pixelated; }
+
+/* Saved quotes */
+#app[data-world="renaissance"] .quote-group ul, #app[data-world="renaissance"] .quote-list { list-style: none; padding: 0; margin: 0; }
+#app[data-world="renaissance"] .quote-group li { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 4px 0; }
+#app[data-world="renaissance"] .quote-group blockquote { margin: 0; color: #3b2a1a; line-height: 1.4; }
+#app[data-world="renaissance"] .quote-group h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; color: #7a2132; font-size: 16px; }
+#app[data-world="renaissance"] .quote-group .role { color: #5c4528; font-size: 13px; font-weight: 400; }
+#app[data-world="renaissance"] .quote-head .monkey-face { --cell: 32px; flex: none; display: inline-block; width: 32px; height: 32px; border-radius: 50%; border: 1px solid #7a2132; background-color: #e9d9b3; overflow: hidden; }
+#app[data-world="renaissance"] .quote-name { font-weight: 700; }
+#app[data-world="renaissance"] .quote-group .quote-remove { flex: none; padding: 2px 8px; font-size: 12px; background: transparent; color: #7a2132; border: 1px solid #7a2132; border-radius: 3px; cursor: pointer; }
+
+/* Debrief on parchment: every text at least 4.5:1 (ink #3b2a1a on #f1e4c3 is about 10:1, #5c4528 about 6.5:1, burgundy #7a2132 about 8:1). */
+#app[data-world="renaissance"] .debrief-page { --cream: #3b2a1a; --muted: #5c4528; --edge: #7a2132; --deep: #e9d9b3; --panel: #e9d9b3; }
+#app[data-world="renaissance"] .debrief-eyebrow { color: #5c4528; }
+#app[data-world="renaissance"] .debrief-page h1, #app[data-world="renaissance"] .debrief-page h2 { color: #3b2a1a; }
+#app[data-world="renaissance"] .debrief-page .slips h3 { color: #7a2132; }
+#app[data-world="renaissance"] .verdict-summary p { color: #3b2a1a; }
+#app[data-world="renaissance"] .spend-summary { background: #e9d9b3; border-color: #7a2132; }
+#app[data-world="renaissance"] .spend-summary p { color: #3b2a1a; }
+#app[data-world="renaissance"] .spend-summary small, #app[data-world="renaissance"] .debrief-stat span, #app[data-world="renaissance"] .debrief-fine, #app[data-world="renaissance"] .wrong-count { color: #5c4528; }
+#app[data-world="renaissance"] .debrief-stat b { color: #3b2a1a; }
+#app[data-world="renaissance"] .debrief-secondary { background: transparent; color: #7a2132; border-color: #7a2132; }
+#app[data-world="renaissance"] .debrief-primary { background: #7a2132; color: #f1e4c3; border-color: #3b2a1a; box-shadow: 0 4px 0 #3b2a1a; }
+#app[data-world="renaissance"] .debrief-page button:focus-visible { outline-color: #7a2132; }

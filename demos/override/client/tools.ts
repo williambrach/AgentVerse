@@ -8,6 +8,14 @@ export const HINTS: Record<'coins' | Tool, string> = {
   continue: 'They talk among themselves, one line each.',
 };
 
+/** The coin counter's tooltip; in a talk case only typed questions cost coins. */
+export function coinHint(talk: boolean): string {
+  return talk ? 'Typed questions cost coins. Topics and “What did you mean?” are free.' : HINTS.coins;
+}
+
+/** Why a tool card is off in a case that does not use that tool. */
+export const NOT_IN_CASE = 'Not in this case';
+
 type ArbiterTool = 'inspect' | 'continue';
 
 /** The Arbiter tools in toolbelt order. */
@@ -111,4 +119,23 @@ export function threadPanel(thread: ThreadLine[], names: Record<string, string>,
   return `<section class="thread-panel"><div class="panel-heading"><span class="eyebrow">ARBITER TOOL · LET THEM TALK</span><h2>The agents’ thread</h2></div>` +
     `<div class="notebook-content"><ol id="thread-log" role="log" aria-live="polite">${posts}${wait}</ol>` +
     `<p class="fine">${esc(note)}</p></div></section>`;
+}
+
+/** The three briefing steps of a talk case; the stock steps (one question each, tools, roles) do not fit it. */
+export function talkBriefingSteps(): { title: string; text: string }[] {
+  return [
+    { title: 'Ask about everyday things', text: 'Use the topic chips in each chat to ask the townsfolk about their day.' },
+    { title: 'Save the words that don’t belong', text: 'Pick words in an answer, then Save quote.' },
+    { title: 'Accuse with 1–3 quotes', text: 'A wrong accusation costs points, not the game.' },
+  ];
+}
+
+/** The briefing's step list for a talk case, in the stock `task-list` markup. */
+export function talkBriefingList(): string {
+  return `<ol class="task-list">${talkBriefingSteps().map(s => `<li><b>${esc(s.title)}</b><span>${esc(s.text)}</span></li>`).join('')}</ol>`;
+}
+
+/** The rail verdict button of a talk case: its title and the saved-quote count line. */
+export function talkVerdictLabel(quotes: number): { title: string; progress: string } {
+  return { title: 'Accuse the traveller', progress: `${quotes} ${quotes === 1 ? 'quote' : 'quotes'} saved` };
 }

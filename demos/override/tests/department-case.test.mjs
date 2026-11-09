@@ -14,7 +14,7 @@ test('department_shape', () => {
   assert.equal(dept.version, 'department-murder-v1.0.0');
   assert.equal(dept.order, 5);
   assert.equal(dept.world.id, 'department');
-  assert.equal(cases.at(-1), dept);
+  assert.equal(cases.find(c => c.id === 'department-murder'), dept);
   assert.deepEqual(dept.parts.map(p => p.id), ['killer', 'leaker', 'witness', 'lunch', 'late']);
   assert.deepEqual(dept.parts.map(p => p.role), ['killer', 'leaker', 'innocent', 'innocent', 'innocent']);
   assert.ok(dept.parts.every(p => p.label === 'Colleague'));
