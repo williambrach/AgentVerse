@@ -930,8 +930,7 @@ async function boot() {
     }
     const access = await api('access');
     if (!access.authorized) {
-      const here = world(), where = here.text.eyebrow.toLowerCase();
-      app.innerHTML = `<div class="access-screen"><form id="access-form" class="reset-card"><span class="eyebrow">${t('main.access.eyebrow')}</span><h1>${t('main.access.title', { place: here.text.place })}</h1><p>${t('main.access.body', { where })}</p><label for="access-code">${t('main.access.label')}</label><input type="password" id="access-code" required autocomplete="current-password"><p id="access-error" role="alert"></p><button class="primary-button">${t('main.access.open', { where })} ${icon('arrow')}</button></form></div>`;
+      app.innerHTML = `<div class="access-screen"><form id="access-form" class="reset-card"><span class="eyebrow">${t('main.access.eyebrow')}</span><h1>${t('main.access.title')}</h1><p>${t('main.access.body')}</p><label for="access-code">${t('main.access.label')}</label><input type="password" id="access-code" required autocomplete="current-password"><p id="access-error" role="alert"></p><button class="primary-button">${t('main.access.open')} ${icon('arrow')}</button></form></div>`;
       document.querySelector('#access-form')!.addEventListener('submit', async event => {
         event.preventDefault();
         try { await api('access', { code: (document.querySelector('#access-code') as HTMLInputElement).value }); await boot(); }
@@ -957,8 +956,7 @@ async function boot() {
     await shell();
     render();
   } catch {
-    const where = world().text.eyebrow.toLowerCase();
-    app.innerHTML = `<div class="access-screen"><div class="reset-card"><span class="eyebrow">${t('main.offline.eyebrow')}</span><h1>${t('main.offline.title', { where })}</h1><p>${t('main.offline.body')}</p><button class="primary-button" onclick="location.reload()">${t('main.offline.retry')}</button></div></div>`;
+    app.innerHTML = `<div class="access-screen"><div class="reset-card"><span class="eyebrow">${t('main.offline.eyebrow')}</span><h1>${t('main.offline.title')}</h1><p>${t('main.offline.body')}</p><button class="primary-button" onclick="location.reload()">${t('main.offline.retry')}</button></div></div>`;
   }
 }
 

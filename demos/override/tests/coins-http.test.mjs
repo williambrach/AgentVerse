@@ -16,7 +16,7 @@ async function liveGame(t, extra = {}) {
   const endpoints = join(dir, 'endpoints.json');
   writeFileSync(endpoints, JSON.stringify([{ name: 'a', baseUrl: mock.url, model: 'mock-model', keyEnv: 'OVERRIDE_ENDPOINT_A_KEY' }]));
   const server = await startServer({
-    PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: join(dir, 'data'), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 'secret-one',
+    PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: join(dir, 'data'), OVERRIDE_CONTENT_DIR: mkdtempSync(join(tmpdir(), 'override-content-')), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 'secret-one',
     OVERRIDE_ENDPOINTS: endpoints, OVERRIDE_ENDPOINT_A_KEY: 'sk-test-key', ...extra,
   }, { publicDir: mkdtempSync(join(tmpdir(), 'override-public-')) });
   t.after(() => server.close());

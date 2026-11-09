@@ -186,10 +186,16 @@ export function createContentStore({ cases, dataDir, contentDir, uiDefaults = {}
     if (file.status === 'ok') {
       overlay = file.edits;
       if (!same(sorted(overlay ?? {}), sorted(logEdits ?? {}))) s.act = () => fileRecord(overlay);
+      else if (logEdits && !last.tracked) s.act = () => fileRecord(overlay); // marker: a later missing file is a removal
     } else if (file.status === 'bad') s.stale = true;
     else if (logEdits && !last.tracked) {
       overlay = logEdits;
-      s.act = () => { try { writeTracked(s, overlay); } catch { /* imported again next boot */ } };
+      s.act = () => {
+        try { writeTracked(s, overlay); } catch { return; } // imported again next boot
+        const r = record(s, overlay, 'import', { fields: [] });
+        try { r.contentHash = s.id === GAME ? hashOf(overlay) : compose(s.base, overlay).contentHash; } catch { r.contentHash = null; }
+        try { log(s, r); } catch { /* a read-only data dir must not stop the boot */ }
+      };
     } else if (logEdits) s.act = () => fileRecord(null);
     return overlay;
   };

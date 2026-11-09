@@ -238,6 +238,8 @@ test('known_hints', () => {
   assert.match(fieldCopy('prompt.use').hint, /One per line\.$/);
   assert.match(fieldCopy('worlds.grove.frame').hint, /\w/);
   assert.match(fieldCopy('prompt.thread').hint, /\[\[knowledge\]\]/);
+  assert.match(fieldCopy('worlds.grove.cast.one').hint, /server messages/);
+  assert.doesNotMatch(fieldCopy('worlds.grove.cast.many').hint, /prompt/i);
 });
 
 test('grow_skips_without_scrollHeight', () => {

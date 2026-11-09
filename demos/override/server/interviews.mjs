@@ -25,8 +25,8 @@ YOUR KNOWLEDGE:
 [[knowledge]]`,
 });
 
-const INTERVIEW_TOKENS = ['name', 'label', 'setting', 'version', 'promptVersion', 'frame', 'use', 'avoid', 'persona', 'memory', 'knowledge'];
-const TOKENS = { interview: INTERVIEW_TOKENS, thread: [...INTERVIEW_TOKENS, 'others', 'frameFirst'] };
+const INTERVIEW_TOKENS = ['name', 'label', 'setting', 'version', 'promptVersion', 'frame', 'use', 'avoid', 'persona', 'memory', 'knowledge', 'frameFirst'];
+const TOKENS = { interview: INTERVIEW_TOKENS, thread: [...INTERVIEW_TOKENS, 'others'] };
 
 export function checkTemplate(kind, text) {
   if (!Object.hasOwn(TOKENS, kind)) return 'Unknown template kind.';
@@ -134,7 +134,7 @@ export function buildMessages(kase, session, characterId, question) {
   const say = text => resolve(kase, session.cast, text);
   const instructions = renderTemplate(kase.prompts?.interview ?? DEFAULT_TEMPLATES.interview, {
     name: character.name, label: say(character.label ?? part.label), setting: prompt.setting, version: kase.version,
-    promptVersion: kase.prompts?.interviewVersion ?? promptVersion, frame: kase.world.frame,
+    promptVersion: kase.prompts?.interviewVersion ?? promptVersion, frame: kase.world.frame, frameFirst: kase.world.frame.split('. ')[0],
     use: prompt.use.join(', '), avoid: prompt.avoid.join(', '), persona: kase.world.persona, memory: kase.world.memory,
     knowledge: [...(character.knowledge ?? []), ...part.knowledge].map(say).join('\n'),
   });

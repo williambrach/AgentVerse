@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createAdmin } from '../server/admin.mjs';
 import { signToken, verifyToken } from '../server/identity.mjs';
-import { adminSecret, createApp } from '../server/index.mjs';
+import { adminSecret, adminTrustProxy, createApp } from '../server/index.mjs';
 
 const SECRET = 'srv-secret';
 const content = {
@@ -229,4 +229,11 @@ test('throttle_ignores_header_untrusted', async t => {
   const a = await boot({ trustProxy: false }); t.after(a.close);
   for (let i = 0; i < 10; i++) assert.equal(await lg(a, `203.0.113.${i + 1}`, 'bad'), 401);
   assert.equal(await lg(a, '203.0.113.99', 'bad'), 429);
+});
+
+test('admin_trust_is_separate', () => {
+  assert.equal(adminTrustProxy({}), false);
+  assert.equal(adminTrustProxy({ OVERRIDE_TRUST_PROXY: '1' }), false);
+  assert.equal(adminTrustProxy({ OVERRIDE_ADMIN_TRUST_PROXY: '1' }), true);
+  assert.equal(adminTrustProxy({ OVERRIDE_ADMIN_TRUST_PROXY: 'TRUE' }), true);
 });

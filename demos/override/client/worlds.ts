@@ -33,7 +33,7 @@ export interface WorldPack {
 
 const grove: WorldPack = {
   id: 'grove',
-  text: { get place() { return plain('worlds.grove.place'); }, get eyebrow() { return plain('worlds.grove.eyebrow'); }, get day() { return plain('worlds.grove.day'); }, get one() { return plain('worlds.grove.one'); }, get many() { return plain('worlds.grove.many'); }, get castLabel() { return plain('worlds.grove.castLabel'); }, get hint() { return plain('worlds.grove.hint'); }, get oneWithArticle() { return plain('worlds.grove.oneWithArticle'); }, get investigator() { return plain('worlds.grove.investigator'); }, icon: '<path d="M5 4c-2 8 5 16 14 14-6 5-15 1-16-6C2 8 3 5 5 4zm0 0 2-1"/>' },
+  text: { get place() { return plain('worlds.grove.place'); }, get eyebrow() { return plain('worlds.grove.eyebrow'); }, day: "PICNIC DAY", get one() { return plain('worlds.grove.one'); }, get many() { return plain('worlds.grove.many'); }, castLabel: "MONKEY", get hint() { return plain('worlds.grove.hint'); }, get oneWithArticle() { return plain('worlds.grove.oneWithArticle'); }, get investigator() { return plain('worlds.grove.investigator'); }, icon: '<path d="M5 4c-2 8 5 16 14 14-6 5-15 1-16-6C2 8 3 5 5 4zm0 0 2-1"/>' },
   art: { cast: '/assets/banana/monkeys.png', idle: '/assets/banana/monkey-idle.png', walk: '/assets/banana/detective-walk.png', props: '/assets/banana/jungle-props.png' },
   palette: { ground: '#82a75e', label: '#40533c', labelBg: '#fff6dd' },
   slots: [{ x: 116, y: 156 }, { x: 364, y: 156 }, { x: 364, y: 268 }, { x: 84, y: 212 }, { x: 404, y: 212 }],
@@ -41,7 +41,7 @@ const grove: WorldPack = {
 
 const tower: WorldPack = {
   id: 'tower',
-  text: { get place() { return plain('worlds.tower.place'); }, get eyebrow() { return plain('worlds.tower.eyebrow'); }, get day() { return plain('worlds.tower.day'); }, get one() { return plain('worlds.tower.one'); }, get many() { return plain('worlds.tower.many'); }, get castLabel() { return plain('worlds.tower.castLabel'); }, get hint() { return plain('worlds.tower.hint'); }, get oneWithArticle() { return plain('worlds.tower.oneWithArticle'); }, get investigator() { return plain('worlds.tower.investigator'); }, icon: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4l-5.3 3 1.2-6-4.5-4.1 6-.7z"/>' },
+  text: { get place() { return plain('worlds.tower.place'); }, get eyebrow() { return plain('worlds.tower.eyebrow'); }, day: "POTION DAY", get one() { return plain('worlds.tower.one'); }, get many() { return plain('worlds.tower.many'); }, castLabel: "APPRENTICE", get hint() { return plain('worlds.tower.hint'); }, get oneWithArticle() { return plain('worlds.tower.oneWithArticle'); }, get investigator() { return plain('worlds.tower.investigator'); }, icon: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4l-5.3 3 1.2-6-4.5-4.1 6-.7z"/>' },
   art: { cast: '/assets/tower/apprentices.png', idle: '/assets/tower/apprentice-idle.png', walk: '/assets/tower/inspector-walk.png', props: '/assets/tower/tower-props.png' },
   palette: { ground: '#5d566e', label: '#3d3550', labelBg: '#f3ecff' },
   slots: [{ x: 116, y: 156 }, { x: 364, y: 156 }, { x: 364, y: 268 }, { x: 84, y: 212 }, { x: 404, y: 212 }],
@@ -53,7 +53,7 @@ const tower: WorldPack = {
 const friends: WorldPack = {
   id: 'friends',
   scene: 'roundtable',
-  text: { get place() { return plain('worlds.friends.place'); }, get eyebrow() { return plain('worlds.friends.eyebrow'); }, get day() { return plain('worlds.friends.day'); }, get one() { return plain('worlds.friends.one'); }, get many() { return plain('worlds.friends.many'); }, get castLabel() { return plain('worlds.friends.castLabel'); }, get hint() { return plain('worlds.friends.hint'); }, get oneWithArticle() { return plain('worlds.friends.oneWithArticle'); }, get investigator() { return plain('worlds.friends.investigator'); }, get threadNote() { return plain('worlds.friends.threadNote'); }, icon: '<path d="M4 10h16M6 10v9M18 10v9M3 10c0-3 4-5 9-5s9 2 9 5"/>' },
+  text: { get place() { return plain('worlds.friends.place'); }, get eyebrow() { return plain('worlds.friends.eyebrow'); }, day: "GAME NIGHT", get one() { return plain('worlds.friends.one'); }, get many() { return plain('worlds.friends.many'); }, castLabel: "FRIEND", get hint() { return plain('worlds.friends.hint'); }, get oneWithArticle() { return plain('worlds.friends.oneWithArticle'); }, get investigator() { return plain('worlds.friends.investigator'); }, get threadNote() { return plain('worlds.friends.threadNote'); }, icon: '<path d="M4 10h16M6 10v9M18 10v9M3 10c0-3 4-5 9-5s9 2 9 5"/>' },
   art: { cast: '', idle: '', walk: '', props: '' },
   palette: { ground: '#c98f5a', label: '#4a2f1d', labelBg: '#fff0d6' },
   slots: [],
@@ -61,7 +61,7 @@ const friends: WorldPack = {
 
 const factory: WorldPack = {
   id: 'factory',
-  text: { get place() { return plain('worlds.factory.place'); }, get eyebrow() { return plain('worlds.factory.eyebrow'); }, get day() { return plain('worlds.factory.day'); }, get one() { return plain('worlds.factory.one'); }, get many() { return plain('worlds.factory.many'); }, get castLabel() { return plain('worlds.factory.castLabel'); }, get hint() { return plain('worlds.factory.hint'); }, get oneWithArticle() { return plain('worlds.factory.oneWithArticle'); }, get investigator() { return plain('worlds.factory.investigator'); }, icon: '<path d="M3 20V9l6 4V9l6 4V5h3v15zm4-3h2m3 0h2"/>' },
+  text: { get place() { return plain('worlds.factory.place'); }, get eyebrow() { return plain('worlds.factory.eyebrow'); }, day: "LAST SHIFT", get one() { return plain('worlds.factory.one'); }, get many() { return plain('worlds.factory.many'); }, castLabel: "WORKER", get hint() { return plain('worlds.factory.hint'); }, get oneWithArticle() { return plain('worlds.factory.oneWithArticle'); }, get investigator() { return plain('worlds.factory.investigator'); }, icon: '<path d="M3 20V9l6 4V9l6 4V5h3v15zm4-3h2m3 0h2"/>' },
   art: { cast: '', idle: '', walk: '', props: '' },
   palette: { ground: '#6e7780', label: '#2c343b', labelBg: '#e9edf0' },
   slots: [{ x: 110, y: 190 }, { x: 240, y: 200 }, { x: 370, y: 190 }, { x: 150, y: 290 }, { x: 330, y: 290 }],
@@ -99,7 +99,7 @@ const factory: WorldPack = {
 
 const department: WorldPack = {
   id: 'department',
-  text: { get place() { return plain('worlds.department.place'); }, get eyebrow() { return plain('worlds.department.eyebrow'); }, get day() { return plain('worlds.department.day'); }, get one() { return plain('worlds.department.one'); }, get many() { return plain('worlds.department.many'); }, get castLabel() { return plain('worlds.department.castLabel'); }, get hint() { return plain('worlds.department.hint'); }, get oneWithArticle() { return plain('worlds.department.oneWithArticle'); }, get investigator() { return plain('worlds.department.investigator'); }, icon: '<path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm4.5 10.5L20 20"/>' },
+  text: { get place() { return plain('worlds.department.place'); }, get eyebrow() { return plain('worlds.department.eyebrow'); }, day: "FRIDAY MORNING", get one() { return plain('worlds.department.one'); }, get many() { return plain('worlds.department.many'); }, castLabel: "COLLEAGUE", get hint() { return plain('worlds.department.hint'); }, get oneWithArticle() { return plain('worlds.department.oneWithArticle'); }, get investigator() { return plain('worlds.department.investigator'); }, icon: '<path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm4.5 10.5L20 20"/>' },
   art: { cast: '', idle: '', walk: '', props: '' },
   palette: { ground: '#1b1714', label: '#2b2320', labelBg: '#f6efe4' },
   slots: [{ x: 150, y: 286 }, { x: 330, y: 296 }, { x: 100, y: 214 }, { x: 280, y: 240 }, { x: 365, y: 214 }],
@@ -128,7 +128,7 @@ const department: WorldPack = {
 
 const renaissance: WorldPack = {
   id: 'renaissance',
-  text: { get place() { return plain('worlds.renaissance.place'); }, get eyebrow() { return plain('worlds.renaissance.eyebrow'); }, get day() { return plain('worlds.renaissance.day'); }, get one() { return plain('worlds.renaissance.one'); }, get many() { return plain('worlds.renaissance.many'); }, get castLabel() { return plain('worlds.renaissance.castLabel'); }, get hint() { return plain('worlds.renaissance.hint'); }, get oneWithArticle() { return plain('worlds.renaissance.oneWithArticle'); }, get investigator() { return plain('worlds.renaissance.investigator'); }, icon: '<path d="M4 20V10l4-3 4 3 4-3 4 3v10zm5 0v-5h6v5"/>' },
+  text: { get place() { return plain('worlds.renaissance.place'); }, get eyebrow() { return plain('worlds.renaissance.eyebrow'); }, day: "JUNE 1489", get one() { return plain('worlds.renaissance.one'); }, get many() { return plain('worlds.renaissance.many'); }, castLabel: "TOWNSPERSON", get hint() { return plain('worlds.renaissance.hint'); }, get oneWithArticle() { return plain('worlds.renaissance.oneWithArticle'); }, get investigator() { return plain('worlds.renaissance.investigator'); }, icon: '<path d="M4 20V10l4-3 4 3 4-3 4 3v10zm5 0v-5h6v5"/>' },
   art: { cast: '', idle: '', walk: '', props: '' },
   palette: { ground: '#2a2018', label: '#3b2a1c', labelBg: '#f6ead2' },
   // Cast order: Ottavio (centre-front, sundial steps), Matteo, Beatrice, Bruno, Agnese (right of the well).

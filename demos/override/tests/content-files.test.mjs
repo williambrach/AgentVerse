@@ -71,8 +71,47 @@ test('legacy_import', () => {
   const store = make(dirs).store;
   assert.equal(store.current('banana-mystery').copy.headline, 'Legacy');
   assert.deepEqual(JSON.parse(readFileSync(caseFile(dirs), 'utf8')).edits, { 'copy.headline': 'Legacy' });
-  assert.equal(lines(logFile(dirs)).length, 1);
-  assert.equal(store.info('banana-mystery').rev, 1);
+  assert.equal(lines(logFile(dirs)).length, 2);
+  assert.equal(store.info('banana-mystery').rev, 2);
+});
+
+test('legacy_import_once_then_removable', () => {
+  const dirs = { data: mkdtempSync(join(tmpdir(), 'cf-data-')), content: mkdtempSync(join(tmpdir(), 'cf-content-')) };
+  mkdirSync(join(dirs.data, 'content'));
+  const rec = { type: 'content_revision', caseId: 'banana-mystery', version: banana.version, rev: 1, timestamp: 't', by: 'old', edits: { 'copy.headline': 'Legacy' }, contentHash: 'x', fields: [] };
+  writeFileSync(logFile(dirs), `${JSON.stringify(rec)}\n`);
+  make(dirs);
+  const ls = lines(logFile(dirs));
+  assert.equal(ls.at(-1).tracked, true);
+  rmSync(caseFile(dirs));
+  const store = make(dirs).store;
+  assert.equal(store.current('banana-mystery'), banana);
+  assert.equal(existsSync(caseFile(dirs)), false);
+});
+
+test('matching_file_marks_legacy_log_tracked', () => {
+  const dirs = { data: mkdtempSync(join(tmpdir(), 'cf-data-')), content: mkdtempSync(join(tmpdir(), 'cf-content-')) };
+  mkdirSync(join(dirs.data, 'content'));
+  mkdirSync(join(dirs.content, 'cases'), { recursive: true });
+  const edits = { 'copy.headline': 'Legacy' };
+  const rec = { type: 'content_revision', caseId: 'banana-mystery', version: banana.version, rev: 1, timestamp: 't', by: 'old', edits, contentHash: 'x', fields: [] };
+  writeFileSync(logFile(dirs), `${JSON.stringify(rec)}\n`);
+  const seed = make(dirs).store; // imports and writes the tracked file
+  rmSync(logFile(dirs));
+  writeFileSync(logFile(dirs), `${JSON.stringify(rec)}\n`);
+  assert.deepEqual(JSON.parse(readFileSync(caseFile(dirs), 'utf8')).edits, edits);
+  make(dirs);
+  const ls = lines(logFile(dirs));
+  assert.equal(ls.length, 2);
+  assert.equal(ls[1].tracked, true);
+  rmFile(dirs);
+  const store = make(dirs).store;
+  assert.equal(store.current('banana-mystery'), banana);
+  assert.equal(existsSync(caseFile(dirs)), false);
+  const n = lines(logFile(dirs)).length;
+  make(dirs);
+  assert.equal(lines(logFile(dirs)).length, n);
+  assert.ok(seed);
 });
 
 test('version_mismatch_stale', () => {

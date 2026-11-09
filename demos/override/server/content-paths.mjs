@@ -16,7 +16,7 @@ const clone = v => (Array.isArray(v) ? v.map(clone) : isObj(v) ? Object.fromEntr
 // The editable shape of a registered case: a deep copy with the world as its id, no hash, and the
 // role labels materialized so default roles are editable per case.
 export function rawOf(kase) {
-  const { contentHash, ...rest } = kase; // eslint-disable-line no-unused-vars
+  const { contentHash, prompts, ...rest } = kase; // eslint-disable-line no-unused-vars
   const raw = { ...clone(rest), world: kase.world?.id ?? kase.world };
   if (raw.roles === undefined) raw.roles = clone(rolesOf(kase));
   return raw;

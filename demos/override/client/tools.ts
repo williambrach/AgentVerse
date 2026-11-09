@@ -16,7 +16,6 @@ export function coinHint(talk: boolean): string {
 }
 
 /** Why a tool card is off in a case that does not use that tool. */
-export const NOT_IN_CASE = 'Not in this case';
 /** The same text read at use time, so the admin's edit applies. */
 export const notInCase = (): string => plain('tools.notInCase');
 

@@ -455,6 +455,16 @@ test('startServer resolves with a working player url, with and without an admin 
   }
 });
 
+test('admin_ignores_player_trust_proxy: spoofed CF-Connecting-IP does not dodge the admin login limit', async t => {
+  const server = await boot(t, { OVERRIDE_ADMIN_PASSWORD: 'ops', OVERRIDE_TRUST_PROXY: '1' });
+  const statuses = [];
+  for (let i = 1; i <= 11; i++) {
+    const r = await fetch(`${server.adminUrl}/admin/login`, { method: 'POST', headers: { ...json, 'Sec-Fetch-Site': 'same-origin', 'CF-Connecting-IP': `203.0.113.${i}` }, body: JSON.stringify({ password: 'wrong' }) });
+    statuses.push(r.status);
+  }
+  assert.equal(statuses[10], 429, statuses.join(','));
+});
+
 // ---- content editor wiring
 const adminEnv = { OVERRIDE_ADMIN_PASSWORD: 'ops' };
 const asAdmin = { Authorization: 'Bearer ops' };

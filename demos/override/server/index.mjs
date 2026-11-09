@@ -157,6 +157,11 @@ function devTools(env) {
 const sleep = ms => new Promise(resolve => { setTimeout(resolve, ms).unref(); });
 
 // One password opens the admin panel. OVERRIDE_ADMIN_TOKEN is the old name and still works.
+// The admin port has its own switch: OVERRIDE_TRUST_PROXY is for the public player tunnel and must not make the admin limiter trust client-supplied address headers.
+export function adminTrustProxy(env) {
+  return ['1', 'true'].includes(String(env.OVERRIDE_ADMIN_TRUST_PROXY).toLowerCase());
+}
+
 export function adminSecret(env) {
   const pw = String(env.OVERRIDE_ADMIN_PASSWORD ?? '');
   const old = String(env.OVERRIDE_ADMIN_TOKEN ?? '');
@@ -287,7 +292,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
       };
       admin = createAdmin({
         boardUrl: boardUrlOf(env.OVERRIDE_PUBLIC_URL, server.address()?.port),
-        trustProxy, token: adminAuth.password, secret, monitor, router, investigations, registry, dataDir,
+        trustProxy: adminTrustProxy(env), token: adminAuth.password, secret, monitor, router, investigations, registry, dataDir,
         content, allowedHosts: adminHosts(env), probeMessages,
         readSystem: () => [...systemRing], onSystem,
         leaderboard: {

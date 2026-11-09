@@ -61,12 +61,12 @@
   "main.lb.stale": "Showing the last standings. Trying again shortly.",
   "main.lb.docTitle": "Leaderboard · AgentVerse",
   "main.access.eyebrow": "PRIVATE DEMONSTRATION",
-  "main.access.title": "{place}.",
-  "main.access.body": "Enter the shared access code to open the {where}.",
+  "main.access.title": "Banana Mystery.",
+  "main.access.body": "Enter the shared access code to open the grove.",
   "main.access.label": "Access code",
-  "main.access.open": "Open the {where}",
+  "main.access.open": "Open the grove",
   "main.offline.eyebrow": "CONNECTION UNAVAILABLE",
-  "main.offline.title": "The {where} is offline.",
+  "main.offline.title": "The grove is offline.",
   "main.offline.body": "The case server could not be reached. Start the demo server, then reload this page.",
   "main.offline.retry": "Try again"
 }

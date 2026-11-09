@@ -183,7 +183,7 @@ test('escape_counts_zero_on_leaderboard', async t => {
 test('deadline_env_needs_dev_tools', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'override-env-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const base = { PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 's', OVERRIDE_DEADLINE_SECONDS: '30' };
+  const base = { PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_CONTENT_DIR: mkdtempSync(join(tmpdir(), 'override-content-')), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 's', OVERRIDE_DEADLINE_SECONDS: '30' };
   const off = await startServer(base, { publicDir: dir });
   t.after(() => off.close());
   assert.equal(off.investigations.dev, false);

@@ -140,3 +140,16 @@ test('dotted_and_numeric_ids_fall_back_to_index_paths', () => {
   setPath(raw, 'parts.1.label', 'new2');
   assert.deepEqual(raw.parts.map(p => p.label), ['new', 'new2', 'z']);
 });
+
+test('no_prompts_fields', async () => {
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { cases } = await import('../server/cases/index.mjs');
+  const { createContentStore } = await import('../server/content.mjs');
+  const store = createContentStore({ cases, dataDir: mkdtempSync(join(tmpdir(), 'np-d-')), contentDir: mkdtempSync(join(tmpdir(), 'np-c-')), uiDefaults: {} });
+  const id = cases[0].id;
+  store.publish('game', { 'prompt.interview': store.fields('game').authored['prompt.interview'] + ' x' }, { by: 'a', baseRev: 0 });
+  const f = store.fields(id);
+  assert.deepEqual(Object.keys(f.current), Object.keys(f.authored));
+});

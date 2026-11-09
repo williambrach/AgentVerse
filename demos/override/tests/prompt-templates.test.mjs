@@ -64,3 +64,11 @@ test('prompts_not_hashed: prompts do not change the contentHash', () => {
   assert.equal(k.contentHash, base.contentHash);
   assert.equal(base.prompts, undefined);
 });
+
+test('interview_accepts_frameFirst: the token is allowed and rendered', () => {
+  assert.equal(checkTemplate('interview', '[[frameFirst]] [[knowledge]]'), null);
+  const k = defineCase(partCase, { worlds, prompts: { interview: 'F:[[frameFirst]] [[knowledge]]', thread: DEFAULT_TEMPLATES.thread, interviewVersion: 'interview-v5+abcd1234', threadVersion: 'thread-v4+ffff0000' } });
+  const first = k.world.frame.split('. ')[0];
+  const sys = buildMessages(k, sess(k), 'momo', 'Q?')[0].content;
+  assert.ok(sys.startsWith(`F:${first} `));
+});

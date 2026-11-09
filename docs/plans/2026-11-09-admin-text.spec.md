@@ -75,7 +75,7 @@ Event admins tune the games through the admin page. Today they need two kinds of
 
 | # | Decision |
 |---|---|
-| D1 | Env: `OVERRIDE_ADMIN_PASSWORD`. `OVERRIDE_ADMIN_TOKEN` is a deprecated alias (A8). `OVERRIDE_MAKER_TOKENS` is ignored with a warning. `OVERRIDE_CONTENT_DIR` (default `<app>/content`). |
+| D1 | Env: `OVERRIDE_ADMIN_PASSWORD`. `OVERRIDE_ADMIN_TOKEN` is a deprecated alias (A8). `OVERRIDE_MAKER_TOKENS` is ignored with a warning. `OVERRIDE_CONTENT_DIR` (default `<app>/content`). `OVERRIDE_ADMIN_TRUST_PROXY` (default off) is the only setting that lets the admin listener read client-address and forwarded-proto headers; the player `OVERRIDE_TRUST_PROXY` never applies to it. |
 | D2 | Cookie `override_admin=<exp>.<hex mac>`: HttpOnly, SameSite=Strict, Path=/, Max-Age=43200, Secure only on TLS or a trusted forwarded proto. The MAC key is `sha256("override-admin-v1:" + secret + ":" + password)`, so a password change signs everyone out. `identity.mjs` `signToken`/`verifyToken` gain an optional `purpose` argument; the default keeps the player prefix byte-identical. |
 | D3 | Routes: `POST /admin/login {password}` → 204 plus cookie, or 401 / 429. `POST /admin/logout` → 204 and clears the cookie. `GET /admin/session` → 200 `{signedIn:true}` or 401. Page files stay public. Every revision's `by` is `"admin"`. |
 | D4 | Locked keys at any depth: `id`, `version`, `world`, `status`, `order`, `color`, `role`, `cipher`, `when`, `tools`, `deadline.escapeAt`, `deadline.warnAt`. Functions and non-strings are never fields. |
