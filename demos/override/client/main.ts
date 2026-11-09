@@ -15,7 +15,8 @@ import './factory.css';
 import './department.css';
 import './renaissance.css';
 import { escape, svg, heading, mmss } from './html.ts';
-import { HINTS, NOT_IN_CASE, coinHint, talkBriefingList, talkVerdictLabel, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, threadPanel } from './tools';
+import { HINTS, notInCase, coinHint, talkBriefingList, talkVerdictLabel, toolChip, toolBlock, toolsBlock, toolCard, toolGuide, threadPanel } from './tools';
+import { loadText, t, plain, tn } from './text';
 import { teamGate, teamNameError, leaderboardPanel, type GateView } from './team';
 import { boardScreen } from './board.ts';
 import { debriefPage } from './debrief.ts';
@@ -107,7 +108,7 @@ const slotOf = (id: string) => Math.max(0, state.characters.findIndex(c => c.id 
 /** Class and style that let the world's portrait art and the character's colour apply by cast slot. */
 const castClass = (id: string) => `${escape(id)} slot-${slotOf(id)}`;
 
-const FAILED = 'The server could not complete this request.';
+const failed = () => plain('main.failed');
 
 /** One fetch of /api/`path`; the status and the JSON body (null when it is not JSON) come back whatever the status. */
 async function apiRaw(path: string, body?: object): Promise<{ ok: boolean; status: number; data: any }> {
@@ -118,7 +119,7 @@ async function apiRaw(path: string, body?: object): Promise<{ ok: boolean; statu
 
 async function api(path: string, body?: object) {
   const { ok, data } = await apiRaw(path, body);
-  if (!ok || data === null) throw new Error(data?.error || FAILED);
+  if (!ok || data === null) throw new Error(data?.error || failed());
   return data;
 }
 
@@ -136,7 +137,7 @@ async function action(name: string, payload: object = {}, onSuccess?: () => void
     onSuccess?.();
     return !tookOver;
   } catch (error) {
-    errorMessage = error instanceof Error ? error.message : 'Connection lost. Please retry.';
+    errorMessage = error instanceof Error ? error.message : plain('main.connectionLost');
     try {
       const refreshed: CaseState = await api('state');
       if (refreshed.session?.id !== state.session?.id) {
@@ -275,11 +276,11 @@ function renderWorld() {
   const key = `${world().id}:${ids().join(',')}:${state.evidence?.length ?? ''}:${state.talk ? 'q' : ''}`;
   if (key === worldKey) { syncNavText(); return; }
   worldKey = key;
-  const w = world(), t = w.text;
+  const w = world(), wt = w.text;
   app.dataset.world = w.id;
-  document.querySelector('#world-name')!.textContent = t.place;
-  document.querySelector('#world-icon')!.innerHTML = svg(t.icon);
-  document.querySelector('#room-nav')!.setAttribute('aria-label', `${cap(t.eyebrow)} destinations`);
+  document.querySelector('#world-name')!.textContent = wt.place;
+  document.querySelector('#world-icon')!.innerHTML = svg(wt.icon);
+  document.querySelector('#room-nav')!.setAttribute('aria-label', plain('main.nav.destinations', { eyebrow: cap(wt.eyebrow) }));
   document.querySelector<HTMLElement>('#room-nav')!.style.setProperty('--nav-n', String(state.characters.length + 1 + (state.evidence ? 1 : 0) + (state.talk ? 1 : 0)));
   document.querySelector('#room-nav')!.innerHTML = `
           ${state.characters.map(cardFor).join('')}${state.evidence ? evidenceButton() : ''}${state.talk ? quotesButton() : ''}`;
@@ -287,8 +288,8 @@ function renderWorld() {
   syncNavText();
 }
 
-const evidenceButton = () => `<button data-go="evidence" class="cast-card evidence-nav"><span class="cast-tile"><i class="evidence-icon"></i></span><span class="hud-stack cast-text"><b>Evidence</b><small data-evidence-count>${evidenceCount()}</small></span></button>`;
-const quotesButton = () => `<button data-go="quotes" class="cast-card evidence-nav quotes-nav"><span class="cast-tile"><i class="evidence-icon"></i></span><span class="hud-stack cast-text"><b>Quotes</b><small data-quote-count>${quoteCount()}</small></span></button>`;
+const evidenceButton = () => `<button data-go="evidence" class="cast-card evidence-nav"><span class="cast-tile"><i class="evidence-icon"></i></span><span class="hud-stack cast-text"><b>${t('main.nav.evidence')}</b><small data-evidence-count>${evidenceCount()}</small></span></button>`;
+const quotesButton = () => `<button data-go="quotes" class="cast-card evidence-nav quotes-nav"><span class="cast-tile"><i class="evidence-icon"></i></span><span class="hud-stack cast-text"><b>${t('main.nav.quotes')}</b><small data-quote-count>${quoteCount()}</small></span></button>`;
 const quoteCount = () => String(state.session?.talk?.quotes.length ?? 0);
 const evidenceCount = () => `${state.session?.evidence?.length ?? 0}/${state.evidence?.length ?? 0}`;
 
@@ -435,9 +436,9 @@ function render() {
   if (session?.status === 'closed') markSolved(session.caseId);
   renderWorld();
   document.querySelector('#case-headline')!.textContent = state.copy.headline;
-  document.title = `${state.title} · AgentVerse`;
-  document.querySelector('#case-eyebrow')!.innerHTML = `CASE ${caseNumber(state.order)} <span class="slash">/</span> ${escape(world().text.eyebrow)}`;
-  document.querySelector('#mode-badge')!.textContent = state.mode === 'live' ? 'LIVE INTERVIEWS' : 'SCRIPTED REHEARSAL';
+  document.title = plain('main.docTitle', { title: state.title });
+  document.querySelector('#case-eyebrow')!.innerHTML = `${t('main.case')} ${caseNumber(state.order)} <span class="slash">/</span> ${escape(world().text.eyebrow)}`;
+  document.querySelector('#mode-badge')!.textContent = plain(state.mode === 'live' ? 'main.mode.live' : 'main.mode.rehearsal');
   document.querySelector('#mode-badge')!.classList.toggle('rehearsal', state.mode === 'rehearsal');
   const heard = session ? ids().filter(id => session.interviews[id].length).length : 0;
   const verdictTitle = document.querySelector('.verdict-button b');
@@ -446,8 +447,8 @@ function render() {
     verdictTitle.textContent = label.title;
     document.querySelector('#quick-progress')!.textContent = label.progress;
   } else {
-    if (verdictTitle) verdictTitle.textContent = 'Make your verdict';
-    document.querySelector('#quick-progress')!.textContent = session?.status === 'closed' ? 'Case closed' : `${heard} of ${state.characters.length} asked · free`;
+    if (verdictTitle) verdictTitle.textContent = plain('hud.verdict');
+    document.querySelector('#quick-progress')!.textContent = session?.status === 'closed' ? plain('main.progress.closed') : plain('main.progress.asked', { heard, total: state.characters.length });
   }
   document.querySelectorAll<HTMLButtonElement>('[data-go]').forEach(button => {
     button.disabled = busy || !session || introVisible;
@@ -469,8 +470,8 @@ function render() {
   syncWalking();
   station?.focus(dialogueOpen && !introVisible && ids().includes(panel) ? panel : null);
   const target = document.querySelector<HTMLElement>('#panel')!;
-  const sections: Record<string, string> = { briefing: 'Case briefing', ...Object.fromEntries(state.characters.map(c => [c.id, `Chat · ${escape(c.name)}`])), evidence: 'Evidence', quotes: 'Quotes', report: session?.status === 'closed' ? 'Mystery solved' : 'Your guess' };
-  document.querySelector('#notebook-section')!.textContent = threadOpen ? 'Thread' : sections[panel];
+  const sections: Record<string, string> = { briefing: plain('hud.briefing'), ...Object.fromEntries(state.characters.map(c => [c.id, plain('main.section.chat', { name: c.name })])), evidence: plain('main.nav.evidence'), quotes: plain('main.nav.quotes'), report: plain(session?.status === 'closed' ? 'main.section.solved' : 'main.section.guess') };
+  document.querySelector('#notebook-section')!.textContent = threadOpen ? plain('main.section.thread') : sections[panel];
   let markup: string;
   if (threadOpen && session) markup = threadPanel(session.thread, Object.fromEntries(state.characters.map(c => [c.id, c.name])), session.chatter.pending, world().text.threadNote, Object.fromEntries(state.characters.map(c => [c.id, castClass(c.id)])));
   else if (session?.status === 'closed' && panel === 'report') markup = debriefMarkup();
@@ -508,8 +509,8 @@ function applyTheme() {
 
 /** The case board: the case list beside a preview of the chosen case. Shown at the start (#intro) and from the topbar (#case-switch). */
 function caseBoard(id: 'intro' | 'case-switch') {
-  const status = (row: CaseRow) => state.session?.status === 'active' && state.session.caseId === row.id ? ['playing', 'Playing'] : solved.has(row.id) ? ['solved', 'Solved'] : ['new', 'New'];
-  const list = catalog.length < 2 ? '' : `<fieldset class="case-picker" id="case-list"><legend><span class="eyebrow">CASE FILES</span><b>${catalog.length} mysteries</b></legend>
+  const status = (row: CaseRow) => state.session?.status === 'active' && state.session.caseId === row.id ? ['playing', t('main.status.playing')] : solved.has(row.id) ? ['solved', t('main.status.solved')] : ['new', t('main.status.new')];
+  const list = catalog.length < 2 ? '' : `<fieldset class="case-picker" id="case-list"><legend><span class="eyebrow">${t('main.board.eyebrow')}</span><b>${tn('main.board.count', catalog.length)}</b></legend>
     ${catalog.map(row => { const [key, label] = status(row); return `<label class="case-option"><input type="radio" name="case" value="${escape(row.id)}" ${row.id === selectedCase ? 'checked' : ''}><span class="case-number">${caseNumber(row.order)}</span><span class="case-text"><b class="case-title">${escape(row.title)}</b><small class="case-lead">${escape(row.lead)}</small></span><span class="case-chip ${key}">${key === 'solved' ? icon('check') : ''}${label}</span></label>`; }).join('')}</fieldset>`;
   return `<div class="modal-shade" id="${id}"><section class="case-board" role="dialog" aria-modal="true" aria-labelledby="intro-title">${list}<div class="intro-card" id="case-preview">${casePreview(id)}</div></section></div>`;
 }
@@ -520,19 +521,19 @@ function casePreview(id: 'intro' | 'case-switch') {
   const loaded = !row || row.id === state.caseId;
   const active = state.session?.status === 'active';
   const title = row ? row.title : state.title;
-  const label = busy ? 'Opening…' : !state.session ? 'Let’s investigate' : !loaded ? 'Start this case' : id === 'intro' ? 'Continue mystery' : active ? 'Restart this case' : 'Play again';
+  const label = t(busy ? 'main.preview.opening' : !state.session ? 'main.preview.investigate' : !loaded ? 'main.preview.start' : id === 'intro' ? 'main.preview.continue' : active ? 'main.preview.restart' : 'main.preview.again');
   const primary = `<button class="primary-button" id="${id === 'intro' ? 'begin-button' : 'confirm-reset'}" ${busy ? 'disabled' : ''}>${label} ${icon('arrow')}</button>`;
   // The picked case's own personas (the catalog carries them), so the preview never shows the loaded case's cast.
   const cast = row?.cast ?? state.characters;
-  const note = active && (id === 'case-switch' || !loaded) ? `${loaded ? 'Restarting' : 'Starting it'} ends the case you’re in. Its records stay on the server.` : '';
-  return `<div class="intro-stamp">CASE ${caseNumber(row ? row.order : state.order)} <span>AUTHORED DEMONSTRATION</span></div>
+  const note = active && (id === 'case-switch' || !loaded) ? t(loaded ? 'main.preview.noteRestarting' : 'main.preview.noteStarting') : '';
+  return `<div class="intro-stamp">${t('main.case')} ${caseNumber(row ? row.order : state.order)} <span>${t('hud.authored')}</span></div>
     <div class="monkey-line" data-world="${escape(row?.world || state.world?.id || 'grove')}" aria-hidden="true">${cast.map((c, i) => `<i class="monkey-face ${escape(c.id)} slot-${i}"></i>`).join('')}</div>
-    <span class="eyebrow">A 2–3 MINUTE MYSTERY</span><h2 id="intro-title">${escape(title).replace(/ (\S+)$/, '<br>$1')}<span>.</span></h2>
+    <span class="eyebrow">${t('main.preview.eyebrow')}</span><h2 id="intro-title">${escape(title).replace(/ (\S+)$/, '<br>$1')}<span>.</span></h2>
     <p class="intro-lead">${escape(row ? row.lead : state.copy.intro.lead).replace(/\n/g, '<br>')}</p>
     <p id="intro-body" ${loaded ? '' : 'hidden'}>${escape(state.copy.intro.body)}</p>
-    <div class="intro-flow"><span>01 <b>Ask ${cast.length} ${escape(pw.text.many)}</b></span><span>02 <b>Choose</b></span></div>
-    ${id === 'intro' ? primary : `<div class="reset-actions"><button class="secondary-button" id="cancel-reset">Keep investigating</button>${primary}</div>`}
-    <p class="fine-print">${note || `The ${escape(pw.text.many)} are AI agents in an authored story. Questions, answers, and game actions are recorded. ${state.mode === 'rehearsal' ? 'This preview uses scripted replies.' : 'Their answers are generated live.'}`}</p>`;
+    <div class="intro-flow"><span>01 <b>${t('main.preview.flowAsk', { n: cast.length, many: pw.text.many })}</b></span><span>02 <b>${t('main.preview.flowChoose')}</b></span></div>
+    ${id === 'intro' ? primary : `<div class="reset-actions"><button class="secondary-button" id="cancel-reset">${t('main.preview.keep')}</button>${primary}</div>`}
+    <p class="fine-print">${note || t('main.fine', { many: pw.text.many, mode: plain(state.mode === 'rehearsal' ? 'main.fine.scripted' : 'main.fine.live') })}</p>`;
 }
 
 /** Refreshes only the preview, so the list keeps its scroll position and keyboard focus. */
@@ -566,7 +567,7 @@ function interviewMarkup(characterId: string) {
 /** Empty when every character has a role, else the disabled submit text. */
 function submitHint(): string {
   const missing = state.characters.find(c => !reportDraft.roles[c.id]);
-  return missing ? `Pick a role for ${missing.name}` : '';
+  return missing ? plain('main.pickRole', { name: missing.name }) : '';
 }
 
 /** The turn with this id in a character's chat. */
@@ -585,8 +586,8 @@ function reportPanel() {
     copy: { title: state.copy.report.title, description: state.copy.report.description }, busy,
   });
   const remaining = state.characters.filter(c => !session.interviews[c.id].length);
-  if (remaining.length) return `${heading('YOUR GUESS', 'Hear everyone first.', `One question per ${escape(world().text.one)} is enough. Then make your choice.`)}
-    <div class="notebook-content"><div class="requirements">${state.characters.map(c => `<button data-go="${escape(c.id)}"><span>${session.interviews[c.id].length ? icon('check') : icon('person')} Ask ${escape(c.name)}</span>${icon('arrow')}</button>`).join('')}</div></div>`;
+  if (remaining.length) return `${heading(t('main.report.eyebrow'), t('main.report.title'), t('main.report.desc', { one: world().text.one }))}
+    <div class="notebook-content"><div class="requirements">${state.characters.map(c => `<button data-go="${escape(c.id)}"><span>${session.interviews[c.id].length ? icon('check') : icon('person')} ${t('main.report.ask', { name: c.name })}</span>${icon('arrow')}</button>`).join('')}</div></div>`;
   return lineupPanel({
     title: state.title, noun: world().text.one, time: elapsedText(), spent: session.economy.spent, roles: state.roles,
     cast: state.characters.map(c => ({ id: c.id, name: c.name, part: c.role, faceClass: castClass(c.id) })),
@@ -635,7 +636,7 @@ function renderTools() {
   if (tip) tip.textContent = coinHint(Boolean(state.talk));
   if (session) {
     const { budget, spent } = session.economy;
-    counter.innerHTML = budget == null ? `<span class="coin-num">${spent}</span><span class="hud-label">COINS SPENT</span>` : `<span class="coin-num">${budget - spent} / ${budget}</span><span class="hud-label">COINS LEFT</span>`;
+    counter.innerHTML = budget == null ? `<span class="coin-num">${spent}</span><span class="hud-label">${t('main.coins.spent')}</span>` : `<span class="coin-num">${budget - spent} / ${budget}</span><span class="hud-label">${t('main.coins.left')}</span>`;
   }
   let markup = '';
   if (session && active) {
@@ -645,19 +646,19 @@ function renderTools() {
     const character = state.characters.find(c => c.id === panel);
     const spoken = Boolean(character && session.interviews[character.id].length);
     const inspect = toolBlock(economy, 'inspect', reserveFor(null));
-    const inspectOff = state.tools?.inspect === false ? NOT_IN_CASE : inspect.reason || (!character ? `Open ${world().text.oneWithArticle}’s chat` : !spoken ? `${character.name} has not spoken yet` : null);
+    const inspectOff = state.tools?.inspect === false ? notInCase() : inspect.reason || (!character ? plain('main.inspect.open', { one: world().text.oneWithArticle }) : !spoken ? plain('main.inspect.notSpoken', { name: character.name }) : null);
     const block = toolBlock(economy, 'continue', reserveFor(null));
     const talkOff = state.tools?.talk === false;
     const can = open && !talkOff && (chatter.pending > 0 || block.enabled);
     const heardAll = ids().every(id => session.interviews[id].length);
     markup = toolCard({
-      tool: 'inspect', id: 'inspect-button', label: 'Inspect reasoning', target: inspectOff ? '' : character!.name,
+      tool: 'inspect', id: 'inspect-button', label: plain('tools.inspect'), target: inspectOff ? '' : character!.name,
       chip: inspectOff || toolChip(economy, 'inspect'), enabled: open && !inspectOff, busy, fresh: open && !inspectOff && !session.inspections.length,
     }) + toolCard({
-      tool: 'continue', id: 'continue-button', label: talking ? 'Listening…' : chatter.pending > 0 ? `Keep listening (${chatter.pending})` : 'Let them talk', target: '',
-      chip: talkOff ? NOT_IN_CASE : chatter.pending > 0 ? 'free' : block.reason || toolChip(economy, 'continue'), enabled: can, busy: busy || talking,
+      tool: 'continue', id: 'continue-button', label: talking ? plain('main.listening') : chatter.pending > 0 ? plain('main.keepListening', { n: chatter.pending }) : plain('tools.talk'), target: '',
+      chip: talkOff ? notInCase() : chatter.pending > 0 ? plain('main.free') : block.reason || toolChip(economy, 'continue'), enabled: can, busy: busy || talking,
       fresh: can && !talking && heardAll && chatter.pending === 0 && economy.charges.continue.used === 0,
-      extra: talkOff ? '' : `<button class="thread-button" id="read-thread" type="button" ${busy ? 'disabled' : ''}>Read thread</button>`,
+      extra: talkOff ? '' : `<button class="thread-button" id="read-thread" type="button" ${busy ? 'disabled' : ''}>${t('main.readThread')}</button>`,
     });
   }
   if (markup !== toolsMarkup) { toolsMarkup = markup; document.querySelector('#toolbelt-cards')!.innerHTML = markup; }
@@ -788,7 +789,7 @@ function bindForms() {
       button.disabled = busy || !!hint;
       // Same markup lineupPanel renders: the label, plus the count while picks are missing. The hint text never goes in the button.
       const picked = state.characters.filter(c => reportDraft.roles[c.id]).length;
-      button.innerHTML = `Lock in verdict${hint ? `<small class="lock-count">${picked} of ${state.characters.length} picked</small>` : ''}`;
+      button.innerHTML = `${t('main.lockIn')}${hint ? `<small class="lock-count">${t('main.lockCount', { picked, total: state.characters.length })}</small>` : ''}`;
     }));
     document.querySelectorAll<HTMLInputElement>('input[name="confidence"]').forEach(input => input.addEventListener('change', () => { reportDraft.confidence = Number(input.value); }));
     document.querySelector('#explanation')!.addEventListener('input', event => { reportDraft.explanation = (event.target as HTMLTextAreaElement).value; });
@@ -809,7 +810,7 @@ function showCases() {
 
 /** Asks before starting the current case over. The old session's records stay on the server. */
 function showRestart() {
-  document.querySelector('#overlay-root')!.innerHTML = `<div class="modal-shade" id="reset-confirm"><section class="reset-card" role="dialog" aria-modal="true" aria-labelledby="reset-title"><span class="eyebrow">RESET SESSION</span><h2 id="reset-title">Start ${escape(state.title)} over?</h2><p>Your chats with the ${escape(world().text.many)} and your guess are cleared, and the case starts again from the briefing. The old session’s records stay on the server.</p><div class="reset-actions"><button class="secondary-button" id="cancel-restart">Keep investigating</button><button class="primary-button" id="confirm-restart">Reset session ${icon('reset')}</button></div></section></div>`;
+  document.querySelector('#overlay-root')!.innerHTML = `<div class="modal-shade" id="reset-confirm"><section class="reset-card" role="dialog" aria-modal="true" aria-labelledby="reset-title"><span class="eyebrow">${t('main.reset.eyebrow')}</span><h2 id="reset-title">${t('main.reset.title', { title: state.title })}</h2><p>${t('main.reset.body', { many: world().text.many })}</p><div class="reset-actions"><button class="secondary-button" id="cancel-restart">${t('main.preview.keep')}</button><button class="primary-button" id="confirm-restart">${t('hud.restart')} ${icon('reset')}</button></div></section></div>`;
   syncWalking();
   document.querySelector<HTMLButtonElement>('#cancel-restart')!.focus({ preventScroll: true });
   document.querySelector('#reset-confirm')!.addEventListener('click', event => { if (event.target === event.currentTarget) closeOverlay(); });
@@ -840,7 +841,7 @@ function stopLeaderboardPoll() { if (leaderboardTimer) clearInterval(leaderboard
 function showLeaderboard(opener: string) {
   stopLeaderboardPoll();
   leaderboardOpener = opener;
-  document.querySelector('#overlay-root')!.innerHTML = `<div class="modal-shade" id="leaderboard"><section class="reset-card board-card" role="dialog" aria-modal="true" aria-labelledby="board-title"><span class="eyebrow" id="board-title">LEADERBOARD</span><div id="leaderboard-body"><p class="board-empty">Loading…</p></div><div class="reset-actions"><button class="secondary-button" id="leaderboard-close">Close</button></div></section></div>`;
+  document.querySelector('#overlay-root')!.innerHTML = `<div class="modal-shade" id="leaderboard"><section class="reset-card board-card" role="dialog" aria-modal="true" aria-labelledby="board-title"><span class="eyebrow" id="board-title">${t('main.lb.eyebrow')}</span><div id="leaderboard-body"><p class="board-empty">${t('main.lb.loading')}</p></div><div class="reset-actions"><button class="secondary-button" id="leaderboard-close">${t('main.lb.close')}</button></div></section></div>`;
   syncWalking();
   const shade = document.querySelector('#leaderboard')!;
   shade.addEventListener('click', event => { if (event.target === event.currentTarget) closeOverlay(); });
@@ -853,7 +854,7 @@ function showLeaderboard(opener: string) {
       document.querySelector('#leaderboard-body')!.innerHTML = leaderboardPanel(board);
     } catch {
       if (document.querySelector('#leaderboard') !== shade) return;
-      document.querySelector('#leaderboard-body')!.innerHTML = '<p class="board-empty">The leaderboard could not be loaded. Trying again shortly.</p>';
+      document.querySelector('#leaderboard-body')!.innerHTML = `<p class="board-empty">${t('main.lb.error')}</p>`;
     }
   };
   leaderboardTimer = pollLeaderboard(load);
@@ -865,8 +866,8 @@ async function postTeam(name: string, join: boolean): Promise<{ ok: true } | { o
     const { ok, status, data: body } = await apiRaw('team', join ? { name, join: true } : { name });
     if (ok) return { ok: true };
     const data = body ?? {};
-    return { ok: false, error: status === 409 ? '' : String(data.error || FAILED), taken: status === 409 && typeof data.taken === 'string' ? data.taken : null };
-  } catch { return { ok: false, error: 'The server could not be reached.', taken: null }; }
+    return { ok: false, error: status === 409 ? '' : String(data.error || failed()), taken: status === 409 && typeof data.taken === 'string' ? data.taken : null };
+  } catch { return { ok: false, error: plain('main.unreachable'), taken: null }; }
 }
 
 /** Renders the check-in form into `host` and wires it once per render. Resolves when a team is set. */
@@ -922,13 +923,15 @@ let splashChecked = false;
 
 async function boot() {
   try {
+    await loadText();
     if (!splashChecked) {
       splashChecked = true;
       if (wantSplash(new URLSearchParams(location.search), splashSeen())) { await playSplash(app); markSplashSeen(); }
     }
     const access = await api('access');
     if (!access.authorized) {
-      app.innerHTML = `<div class="access-screen"><form id="access-form" class="reset-card"><span class="eyebrow">PRIVATE DEMONSTRATION</span><h1>Banana Mystery.</h1><p>Enter the shared access code to open the grove.</p><label for="access-code">Access code</label><input type="password" id="access-code" required autocomplete="current-password"><p id="access-error" role="alert"></p><button class="primary-button">Open the grove ${icon('arrow')}</button></form></div>`;
+      const here = world(), where = here.text.eyebrow.toLowerCase();
+      app.innerHTML = `<div class="access-screen"><form id="access-form" class="reset-card"><span class="eyebrow">${t('main.access.eyebrow')}</span><h1>${t('main.access.title', { place: here.text.place })}</h1><p>${t('main.access.body', { where })}</p><label for="access-code">${t('main.access.label')}</label><input type="password" id="access-code" required autocomplete="current-password"><p id="access-error" role="alert"></p><button class="primary-button">${t('main.access.open', { where })} ${icon('arrow')}</button></form></div>`;
       document.querySelector('#access-form')!.addEventListener('submit', async event => {
         event.preventDefault();
         try { await api('access', { code: (document.querySelector('#access-code') as HTMLInputElement).value }); await boot(); }
@@ -954,20 +957,21 @@ async function boot() {
     await shell();
     render();
   } catch {
-    app.innerHTML = `<div class="access-screen"><div class="reset-card"><span class="eyebrow">CONNECTION UNAVAILABLE</span><h1>The grove is offline.</h1><p>The case server could not be reached. Start the demo server, then reload this page.</p><button class="primary-button" onclick="location.reload()">Try again</button></div></div>`;
+    const where = world().text.eyebrow.toLowerCase();
+    app.innerHTML = `<div class="access-screen"><div class="reset-card"><span class="eyebrow">${t('main.offline.eyebrow')}</span><h1>${t('main.offline.title', { where })}</h1><p>${t('main.offline.body')}</p><button class="primary-button" onclick="location.reload()">${t('main.offline.retry')}</button></div></div>`;
   }
 }
 
 /** The projector screen: no heartbeat, no team. Fetches the standings and refreshes them every 10 s. */
 async function bootBoard() {
   app.dataset.view = 'board';
-  document.title = 'Leaderboard · AgentVerse';
+  document.title = plain('main.lb.docTitle');
   const draw = async () => {
     try { app.innerHTML = boardScreen(await api('leaderboard')); }
     catch {
       const screen = app.querySelector('.board-screen');
-      if (!screen) app.innerHTML = '<div class="board-screen"><p class="board-empty">The leaderboard could not be loaded. Trying again shortly.</p></div>';
-      else if (!screen.querySelector('.board-stale')) screen.insertAdjacentHTML('beforeend', '<p class="board-stale board-empty" role="status">Showing the last standings. Trying again shortly.</p>');
+      if (!screen) app.innerHTML = `<div class="board-screen"><p class="board-empty">${t('main.lb.error')}</p></div>`;
+      else if (!screen.querySelector('.board-stale')) screen.insertAdjacentHTML('beforeend', `<p class="board-stale board-empty" role="status">${t('main.lb.stale')}</p>`);
     }
   };
   const timer = pollLeaderboard(draw);

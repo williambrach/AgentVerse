@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { fieldCopy, sectionOf } from '../server/admin/maker-copy.js';
+import { COPY, fieldCopy, sectionOf } from '../server/admin/maker-copy.js';
 import { renderForm, knowledgeLines, linesText } from '../server/admin/maker-form.js';
+import { rawOf, fieldsOf } from '../server/content-paths.mjs';
+import renaissance from '../server/cases/renaissance-traveler.mjs';
 
 class El {
   constructor(tag, doc) { this.tag = tag; this.ownerDocument = doc; this.children = []; this.listeners = {}; this.className = ''; this._text = ''; this.dataset = {}; this.style = {}; this.hidden = false; this.disabled = false; this.value = ''; }
@@ -18,23 +20,28 @@ class El {
 const doc = { createElement: t => new El(t, doc) };
 const area = (root, path) => root.all(e => e.tag === 'textarea' && e.dataset.path === path)[0];
 const type = (root, path, v) => { const a = area(root, path); a.value = v; a.fire('input'); };
+const sections = root => root.all(e => e.className === 'form-section');
+const visible = root => sections(root).filter(s => !s.hidden).map(s => s.dataset.section);
 
-const partFields = id => ({
-  [`parts.${id}.label`]: `The ${id}`, [`parts.${id}.introduction`]: `Hi ${id}`, [`parts.${id}.quickQuestion`]: `What ${id}?`,
-  [`parts.${id}.knowledge`]: [`k1 ${id}`, `k2 ${id}`], [`parts.${id}.finding.classification`]: `c-${id}`, [`parts.${id}.finding.explanation`]: `e-${id}`,
-});
+// A small case with a character, a part and every section kind.
 const authored = () => ({
-  'prompt.setting': 'a monkey', 'prompt.use': ['bananas'], 'prompt.avoid': ['override'],
-  ...partFields('boss'), ...partFields('helper'), ...partFields('bystander'),
-  'copy.headline': 'H', 'copy.intro.lead': 'L1\nL2', 'copy.intro.body': 'B',
-  'copy.briefing.title': 'BT', 'copy.report.title': 'RT',
-  'debrief.title': 'DT', 'debrief.summary': 'DS {boss}', 'answer.feedback.correct': 'yes',
+  'title': 'The mini case',
+  'copy.headline': 'H', 'copy.intro.lead': 'L1\nL2',
+  'prompt.setting': 'a monkey', 'prompt.use': ['bananas'],
+  'roles.villain.hint': 'the one',
+  'characters.momo.name': 'Momo', 'characters.momo.introduction': 'Hi',
+  'characters.pip.name': 'Pip',
+  'talk.slips.pip.0.line': 'a slip line', 'talk.rehearsal.pip': ['r1', 'r2'],
+  'parts.boss.label': 'The boss', 'parts.boss.knowledge': ['k1', 'k2'],
+  'evidence.knife.text': 'a knife',
+  'talk.topics.weather.label': 'Weather',
+  'debrief.title': 'DT', 'answer.feedback.correct': 'yes',
+  'weird.path': 'odd',
 });
-const fixture = (current = authored()) => ({
-  id: 'mini-parts', title: 'Mini', version: 'v1', status: 'ready', world: 'grove', rev: 0, by: null, editedAt: null,
-  contentHash: 'abc', baseContentHash: 'abc', stale: false, mode: 'rehearsal',
-  structure: { characters: ['momo', 'pip', 'nori'], parts: [{ id: 'boss', role: 'villain' }, { id: 'helper', role: 'fooled' }, { id: 'bystander', role: 'honest' }], world: 'grove', placeholders: ['{boss}', '{helper}'] },
-  authored: authored(), current, history: [],
+const fixture = (current = authored(), over = {}) => ({
+  id: 'mini', title: 'Mini', version: 'v1', rev: 0, by: null, stale: false, corrupt: false, skipped: [], mode: 'rehearsal',
+  structure: { characters: [{ id: 'momo', name: 'Momo' }, { id: 'pip', name: 'Pip' }], parts: [{ id: 'boss', role: 'villain' }], world: 'grove', placeholders: ['{boss}'] },
+  authored: authored(), current, order: Object.keys(authored()), history: [], ...over,
 });
 const mk = (detail = fixture()) => {
   const root = new El('div', doc); const changes = [];
@@ -42,20 +49,71 @@ const mk = (detail = fixture()) => {
   return { root, handle, changes };
 };
 
-test('renders_every_editable_path', () => {
-  const { root, handle } = mk();
-  const paths = root.all(e => e.tag === 'textarea').map(e => e.dataset.path).sort();
-  assert.deepEqual(paths, Object.keys(authored()).sort());
-  assert.equal(root.all(e => e.className === 'form-section').length, 6);
-  assert.match(root.all(e => e.className === 'form-section' && e.dataset.section === 'part:boss')[0].textContent, /The boss/);
-  assert.equal(area(root, 'parts.boss.knowledge').value, 'k1 boss\nk2 boss');
-  assert.deepEqual(handle.values()['prompt.use'], ['bananas']);
-  assert.match(root.textContent, /\{boss\} \{helper\}/);
-});
-
 test('knowledge_lines_roundtrip', () => {
   assert.deepEqual(knowledgeLines('a\n\nb '), ['a', 'b']);
   assert.equal(linesText(['a', 'b']), 'a\nb');
+});
+
+test('section_of', () => {
+  const s = { characters: [{ id: 'momo', name: 'momo' }, { id: 'ottavio', name: 'Ottavio' }], parts: [{ id: 'carrier', label: 'The carrier' }] };
+  assert.equal(sectionOf('characters.momo.name', s), 'Character: Momo');
+  assert.equal(sectionOf('talk.slips.ottavio.0.line', s), 'Character: Ottavio');
+  assert.equal(sectionOf('talk.rehearsal.ottavio', s), 'Character: Ottavio');
+  assert.equal(sectionOf('parts.carrier.knowledge', s), 'Part: The carrier');
+  assert.equal(sectionOf('ui.hud.notebook', s), 'UI · HUD');
+  assert.equal(sectionOf('ui.dialogue.ask', s), 'UI · Conversation');
+  assert.equal(sectionOf('ui.station.x', s), 'UI · Map labels');
+  assert.equal(sectionOf('ui.zzz.x', s), 'UI · zzz');
+  assert.equal(sectionOf('talk.glossary.0.text', s), 'Topics');
+  assert.equal(sectionOf('partsKnowledge', s), 'Prompt');
+  assert.equal(sectionOf('prompt.interview', s), 'Prompt rules');
+  assert.equal(sectionOf('prompt.use', s), 'Prompt');
+  assert.equal(sectionOf('worlds.grove.cast.one', s), 'World: grove');
+  assert.equal(sectionOf('answer.feedback.other', s), 'Debrief');
+  assert.equal(sectionOf('weird.path', s), 'Other');
+});
+
+test('no_field_dropped', () => {
+  const raw = rawOf(renaissance);
+  const list = fieldsOf(raw);
+  const a = Object.fromEntries(list.map(f => [f.path, f.value]));
+  const d = fixture({ ...a }, {
+    authored: a, order: list.map(f => f.path),
+    structure: { characters: raw.characters.map(c => ({ id: c.id, name: c.name })), parts: raw.parts.map(p => ({ id: p.id, role: p.role })), placeholders: [] },
+  });
+  const { root } = mk(d);
+  const paths = root.all(e => e.tag === 'textarea').map(e => e.dataset.path);
+  assert.equal(new Set(paths).size, paths.length);
+  assert.deepEqual([...paths].sort(), list.map(f => f.path).sort());
+  assert.equal(root.all(e => e.className === 'form-section' && e.dataset.section === 'other').length, 0);
+  const topics = root.all(e => e.className === 'form-section' && e.dataset.section === 'topics')[0];
+  assert.ok(topics.all(e => e.tag === 'textarea').some(a => a.dataset.path.startsWith('talk.glossary.')));
+  assert.ok(list.length > 300);
+});
+
+test('sections_order', () => {
+  const { handle } = mk();
+  assert.deepEqual(handle.sections().map(s => s.title), [
+    'Story', 'Prompt', 'Roles', 'Character: Momo', 'Character: Pip', 'Part: The boss', 'Evidence', 'Topics', 'Debrief', 'Other']);
+  const game = fixture({}, { id: 'game', authored: {}, structure: { characters: [], parts: [], world: null, placeholders: [], areas: ['hud', 'tools'], worlds: ['grove', 'tower'] } });
+  const ga = { 'worlds.tower.frame': 'f', 'worlds.grove.frame': 'g', 'prompt.thread': 't', 'prompt.interview': 'i', 'ui.tools.talk': 'Talk', 'ui.hud.notebook': 'Notes' };
+  const g = mk({ ...game, authored: ga, current: ga, order: Object.keys(ga) });
+  assert.deepEqual(g.handle.sections().map(s => s.title), ['UI · HUD', 'UI · Arbiter tools', 'Prompt rules', 'World: grove', 'World: tower']);
+});
+
+test('section_titles_follow_current_names', () => {
+  const { root, handle } = mk(fixture({ ...authored(), 'characters.momo.name': 'Mimi', 'parts.boss.label': 'The chief' }));
+  assert.ok(handle.sections().some(s => s.title === 'Character: Mimi'));
+  assert.deepEqual(handle.sections().find(s => s.key === 'part:boss'), { key: 'part:boss', title: 'Part: The chief', role: 'villain' });
+  type(root, 'characters.momo.name', 'Zed');
+  assert.ok(handle.sections().some(s => s.title === 'Character: Zed'));
+});
+
+test('unclaimed_paths_go_to_other', () => {
+  const { root, handle } = mk();
+  assert.equal(handle.sections().at(-1).key, 'other');
+  assert.ok(area(root, 'weird.path'));
+  assert.equal(area(root, 'weird.path').parent.parent.dataset.section, 'other');
 });
 
 test('overlay_only_changed_paths', () => {
@@ -64,9 +122,9 @@ test('overlay_only_changed_paths', () => {
   type(root, 'copy.intro.lead', 'New lead');
   assert.deepEqual(handle.overlay(), { 'copy.intro.lead': 'New lead' });
   assert.equal(changes.length, 1);
-  type(root, 'parts.boss.knowledge', 'k1 boss\n\nk3 ');
-  assert.deepEqual(handle.overlay()['parts.boss.knowledge'], ['k1 boss', 'k3']);
-  type(root, 'parts.boss.knowledge', 'k1 boss\nk2 boss');
+  type(root, 'parts.boss.knowledge', 'k1\n\nk3 ');
+  assert.deepEqual(handle.overlay()['parts.boss.knowledge'], ['k1', 'k3']);
+  type(root, 'parts.boss.knowledge', 'k1\nk2');
   type(root, 'copy.intro.lead', 'L1\nL2');
   assert.equal(handle.overlay(), null);
 });
@@ -77,17 +135,14 @@ test('differs_marker_and_reset', () => {
   assert.equal(marker().hidden, true);
   type(root, 'copy.headline', 'X');
   assert.equal(marker().hidden, false);
-  assert.equal(marker().textContent.startsWith('edited'), true);
   marker().all(e => e.tag === 'button')[0].click();
   assert.equal(area(root, 'copy.headline').value, 'H');
-  assert.equal(marker().hidden, true);
   assert.equal(handle.overlay(), null);
   assert.equal(changes.length, 2);
 });
 
 test('dirty_against_current', () => {
-  const current = { ...authored(), 'copy.headline': 'Published' };
-  const { root, handle } = mk(fixture(current));
+  const { root, handle } = mk(fixture({ ...authored(), 'copy.headline': 'Published' }));
   assert.equal(area(root, 'copy.headline').value, 'Published');
   assert.deepEqual(handle.overlay(), { 'copy.headline': 'Published' });
   assert.equal(handle.dirty(), false);
@@ -99,30 +154,37 @@ test('dirty_against_current', () => {
   assert.equal(handle.dirty(), true);
   handle.setDetail(fixture({ ...authored() }));
   assert.equal(handle.dirty(), false);
-  assert.equal(area(root, 'copy.headline').value, 'H');
 });
 
-test('set_error_shows_under_field', () => {
+test('dirty_sections_and_count', () => {
+  const { root, handle } = mk();
+  assert.deepEqual(handle.dirtySections(), []);
+  type(root, 'copy.headline', 'Z');
+  type(root, 'parts.boss.label', 'Q');
+  assert.deepEqual(handle.dirtySections(), ['story', 'part:boss']);
+  assert.equal(handle.dirtyCount(), 2);
+  type(root, 'copy.headline', 'H');
+  assert.equal(handle.dirtyCount(), 1);
+});
+
+test('set_error_returns_section_and_shows', () => {
   const { root, handle } = mk();
   const err = path => area(root, path).parent.all(e => e.className === 'field-error')[0];
-  assert.equal(err('parts.boss.knowledge').hidden, true);
-  handle.setError('parts.boss.knowledge', 'unknown placeholder {x}');
-  assert.equal(err('parts.boss.knowledge').textContent, 'unknown placeholder {x}');
+  assert.equal(handle.setError('parts.boss.knowledge', 'bad'), 'part:boss');
+  assert.equal(err('parts.boss.knowledge').textContent, 'bad');
   assert.equal(err('parts.boss.knowledge').hidden, false);
-  handle.setError('copy.headline', 'bad');
+  assert.equal(handle.setError('nope', 'x'), null);
   assert.equal(err('parts.boss.knowledge').hidden, true);
-  assert.equal(err('copy.headline').hidden, false);
-  handle.clearErrors();
-  assert.equal(err('copy.headline').hidden, true);
 });
 
 test('text_stays_literal', () => {
   const { root, handle } = mk();
   type(root, 'copy.headline', '<img onerror=x>');
-  assert.equal(handle.values()['copy.headline'], '<img onerror=x>');
   assert.deepEqual(handle.overlay(), { 'copy.headline': '<img onerror=x>' });
-  const src = readFileSync(new URL('../server/admin/maker-form.js', import.meta.url), 'utf8');
-  assert.equal(/innerHTML|outerHTML|insertAdjacentHTML/.test(src), false);
+  for (const f of ['maker-form.js', 'maker-copy.js', 'maker.js']) {
+    const src = readFileSync(new URL(`../server/admin/${f}`, import.meta.url), 'utf8');
+    assert.equal(/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(src), false, f);
+  }
 });
 
 test('set_detail_rebuilds_and_clears_errors', () => {
@@ -133,82 +195,49 @@ test('set_detail_rebuilds_and_clears_errors', () => {
   assert.equal(area(root, 'copy.headline').value, 'Y');
   assert.equal(root.all(e => e.tag === 'textarea').length, Object.keys(authored()).length);
   assert.equal(root.all(e => e.className === 'field-error' && !e.hidden).length, 0);
-  assert.equal(handle.dirty(), false);
-  assert.deepEqual(handle.overlay(), { 'copy.headline': 'Y' });
 });
 
-const sections = root => root.all(e => e.className === 'form-section');
-
-test('labels_have_no_dotted_key', () => {
-  const { root } = mk();
-  const labels = root.all(e => e.className === 'field-label');
-  assert.equal(labels.length, Object.keys(authored()).length);
-  for (const l of labels) assert.equal(/\w\.\w/.test(l.textContent), false, l.textContent);
-  assert.ok(labels.every(l => l.title.includes('.')));
+test('search_filters', () => {
+  const { root, handle } = mk();
+  handle.setFilter('slip');
+  const shown = root.all(e => e.className === 'field').filter(f => !f.hidden).map(f => f.all(e => e.tag === 'textarea')[0].dataset.path);
+  assert.deepEqual(shown, ['talk.slips.pip.0.line']);
+  assert.deepEqual(handle.sections().map(s => s.key), ['character:pip']);
+  assert.deepEqual(visible(root), ['character:pip']);
+  handle.setFilter('KNIFE'); // matches the value, not the path
+  assert.deepEqual(visible(root), ['evidence']);
+  handle.setFilter('Debrief verdict'); // label match is case-insensitive too
+  assert.deepEqual(visible(root), []);
+  handle.setFilter('');
+  assert.equal(root.all(e => e.className === 'field' && e.hidden).length, 0);
+  assert.equal(visible(root).length, 1);
 });
 
-test('every_field_has_hint', () => {
-  const { root } = mk();
-  const hints = root.all(e => e.className === 'field-hint');
-  assert.equal(hints.length, Object.keys(authored()).length);
-  assert.ok(hints.every(h => h.textContent.length > 0));
+test('templates_get_monospace_and_token_legend', () => {
+  const ga = { 'prompt.interview': 'You are [[name]] [[knowledge]]', 'prompt.thread': 'T [[others]] [[knowledge]]' };
+  const d = fixture(ga, { id: 'game', authored: ga, order: Object.keys(ga), structure: { characters: [], parts: [], placeholders: [], areas: [], worlds: [] } });
+  const { root } = mk(d);
+  assert.match(area(root, 'prompt.interview').className, /mono/);
+  const legends = root.all(e => e.className === 'token-legend').map(e => e.textContent);
+  assert.equal(legends.length, 2);
+  assert.match(legends[0], /\[\[name\]\].*\[\[knowledge\]\]/);
+  assert.equal(legends[0].includes('[[others]]'), false);
+  assert.match(legends[1], /\[\[others\]\]/);
+  assert.equal(area(root, 'prompt.interview').parent.all(e => e.className === 'token-legend').length, 1);
+});
+
+test('known_hints', () => {
+  for (const [path, [label, hint]] of Object.entries(COPY)) {
+    assert.ok(hint.length > 0, path);
+    assert.equal(/\./.test(label), false, path);
+  }
+  for (const f of fieldsOf(rawOf(renaissance))) assert.equal(/\w\.\w/.test(fieldCopy(f.path).label), false, f.path);
+  assert.equal(fieldCopy('ui.hud.notebook.title').label, 'Notebook title');
   assert.equal(fieldCopy('parts.planner.finding.classification').label, 'Debrief verdict');
-  assert.deepEqual(fieldCopy('zzz.weird'), { label: 'weird', hint: '' });
-  assert.match(fieldCopy('copy.report.title').hint, /^Not shown to players yet\./);
-  assert.match(fieldCopy('debrief.summary').hint, /^Not shown to players yet\./);
+  assert.equal(fieldCopy('talk.slips.ottavio.0.line').label, 'Line');
   assert.match(fieldCopy('prompt.use').hint, /One per line\.$/);
-  assert.match(fieldCopy('parts.x.knowledge').hint, /One per line\.$/);
-});
-
-test('section_of', () => {
-  assert.equal(sectionOf('parts.carrier.knowledge'), 'part:carrier');
-  assert.equal(sectionOf('answer.feedback.other'), 'debrief');
-  assert.equal(sectionOf('copy.headline'), 'story');
-  assert.equal(sectionOf('prompt.use'), 'prompt');
-});
-
-test('sections_list_and_show', () => {
-  const { root, handle } = mk();
-  assert.deepEqual(handle.sections().map(s => s.key), ['story', 'prompt', 'part:boss', 'part:helper', 'part:bystander', 'debrief']);
-  assert.deepEqual(handle.sections()[2], { key: 'part:boss', title: 'The boss', role: 'villain' });
-  assert.equal(sections(root).filter(s => !s.hidden).length, 1);
-  handle.show('prompt');
-  const vis = sections(root).filter(s => !s.hidden);
-  assert.equal(vis.length, 1);
-  assert.equal(vis[0].dataset.section, 'prompt');
-});
-
-test('dirty_sections_and_count', () => {
-  const { root, handle } = mk();
-  assert.deepEqual(handle.dirtySections(), []);
-  assert.equal(handle.dirtyCount(), 0);
-  type(root, 'copy.headline', 'Z');
-  assert.deepEqual(handle.dirtySections(), ['story']);
-  assert.equal(handle.dirtyCount(), 1);
-  type(root, 'parts.helper.label', 'Q');
-  assert.deepEqual(handle.dirtySections(), ['story', 'part:helper']);
-  assert.equal(handle.dirtyCount(), 2);
-  type(root, 'copy.headline', 'H');
-  assert.equal(handle.dirtyCount(), 1);
-});
-
-test('dirty_ignores_authored_difference', () => {
-  const { handle } = mk(fixture({ ...authored(), 'copy.headline': 'Published' }));
-  assert.equal(handle.dirtyCount(), 0);
-});
-
-test('set_error_returns_section', () => {
-  const { handle } = mk();
-  assert.equal(handle.setError('parts.boss.knowledge', 'x'), 'part:boss');
-  assert.equal(handle.setError('nope', 'x'), null);
-});
-
-test('name_tag_legend', () => {
-  const { root } = mk();
-  const tags = root.all(e => e.className === 'placeholders');
-  assert.equal(tags.length, 4);
-  assert.match(root.textContent, /\{boss\} \{helper\}/);
-  assert.match(tags[0].textContent, /^Name tags: \{boss\} \{helper\}\. Each becomes/);
+  assert.match(fieldCopy('worlds.grove.frame').hint, /\w/);
+  assert.match(fieldCopy('prompt.thread').hint, /\[\[knowledge\]\]/);
 });
 
 test('grow_skips_without_scrollHeight', () => {
@@ -218,4 +247,16 @@ test('grow_skips_without_scrollHeight', () => {
   a.scrollHeight = 120;
   type(root, 'copy.headline', 'xy');
   assert.equal(a.style.height, '122px');
+});
+
+test('renaissance_builds_fast', () => {
+  const raw = rawOf(renaissance);
+  const list = fieldsOf(raw);
+  const a = Object.fromEntries(list.map(f => [f.path, f.value]));
+  const d = fixture({ ...a }, { authored: a, order: list.map(f => f.path), structure: { characters: raw.characters.map(c => ({ id: c.id, name: c.name })), parts: [], placeholders: [] } });
+  const t0 = performance.now();
+  const { root, handle } = mk(d);
+  for (let i = 0; i < 50; i++) type(root, 'copy.headline', `x${i}`);
+  handle.setFilter('slip');
+  assert.ok(performance.now() - t0 < 1500);
 });

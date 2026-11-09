@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, statSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { defineCase } from '../server/cases.mjs';
@@ -10,7 +10,7 @@ import { partCase, agentWorlds } from './fixtures/minimal-case.mjs';
 const worlds = agentWorlds(3);
 const make = (dir = mkdtempSync(join(tmpdir(), 'content-')), opts = {}) => {
   const kase = defineCase(partCase, { worlds });
-  return { dir, kase, store: createContentStore({ cases: [kase], dataDir: dir, worlds, ...opts }) };
+  return { dir, kase, store: createContentStore({ cases: [kase], dataDir: dir, contentDir: join(dir, 'tracked'), uiDefaults: {}, worlds, ...opts }) };
 };
 const fail = (fn, status, path) => assert.throws(fn, e => e instanceof ContentError && e.status === status && (path === undefined || e.path === path), `expected ${status} ${path}`);
 const file = dir => join(dir, 'content', 'mini-parts.jsonl');
@@ -171,6 +171,7 @@ test('boot_survives_garbage_and_partial_line', () => {
   writeFileSync(file(dir), `${JSON.stringify(rec)}\n{"type":"cont`);
   assert.equal(make(dir).store.current('mini-parts').copy.headline, 'Kept');
   writeFileSync(file(dir), 'not json\n{"a":1}\n');
+  rmSync(join(dir, 'tracked'), { recursive: true }); // the legacy import above wrote a tracked file
   const info = make(dir).store.info('mini-parts');
   assert.equal(info.rev, 0); assert.equal(info.corrupt, true); assert.equal(info.stale, false);
 });
@@ -221,4 +222,37 @@ test('structure_lists_locked_facts', () => {
     world: { id: 'grove', place: 'Banana Grove', agents: 3 },
     placeholders: ['{boss}', '{helper}', '{bystander}'],
   });
+});
+
+const rdir = () => mkdtempSync(join(tmpdir(), 'content-ren-'));
+const renStore = async dir => {
+  const { cases } = await import('../server/cases/index.mjs');
+  const { worlds: liveWorlds } = await import('../server/worlds.mjs');
+  const kase = cases.find(c => c.id === 'renaissance-traveler');
+  return { kase, store: createContentStore({ cases: [kase], dataDir: dir, contentDir: join(dir, 'tracked'), uiDefaults: {}, worlds: liveWorlds }) };
+};
+
+test('parts_knowledge_publish: one edit gives every part that knowledge', async () => {
+  const { store, kase } = await renStore(rdir());
+  assert.ok(store.fields(kase.id).order.includes('partsKnowledge'));
+  const r = store.publish(kase.id, { partsKnowledge: ['A shared fact.', 'Another one.'] }, { by: 'alice', baseRev: 0 });
+  assert.deepEqual(r.fields, ['partsKnowledge']);
+  const cur = store.current(kase.id);
+  assert.ok(cur.parts.every(p => p.knowledge.length === 2 && p.knowledge[0] === 'A shared fact.'));
+  fail(() => store.preview(kase.id, { partsKnowledge: [] }), 400, 'partsKnowledge');
+  fail(() => store.preview(kase.id, { partsKnowledge: Array(21).fill('x') }), 400, 'partsKnowledge');
+});
+
+test('talk_split_rejected: a per-part knowledge path is an unknown field on a talk case', async () => {
+  const { store, kase } = await renStore(rdir());
+  const path = `parts.${kase.parts[0].id}.knowledge`;
+  fail(() => store.preview(kase.id, { [path]: ['A different fact.'] }), 400, path);
+});
+
+test('wrong_typed_overlay_values_are_a_400_not_a_crash', () => {
+  const { dir, kase, store } = make();
+  const path = store.fields(kase.id).order[0];
+  appendFileSync(join(dir, 'content', `${kase.id}.jsonl`), `${JSON.stringify({ type: 'content_revision', caseId: kase.id, version: kase.version, rev: 1, edits: { [path]: 5, 'nope.x': 'y' }, tracked: false })}\n`);
+  const again = make(dir).store;
+  fail(() => again.revert(kase.id, 1), 400);
 });

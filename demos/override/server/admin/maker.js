@@ -2,15 +2,19 @@
 import { el } from './dom.js';
 import { renderForm } from './maker-form.js';
 import { createChat } from './maker-chat.js';
+import { mountSignIn } from './signin.js';
 
-export function mountMaker(root, { api, caseId = null, location = null, confirm = (m) => window.confirm(m) } = {}) {
+const GAME = 'game';
+
+export function mountMaker(root, { api, caseId = null, location = null, confirm = (m) => window.confirm(m), debounceMs = 80 } = {}) {
   const doc = root.ownerDocument || root;
   const $ = (id) => doc.getElementById(id);
   let cases = [];
   let id = null;
   let detail = null;
   let form = null;
-  let currentKey = 'story';
+  let currentKey = null;
+  let navTimer = null;
   const chat = createChat(doc, {
     api,
     getEdits: () => (form ? form.overlay() || {} : {}),
@@ -22,6 +26,7 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
   const flags = () => [
     detail?.stale ? 'Stale: the last revision no longer fits this case version, so the authored text is shown' : null,
     detail?.corrupt ? 'History file has an unreadable line; the readable revisions were kept' : null,
+    detail?.skipped?.length ? `Skipped, no longer valid: ${detail.skipped.join(', ')}` : null,
   ].filter(Boolean);
   const setStatus = () => {
     const dirty = !!(form && form.dirty());
@@ -30,11 +35,18 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
     $('status').dataset.state = dirty ? 'unsaved' : (fl.length ? 'bad' : 'ok');
     const n = form ? form.dirtyCount() : 0;
     $('dirty-count').textContent = n === 0 ? '' : n === 1 ? '1 unsaved change' : `${n} unsaved changes`;
-    renderNav();
+    renderNavSoon();
   };
   const showError = (message) => { $('status').textContent = message; $('status').dataset.state = 'bad'; };
 
+  // Typing updates the status at once; the nav (dots, order, titles) catches up after a pause.
+  function renderNavSoon() {
+    if (navTimer !== null) return;
+    navTimer = setTimeout(renderNav, debounceMs);
+  }
+
   function renderNav() {
+    if (navTimer !== null) { clearTimeout(navTimer); navTimer = null; }
     const nav = $('sections');
     if (!nav || !form) return;
     clear(nav);
@@ -79,7 +91,7 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
       });
     }
     clear(caseSel);
-    for (const c of cases) {
+    for (const c of [...cases.filter((x) => x.id !== GAME), ...cases.filter((x) => x.id === GAME)]) {
       const o = el(doc, 'option', null, { text: `${c.title} · ${c.rev ? 'rev ' + c.rev : 'authored'}${c.stale ? ' · stale' : ''}`, parent: caseSel });
       o.value = c.id;
     }
@@ -107,9 +119,12 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
     detail = next;
     if (form) form.setDetail(detail);
     else form = renderForm($('form'), detail, { onChange: setStatus });
-    chat.setDetail(detail);
+    if ($('field-search')) $('field-search').value = '';
+    const game = detail.id === GAME;
+    if ($('panel')) $('panel').hidden = game;
+    if (!game) chat.setDetail(detail);
     renderHistory();
-    if (currentKey !== 'history' && !form.sections().some((x) => x.key === currentKey)) currentKey = 'story';
+    if (currentKey !== 'history' && !form.sections().some((x) => x.key === currentKey)) currentKey = form.sections()[0]?.key ?? 'history';
     selectSection(currentKey);
     setStatus();
   }
@@ -124,8 +139,8 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
     const list = await api('/admin/content');
     cases = list.cases || [];
     const want = wanted();
-    id = (cases.find(c => c.id === want) || cases[0] || {}).id ?? null;
-    currentKey = 'story';
+    id = (cases.find(c => c.id === want) || cases.find(c => c.id !== GAME) || cases[0] || {}).id ?? null;
+    currentKey = null;
     renderTabs();
     if (id) await fetchDetail();
   }
@@ -133,7 +148,7 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
   async function select(next) {
     if (form && form.dirty() && !confirm('Discard unsaved changes?')) return;
     id = next;
-    currentKey = 'story';
+    currentKey = null;
     $('prompt').textContent = '';
     $('prompt-box').hidden = true;
     $('publish-note').textContent = '';
@@ -189,15 +204,22 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
   }
 
   $('publish').addEventListener('click', publish);
+  if ($('field-search')) {
+    $('field-search').addEventListener('input', () => {
+      if (!form) return;
+      form.setFilter($('field-search').value);
+      if (currentKey !== 'history') currentKey = form.shownKey();
+      renderNav();
+    });
+  }
 
   return { load, select, preview: chat.showPrompt, tryAsk: chat.send, publish, restore };
 }
 
 function start() {
   const $ = (id) => document.getElementById(id);
-  const token = () => sessionStorage.getItem('adminToken') || '';
   async function api(path, body, method = body ? 'POST' : 'GET') {
-    const init = { method, headers: { authorization: 'Bearer ' + token() } };
+    const init = { method, headers: {}, credentials: 'same-origin' };
     if (body !== undefined) {
       init.headers['content-type'] = 'application/json';
       init.body = JSON.stringify(body);
@@ -214,15 +236,9 @@ function start() {
     }
     return j;
   }
-  $('token').value = token();
   const app = mountMaker(document.body, { api, caseId: new URLSearchParams(window.location.search).get('case'), location: window.location });
-  const go = () => app.load().catch((err) => { $('status').textContent = err.status === 401 ? 'Bad token: ' + err.message : err.message; $('status').dataset.state = 'bad'; });
-  $('auth').addEventListener('submit', (e) => {
-    e.preventDefault();
-    sessionStorage.setItem('adminToken', $('token').value.trim());
-    go();
-  });
-  if (token()) go();
+  const go = () => app.load().catch((err) => { $('status').textContent = err.message; $('status').dataset.state = 'bad'; });
+  mountSignIn(document, { onSignedIn: go });
 }
 
 if (typeof document !== 'undefined') start();

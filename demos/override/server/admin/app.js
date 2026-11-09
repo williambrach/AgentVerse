@@ -5,6 +5,7 @@ import * as round from './round.js';
 import * as controls from './controls.js';
 import { renderBoard } from './board.js';
 import { renderWatch } from './watch.js';
+import { mountSignIn } from './signin.js';
 import { initPanels, setBadge } from './panels.js';
 
 const DELAYS = [1000, 2000, 5000, 10000];
@@ -14,7 +15,6 @@ function start() {
   const $ = (id) => document.getElementById(id);
   try { initPanels(document, window.localStorage); } catch { initPanels(document, null); }
   const statusEl = $('status');
-  const tokenEl = $('token');
   const baseTitle = document.title;
   let catalog = [];
   let lastSnap = null;
@@ -30,11 +30,10 @@ function start() {
     statusEl.textContent = s;
     statusEl.dataset.state = s.replace(/ /g, '-');
   };
-  const token = () => sessionStorage.getItem('adminToken') || '';
-  tokenEl.value = token();
+  let signin = null;
 
   async function api(path, body) {
-    const init = { headers: { authorization: 'Bearer ' + token() } };
+    const init = { headers: {} };
     if (body !== undefined) {
       init.method = 'POST';
       init.headers['content-type'] = 'application/json';
@@ -43,6 +42,7 @@ function start() {
     const res = await fetch(path, init);
     let j = {};
     try { j = await res.json(); } catch { /* empty body */ }
+    if (res.status === 401) { stopped = true; setStatus('signed out'); signin?.show(); }
     if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
     return j;
   }
@@ -98,13 +98,11 @@ function start() {
     ctl = mine;
     stopped = false;
     try {
-      const res = await fetch('/admin/stream', {
-        headers: { authorization: 'Bearer ' + token() },
-        signal: mine.signal,
-      });
+      const res = await fetch('/admin/stream', { signal: mine.signal });
       if (res.status === 401) {
         stopped = true;
-        setStatus('bad token');
+        setStatus('signed out');
+        signin?.show();
         return;
       }
       if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
@@ -131,13 +129,11 @@ function start() {
     if (status === 'connected' && Date.now() - lastTick > STALE_MS) setStatus('stale');
   }, 1000);
 
-  $('auth').addEventListener('submit', (e) => {
-    e.preventDefault();
-    sessionStorage.setItem('adminToken', tokenEl.value.trim());
+  const connected = async () => {
     attempt = 0;
     connect();
     loadLinks();
-  });
+  };
   async function loadLinks() {
     const link = $('board-link');
     if (!link) return;
@@ -146,7 +142,7 @@ function start() {
       if (typeof board === 'string' && /^https?:\/\//.test(board)) { link.href = board; link.hidden = false; }
     } catch { /* the link is optional */ }
   }
-  if (token()) { connect(); loadLinks(); }
+  mountSignIn(document, { onSignedIn: connected }).then((s) => { signin = s; });
 }
 
 if (typeof document !== 'undefined') start();

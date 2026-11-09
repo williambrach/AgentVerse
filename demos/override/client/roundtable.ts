@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { Character } from './types';
 import type { WorldPack } from './worlds';
+import { plain } from './text.ts';
 import { actorAnimation, frameAt, ANCHOR } from './sprite-anim';
 import type { ActorState, AnimFrame } from './sprite-anim';
 import { seats, table, fitRoom, farEdge, tablePoint, chairs, ROOM, DEPTH, TILT } from './roundtable-layout';
@@ -459,7 +460,7 @@ export class Roundtable extends Phaser.Scene {
     view.hit.on('pointerover', () => {
       if (!this.enabled) return;
       this.game.canvas.style.cursor = 'pointer';
-      this.setHint(`Click to talk to ${view.name}`);
+      this.setHint(plain('roundtable.click', { name: view.name }));
     });
     view.hit.on('pointerout', () => {
       this.game.canvas.style.cursor = '';
@@ -475,8 +476,8 @@ export class Roundtable extends Phaser.Scene {
 
   private describe() {
     const names = this.cast.map(c => c.name).join(', ');
-    const place = this.world?.text.place ?? 'The Roundtable';
-    this.game.canvas.setAttribute('aria-label', `${place}: ${names} and you around a table. Click a friend to talk, or pick one in the list.`);
+    const place = this.world?.text.place ?? plain('worlds.friends.place');
+    this.game.canvas.setAttribute('aria-label', plain('roundtable.canvas', { place, names }));
     this.game.canvas.setAttribute('role', 'img');
   }
 
@@ -720,6 +721,6 @@ export function createRoundtable(onArrival: (id: string) => void, onHint: (hint:
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }, audio: { noAudio: true }, scene: [scene], input: { keyboard: false }, autoFocus: false,
   });
   game.canvas.setAttribute('role', 'img');
-  game.canvas.setAttribute('aria-label', 'The Roundtable: Maya, Ken, Alex, Nora, Sam and you around a table. Click a friend to talk.');
+  game.canvas.setAttribute('aria-label', plain('roundtable.canvas.default', { place: plain('worlds.friends.place'), names: 'Maya, Ken, Alex, Nora, Sam' }));
   return scene;
 }

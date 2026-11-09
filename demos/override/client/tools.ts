@@ -1,27 +1,31 @@
 import type { Economy, Inspection, ThreadLine, Tool } from './types.ts';
 import { escape as esc, svg as baseSvg } from './html.ts';
+import { plain, plainTn, t, tn } from './text.ts';
 
+/** Raw tooltip texts; read at use time so the admin's edits apply. */
 export const HINTS: Record<'coins' | Tool, string> = {
-  coins: 'Every question and tool costs coins.',
-  ask: 'Ask one question; only this character hears it.',
-  inspect: 'See how this character reasoned about their last line. Rare.',
-  continue: 'They talk among themselves, one line each.',
+  get coins() { return plain('tools.hint.coins'); },
+  get ask() { return plain('tools.hint.ask'); },
+  get inspect() { return plain('tools.hint.inspect'); },
+  get continue() { return plain('tools.hint.continue'); },
 };
 
 /** The coin counter's tooltip; in a talk case only typed questions cost coins. */
 export function coinHint(talk: boolean): string {
-  return talk ? 'Typed questions cost coins. Topics and “What did you mean?” are free.' : HINTS.coins;
+  return talk ? plain('tools.hint.coinsTalk') : HINTS.coins;
 }
 
 /** Why a tool card is off in a case that does not use that tool. */
 export const NOT_IN_CASE = 'Not in this case';
+/** The same text read at use time, so the admin's edit applies. */
+export const notInCase = (): string => plain('tools.notInCase');
 
 type ArbiterTool = 'inspect' | 'continue';
 
 /** The Arbiter tools in toolbelt order. */
 export const ARBITER_TOOLS: { tool: ArbiterTool; name: string; icon: string; does: string }[] = [
-  { tool: 'inspect', name: 'Inspect reasoning', icon: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5.5 5.5M8 10.5h5"/>', does: 'See how one character reasoned about their last line.' },
-  { tool: 'continue', name: 'Let them talk', icon: '<path d="M3.5 5h11v8h-7l-4 3.5zM14.5 9h6v8.5l-3-2.5h-6v-2"/>', does: 'They talk among themselves; you read along in the thread.' },
+  { tool: 'inspect', get name() { return plain('tools.inspect'); }, icon: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5.5 5.5M8 10.5h5"/>', get does() { return plain('tools.inspect.does'); } },
+  { tool: 'continue', get name() { return plain('tools.talk'); }, icon: '<path d="M3.5 5h11v8h-7l-4 3.5zM14.5 9h6v8.5l-3-2.5h-6v-2"/>', get does() { return plain('tools.talk.does'); } },
 ];
 
 const svg = (path: string): string => baseSvg(path, 18, 1.6);
@@ -30,10 +34,10 @@ const toolOf = (tool: ArbiterTool) => ARBITER_TOOLS.find(t => t.tool === tool)!;
 /** "1 question", "2 questions". */
 export const pluralise = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
-const plural = (n: number): string => pluralise(n, 'coin');
+const plural = (n: number): string => plainTn('tools.coin', n);
 
 export function coinLabel(e: Economy): string {
-  return e.budget == null ? plural(e.spent) : `${e.spent} / ${e.budget} coins`;
+  return e.budget == null ? plural(e.spent) : plain('tools.coinsOf', { spent: e.spent, budget: e.budget });
 }
 
 function left(e: Economy, tool: Tool): number | null {
@@ -44,19 +48,19 @@ function left(e: Economy, tool: Tool): number | null {
 
 export function toolChip(e: Economy, tool: Tool): string {
   const n = left(e, tool);
-  if (n === 0) return '0 left';
+  if (n === 0) return plain('tools.none');
   const cost = plural(e.costs[tool]);
-  return n == null ? cost : `${cost} · ${n} left`;
+  return n == null ? cost : plain('tools.chipLeft', { cost, n });
 }
 
 /** Mirrors the server: charges first, then budget, then the reserve for asking everyone. Cost is the sum over `tools`. */
 export function toolsBlock(e: Economy, tools: Tool[], reserve: number): { enabled: boolean; reason: string | null } {
-  if (tools.some(t => left(e, t) === 0)) return { enabled: false, reason: '0 left' };
+  if (tools.some(t => left(e, t) === 0)) return { enabled: false, reason: plain('tools.none') };
   if (e.budget != null) {
     const remaining = e.budget - e.spent;
     const cost = tools.reduce((sum, t) => sum + e.costs[t], 0);
-    if (cost > remaining) return { enabled: false, reason: 'Not enough coins' };
-    if (remaining - cost < reserve) return { enabled: false, reason: 'Save coins to ask everyone' };
+    if (cost > remaining) return { enabled: false, reason: plain('tools.notEnough') };
+    if (remaining - cost < reserve) return { enabled: false, reason: plain('tools.saveCoins') };
   }
   return { enabled: true, reason: null };
 }
@@ -68,7 +72,7 @@ export function toolBlock(e: Economy, tool: Tool, reserve: number): { enabled: b
 /** The briefing's list of Arbiter tools with their prices. */
 export function toolGuide(e: Economy): string {
   const rows = ARBITER_TOOLS.map(t => `<li><span class="tool-icon">${svg(t.icon)}</span><span class="tool-text"><b>${esc(t.name)}</b><small>${esc(t.does)}</small></span>` +
-    `<em>${esc(plural(e.costs[t.tool]))} · ${esc(pluralise(e.charges[t.tool].max, 'use'))}</em></li>`).join('');
+    `<em>${esc(plural(e.costs[t.tool]))} · ${tn('tools.use', e.charges[t.tool].max)}</em></li>`).join('');
   return `<ul class="tool-guide">${rows}</ul>`;
 }
 
@@ -94,29 +98,29 @@ export function toolCard(c: ToolCard): string {
     `<span class="tool-icon">${svg(toolOf(c.tool).icon)}</span>` +
     `<span class="tool-text"><button class="tool-button" id="${esc(c.id)}" type="button" aria-describedby="tip-${c.tool}"${c.enabled && !c.busy ? '' : ' disabled'}>${esc(c.label)}</button>` +
     `<span class="tool-status">${c.target ? `<span class="tool-target">${esc(c.target)}</span>` : ''}<span class="tool-chip" data-tool="${c.tool}">${esc(c.chip)}</span></span></span>` +
-    (c.fresh ? '<span class="tool-new" aria-hidden="true">NEW</span>' : '') + (c.extra ?? '') +
+    (c.fresh ? `<span class="tool-new" aria-hidden="true">${t('tools.new')}</span>` : '') + (c.extra ?? '') +
     `<span class="tool-tipbox" id="tip-${c.tool}" role="tooltip">${esc(HINTS[c.tool])}</span></div>`;
 }
 
 export function reasoningBlock(i: Inspection, name: string): string {
   return `<article class="speech reasoning" data-motion-key="reasoning-${esc(i.sourceEventId)}">` +
-    `<h4>${esc(name)}’s reasoning</h4><p>${esc(i.reasoning)}</p></article>`;
+    `<h4>${t('tools.reasoning', { name })}</h4><p>${esc(i.reasoning)}</p></article>`;
 }
 
 /** Inspect's answer when the character's latest line has no reasoning. */
 export function noThoughtBlock(name: string, line: number): string {
   return `<article class="speech reasoning no-thought" data-motion-key="no-thought-${line}">` +
-    `<h4>${esc(name)}’s reasoning</h4><p>${esc(name)} did not think. No coins spent.</p></article>`;
+    `<h4>${t('tools.reasoning', { name })}</h4><p>${t('tools.noThought', { name })}</p></article>`;
 }
 
 /** `faces` maps a character id to its portrait classes (e.g. `maya slot-0`); a post whose speaker has one shows that head beside it, chat style. */
-export function threadPanel(thread: ThreadLine[], names: Record<string, string>, pending: number, note = 'They only hear what is said in this thread, never your private chats.', faces: Record<string, string> = {}): string {
+export function threadPanel(thread: ThreadLine[], names: Record<string, string>, pending: number, note = plain('tools.thread.note'), faces: Record<string, string> = {}): string {
   const head = (id: string) => faces[id] ? `<span class="thread-face" aria-hidden="true"><i class="monkey-face ${esc(faces[id])}"></i></span>` : '';
   const posts = thread.map((l, n) =>
     `<li class="thread-post" data-motion-key="thread-${n + 1}">${head(l.character)}<h4 class="thread-author">#${n + 1} ${esc(names[l.character] ?? l.character)}</h4>` +
     `<p>${esc(l.text)}</p></li>`).join('');
-  const wait = pending > 0 ? `<li class="thread-pending" aria-live="polite">${esc(pending)} more coming…</li>` : '';
-  return `<section class="thread-panel"><div class="panel-heading"><span class="eyebrow">ARBITER TOOL · LET THEM TALK</span><h2>The agents’ thread</h2></div>` +
+  const wait = pending > 0 ? `<li class="thread-pending" aria-live="polite">${t('tools.thread.pending', { n: pending })}</li>` : '';
+  return `<section class="thread-panel"><div class="panel-heading"><span class="eyebrow">${t('tools.thread.eyebrow')}</span><h2>${t('tools.thread.title')}</h2></div>` +
     `<div class="notebook-content"><ol id="thread-log" role="log" aria-live="polite">${posts}${wait}</ol>` +
     `<p class="fine">${esc(note)}</p></div></section>`;
 }
@@ -124,9 +128,9 @@ export function threadPanel(thread: ThreadLine[], names: Record<string, string>,
 /** The three briefing steps of a talk case; the stock steps (one question each, tools, roles) do not fit it. */
 export function talkBriefingSteps(): { title: string; text: string }[] {
   return [
-    { title: 'Ask about everyday things', text: 'Use the topic chips in each chat to ask the townsfolk about their day.' },
-    { title: 'Save the words that don’t belong', text: 'Pick words in an answer, then Save quote.' },
-    { title: 'Accuse with 1–3 quotes', text: 'A wrong accusation costs points, not the game.' },
+    { title: plain('tools.steps.ask.title'), text: plain('tools.steps.ask.text') },
+    { title: plain('tools.steps.save.title'), text: plain('tools.steps.save.text') },
+    { title: plain('tools.steps.accuse.title'), text: plain('tools.steps.accuse.text') },
   ];
 }
 
@@ -137,5 +141,5 @@ export function talkBriefingList(): string {
 
 /** The rail verdict button of a talk case: its title and the saved-quote count line. */
 export function talkVerdictLabel(quotes: number): { title: string; progress: string } {
-  return { title: 'Accuse the traveller', progress: `${quotes} ${quotes === 1 ? 'quote' : 'quotes'} saved` };
+  return { title: plain('tools.verdictTitle'), progress: plainTn('tools.quotes', quotes) };
 }

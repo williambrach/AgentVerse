@@ -24,10 +24,12 @@
   </nav>
   <div id="round"></div>
   <button id="theme-toggle" type="button" class="ghost" aria-pressed="false">Light mode</button>
-  <form class="auth" id="auth">
-    <input id="token" type="password" placeholder="admin token" autocomplete="off">
-    <button id="save" type="submit">Save</button>
+  <form class="auth" id="auth" hidden>
+    <input id="password" type="password" placeholder="password" autocomplete="current-password">
+    <button id="signin" type="submit">Sign in</button>
+    <span id="auth-error" class="auth-error" role="alert"></span>
   </form>
+  <button id="signout" type="button" class="ghost" hidden>Sign out</button>
 </header>
 <main class="centre">
 <section id="watch" hidden></section>

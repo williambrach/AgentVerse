@@ -1,0 +1,22 @@
+{
+  "hud.homeLabel": "The Override home",
+  "hud.world": "WORLD",
+  "hud.team": "TEAM",
+  "hud.teamTitle": "Change team",
+  "hud.notebook": "Notebook",
+  "hud.leaderboard": "Leaderboard",
+  "hud.restart": "Reset session",
+  "hud.cases": "Cases",
+  "hud.export": "Export session",
+  "hud.authored": "AUTHORED DEMONSTRATION",
+  "hud.toolsLabel": "ARBITER TOOLS",
+  "hud.toolsAria": "Arbiter tools",
+  "hud.verdict": "Make your verdict",
+  "hud.briefing": "Case briefing",
+  "hud.conversation": "Conversation",
+  "hud.closeConversation": "Close conversation",
+  "hud.movement": "WASD / ARROWS to walk · E to interact",
+  "hud.talking": "{part} · talking",
+  "hud.notAsked": "{part} · not asked",
+  "hud.asked": "Asked"
+}

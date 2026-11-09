@@ -51,5 +51,5 @@ test('evidence titles reach a prompt that is already shown', async () => {
   const { readFileSync } = await import('node:fs');
   const src = readFileSync(new URL('../client/station.ts', import.meta.url), 'utf8');
   const body = src.slice(src.indexOf('  evidence(items: EvidenceMark[])'), src.indexOf('private figureImage'));
-  assert.match(body, /prompt\.textContent = `\[E\] \$\{shownStop\.title\}`/);
+  assert.match(body, /prompt\.textContent = plain\('station\.prompt', \{ title: shownStop\.title \}\)/);
 });

@@ -141,6 +141,7 @@ docker run --detach --name override-demo --restart unless-stopped \
   --env PORT=3001 \
   --env OVERRIDE_DATA_DIR=/app/data \
   --mount type=volume,source=override-data,target=/app/data \
+  --mount type=bind,source="$(pwd)/content",target=/app/content \
   agentverse-override
 ```
 
@@ -200,7 +201,7 @@ npm run build
 NODE_ENV=production
 OVERRIDE_ACCESS_CODE=<shared player password>
 OVERRIDE_SECRET=<output of: openssl rand -hex 32>
-OVERRIDE_ADMIN_TOKEN=<output of: openssl rand -hex 32>
+OVERRIDE_ADMIN_PASSWORD=<output of: openssl rand -hex 32>
 OVERRIDE_APP_COMMIT=<output of: git rev-parse --short HEAD>
 HOST=127.0.0.1
 OVERRIDE_TRUST_PROXY=1
@@ -208,7 +209,7 @@ OVERRIDE_TRUST_PROXY=1
 
 - `NODE_ENV=production` keeps draft cases hidden, whatever `OVERRIDE_DEV_TOOLS` says.
 - `OVERRIDE_SECRET` keeps sign-ins valid across restarts. Without it, every restart signs all players out.
-- `OVERRIDE_ADMIN_TOKEN` starts the admin listener on `127.0.0.1:3002`. Without it, there is no admin page and no `/metrics`.
+- `OVERRIDE_ADMIN_PASSWORD` starts the admin listener on `127.0.0.1:3002`. Without it, there is no admin page and no `/metrics`. The old name `OVERRIDE_ADMIN_TOKEN` still works but prints a warning.
 - `HOST=127.0.0.1` with `OVERRIDE_TRUST_PROXY=1` is for a Cloudflare Tunnel: the login limiter then sees each player's own address. On a closed LAN, set `HOST=0.0.0.0` and leave `OVERRIDE_TRUST_PROXY` empty.
 - `OVERRIDE_PUBLIC_URL` (optional) is the public address of the game, for example `https://override.example.org`. The command centre uses it for its big-screen link (`/?view=board`).
 - `OVERRIDE_APP_COMMIT` is recorded in every `session_started`. Update it after each pull.
@@ -247,9 +248,11 @@ From a machine outside, `curl --fail https://<your-host>/api/health` must return
 
 ### 6. Run the event
 
-The admin page is `http://127.0.0.1:3002/admin`; paste the admin token into it. From another machine, open an SSH tunnel first with `ssh -L 3002:127.0.0.1:3002 user@mac`. Never expose the admin port through the Cloudflare Tunnel. The page is the command centre, with a failover banner and a big-screen link: players, tiles, message log, funnel and rounds (see [README](README.md#the-command-centre)). Prometheus scrapes `/metrics` on the same port with the token ([ops/prometheus.yml](ops/prometheus.yml)).
+The admin page is `http://127.0.0.1:3002/admin`; sign in with the admin password. From another machine, open an SSH tunnel first with `ssh -L 3002:127.0.0.1:3002 user@mac`. Never expose the admin port through the Cloudflare Tunnel. The page is the command centre, with a failover banner and a big-screen link: players, tiles, message log, funnel and rounds (see [README](README.md#the-command-centre)). Prometheus scrapes `/metrics` on the same port with the password ([ops/prometheus.yml](ops/prometheus.yml)).
 
-Makers get the editor page at `http://127.0.0.1:3002/admin/maker.html?case=<caseId>`. The admin port is never on the public (player) tunnel. Makers reach it either over the same SSH forward as the operator (`ssh -L 3002:127.0.0.1:3002 user@mac`), or over Tailscale, or over a separate hostname that an identity policy protects (for example Cloudflare Access requiring a login) and that points at `http://127.0.0.1:3002`. In the last case set `OVERRIDE_ADMIN_HOSTS=<that hostname>` so the listener accepts the `Host` header. Give each maker their own token in `OVERRIDE_MAKER_TOKENS=name:secret,…` (see [README](README.md#tuning-a-case-from-the-admin-page)).
+Everyone who edits text uses the same admin page and the same password. Open `http://127.0.0.1:3002/admin`, sign in once, then open the editor from the page. The admin port is never on the public (player) tunnel. Reach it either over the same SSH forward as the operator (`ssh -L 3002:127.0.0.1:3002 user@mac`), or over Tailscale, or over a separate hostname that an identity policy protects (for example Cloudflare Access requiring a login) and that points at `http://127.0.0.1:3002`. In the last case set `OVERRIDE_ADMIN_HOSTS=<that hostname>` so the listener accepts the `Host` header. There are no maker tokens any more. See [README](README.md#editing-text-from-the-admin-page).
+
+Edits are saved as JSON files in `content/`. With Docker, the `docker run` above mounts the folder from the checkout, so edits survive the container. After the event, commit them from the event machine: `git diff demos/override/content`, then `git add`, `git commit` and `git push`. The server never runs git.
 
 One hour before:
 - Start the server and confirm `/admin/health` is green.

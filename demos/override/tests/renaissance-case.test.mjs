@@ -119,7 +119,7 @@ test('maker_cannot_split_part_knowledge: no part knowledge path is offered or ac
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
   const paths = editablePaths(kase);
-  assert.deepEqual(paths.filter(p => p.endsWith('.knowledge')), []);
+  assert.deepEqual(paths.filter(p => p.startsWith('parts.') && p.endsWith('.knowledge')), []);
   assert.ok(paths.some(p => p.endsWith('.introduction') || p.endsWith('.finding.explanation')), 'other part fields stay editable');
   for (const other of cases.filter(c => !c.talk)) assert.ok(editablePaths(other).some(p => p.endsWith('.knowledge')) || !other.parts.some(p => p.knowledge), other.id);
   const store = createContentStore({ cases: [kase], dataDir: mkdtempSync(join(tmpdir(), 'ren-')), worlds });

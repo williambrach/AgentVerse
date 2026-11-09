@@ -17,6 +17,8 @@ import { createTeams } from './teams.mjs';
 import { createLeaderboard } from './leaderboard.mjs';
 import { createAdmin } from './admin.mjs';
 import { createContentStore } from './content.mjs';
+import { loadUiDefaults } from './game-text.mjs';
+import { worlds } from './worlds.mjs';
 import { integerEnv, readJsonBody, safeEqual, sendJson } from './http-util.mjs';
 import { createMonitor } from './monitor.mjs';
 import { createRoundStats } from './monitor-round.mjs';
@@ -29,7 +31,7 @@ const actions = ['start', 'reset', 'visit', 'interview', 'inspect', 'continue', 
 const tabPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export function createApp({ investigations, accessCode = '', secret = randomBytes(32).toString('hex'), trustProxy = false, staticFiles = null, metrics = null, publicDir = resolve(root, 'dist'), onHeartbeat = null, teams = createTeams({ file: null }), leaderboard = null }) {
+export function createApp({ investigations, accessCode = '', secret = randomBytes(32).toString('hex'), trustProxy = false, staticFiles = null, metrics = null, publicDir = resolve(root, 'dist'), onHeartbeat = null, text = () => ({}), teams = createTeams({ file: null }), leaderboard = null }) {
   const files = staticFiles || loadStatic(publicDir);
   // Only wrong codes count. Behind a proxy or a shared network, every player
   // arrives from one address, and correct sign-ins must not lock them out.
@@ -57,13 +59,18 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
       const url = new URL(req.url, 'http://localhost');
       if (url.pathname.startsWith('/api/')) {
         const name = url.pathname.slice('/api/'.length);
-        route = ['health', 'access', 'cases', 'state', 'events', 'heartbeat', 'team', 'leaderboard', ...actions].includes(name) ? `/api/${name}` : '/api/other';
+        route = ['health', 'access', 'cases', 'state', 'events', 'heartbeat', 'team', 'leaderboard', 'text', ...actions].includes(name) ? `/api/${name}` : '/api/other';
         if (url.pathname === '/api/health' && req.method === 'GET') return json(res, 200, { ok: true });
         if (req.method === 'POST') {
           if (req.headers['sec-fetch-site'] === 'cross-site') throw new RequestError(403, 'Cross-site requests are not allowed.');
           if (!req.headers['content-type']?.startsWith('application/json')) throw new RequestError(415, 'Send application/json.');
         }
         if (url.pathname === '/api/access' && req.method === 'GET') return json(res, 200, { authorized: Boolean(validToken(req)), protected: Boolean(accessCode) });
+        // UI wording is public: the sign-in screen itself needs it before the access code is entered.
+        if (url.pathname === '/api/text' && req.method === 'GET') {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
+          return res.end(JSON.stringify({ text: text() }));
+        }
         const input = req.method === 'POST' ? await readJsonBody(req, 16_384) : {};
         if (url.pathname === '/api/access' && req.method === 'POST') {
           const ip = clientAddress(req, trustProxy);
@@ -149,23 +156,15 @@ function devTools(env) {
 
 const sleep = ms => new Promise(resolve => { setTimeout(resolve, ms).unref(); });
 
-// OVERRIDE_MAKER_TOKENS: comma list of name:secret pairs; each maker can edit content and nothing else.
-export function makerTokens(env) {
-  const raw = String(env.OVERRIDE_MAKER_TOKENS ?? '').trim();
-  if (!raw) return [];
-  const out = [];
-  for (const item of raw.split(',').map(x => x.trim()).filter(Boolean)) {
-    const at = item.indexOf(':');
-    const name = at < 0 ? item : item.slice(0, at);
-    const secret = at < 0 ? '' : item.slice(at + 1);
-    if (!/^[a-z0-9_-]{1,32}$/.test(name)) throw new Error('OVERRIDE_MAKER_TOKENS: maker names are 1 to 32 characters of a-z, 0-9, _ or -.');
-    if (name === 'admin') throw new Error('OVERRIDE_MAKER_TOKENS: the name admin is reserved for the operator token.');
-    if (!secret) throw new Error(`OVERRIDE_MAKER_TOKENS: maker ${name} has no secret.`);
-    if (out.some(m => m.name === name)) throw new Error(`OVERRIDE_MAKER_TOKENS: maker ${name} is listed twice.`);
-    if (secret === env.OVERRIDE_ADMIN_TOKEN || out.some(m => m.token === secret)) throw new Error(`OVERRIDE_MAKER_TOKENS: the secret for ${name} is not unique.`);
-    out.push({ name, token: secret });
-  }
-  return out;
+// One password opens the admin panel. OVERRIDE_ADMIN_TOKEN is the old name and still works.
+export function adminSecret(env) {
+  const pw = String(env.OVERRIDE_ADMIN_PASSWORD ?? '');
+  const old = String(env.OVERRIDE_ADMIN_TOKEN ?? '');
+  const warnings = [];
+  if (pw && old && pw !== old) throw new Error('OVERRIDE_ADMIN_PASSWORD and OVERRIDE_ADMIN_TOKEN differ; set only OVERRIDE_ADMIN_PASSWORD.');
+  if (!pw && old) warnings.push('OVERRIDE_ADMIN_TOKEN is deprecated; use OVERRIDE_ADMIN_PASSWORD.');
+  if (String(env.OVERRIDE_MAKER_TOKENS ?? '').trim()) warnings.push('OVERRIDE_MAKER_TOKENS is ignored: one admin password opens the admin panel.');
+  return { password: pw || old || null, warnings };
 }
 
 // OVERRIDE_ADMIN_HOSTS: extra Host names the admin listener accepts, for a tunnel.
@@ -213,8 +212,11 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     endpoints: config.endpoints, maxInFlight: config.maxInFlight, deadlineMs: config.timeoutMs, maxCompletionTokens: config.maxCompletionTokens,
     failover: config.failover, restore: lastRecord(paths.system, r => r.type === 'llm_active'), onSystem, onTrace, onEvent: e => { observeLlmEvent(metrics, e); feed('observeLlm', e); },
   }) : null;
-  const makers = makerTokens(env);
-  const content = createContentStore({ cases, dataDir: paths.root });
+  const adminAuth = adminSecret(env);
+  for (const w of adminAuth.warnings) console.warn(w);
+  const contentDir = resolve(env.OVERRIDE_CONTENT_DIR || join(root, 'content'));
+  const uiDefaults = loadUiDefaults(join(root, 'client', 'text'));
+  const content = createContentStore({ cases, dataDir: paths.root, contentDir, uiDefaults, worlds });
   const investigations = new Investigations({
     dataDir, config, router, content, dev: devTools(env), meta: { env: envName, ...appVersion(env), endpointsHash: config.endpointsHash },
     onEvent: e => { observeGameEvent(metrics, e); feed('observeGame', e); try { board.observe(e); } catch { /* the board must not affect games */ } },
@@ -236,7 +238,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
   // Release everything opened so far, so a failed start never leaves a listener or timer holding the process.
   const abort = error => { clearInterval(tickTimer); sampler?.close(); admin?.close(); server?.close(); server?.closeAllConnections(); throw error; };
   try {
-  if (env.OVERRIDE_ADMIN_TOKEN) {
+  if (adminAuth.password) {
     sampler = createTrafficSampler({ registry, dataDir: paths.root, now: Date.now });
     let cached = null;
     let cachedAt = 0;
@@ -265,14 +267,14 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     console.warn('OVERRIDE_SECRET is not set: sign-ins will not survive a restart.');
   }
   const trustProxy = ['1', 'true'].includes(String(env.OVERRIDE_TRUST_PROXY).toLowerCase());
-  server = createApp({ investigations, accessCode: env.OVERRIDE_ACCESS_CODE || '', secret, trustProxy, staticFiles: loadStatic(publicDir), metrics, onHeartbeat: (tab, sid) => monitor?.heartbeat(tab, sid), teams, leaderboard: board });
+  server = createApp({ investigations, accessCode: env.OVERRIDE_ACCESS_CODE || '', secret, trustProxy, staticFiles: loadStatic(publicDir), metrics, onHeartbeat: (tab, sid) => monitor?.heartbeat(tab, sid), teams, leaderboard: board, text: () => content.uiText?.() ?? {} });
   // Headers and bodies arrive fast; answers take up to 60 s. Keep-alive outlives a proxy's idle timeout.
   server.headersTimeout = 20_000;
   server.requestTimeout = 40_000;
   server.keepAliveTimeout = 75_000;
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(integerEnv(env.PORT, 3001, 'PORT'), host, 1024, resolve); });
 
-  if (env.OVERRIDE_ADMIN_TOKEN) {
+  if (adminAuth.password) {
     {
       // The probe asks the first registered case's first character its quick question, with the identity cast.
       // It reads the current content at probe time, so a published edit reaches it.
@@ -285,8 +287,8 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
       };
       admin = createAdmin({
         boardUrl: boardUrlOf(env.OVERRIDE_PUBLIC_URL, server.address()?.port),
-        token: env.OVERRIDE_ADMIN_TOKEN, monitor, router, investigations, registry, dataDir,
-        content, makers, allowedHosts: adminHosts(env), probeMessages,
+        trustProxy, token: adminAuth.password, secret, monitor, router, investigations, registry, dataDir,
+        content, allowedHosts: adminHosts(env), probeMessages,
         readSystem: () => [...systemRing], onSystem,
         leaderboard: {
           standings: () => board.standings({ includeHidden: true, you: null }),

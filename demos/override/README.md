@@ -101,8 +101,8 @@ Walk with WASD or the arrow keys, and press E or Space next to a monkey, the sig
 
 A case is one module in `server/cases/`, registered in `server/cases/index.mjs`. `banana-mystery.mjs` (grove) and `tower-echo-bell.mjs` (tower) are the examples to copy. The required fields and the allowlist of what reaches the browser are in the "Decided" section of [the cases spec](../../docs/plans/2026-10-26-override-cases.spec.md); they are not repeated here. A live case is a **part case**: `characters` is `[{id, name, color}]`, and `parts` is `[{id, role, label, introduction, quickQuestion, knowledge[], finding}]` with one part for each character and `role` one of `villain`, `collaborator`, `fooled`, `honest` (or one of the case's own `roles`, below). Each game deals the characters into the parts at random. Text refers to other characters by part, as `{partId}` placeholders (for example `{planner}`), resolved to the name of whoever holds that part. A case also has `debrief {title, summary, lesson}`, `answer.feedback {correct, other}`, and three functions that return templates (the caller resolves the placeholders): `rehearsal(partId, question)`, `rehearsalReasoning(partId)` and `rehearsalChatter(partId, n)`. All of a part's `knowledge` goes into the prompt. A job label, introduction and quick question always belong to the same part, so the story stays consistent.
 
-- Optional, and edited in the case module only (the maker cannot change them): `characters[].label`, `characters[].knowledge`, `characters[].introduction` and `characters[].quickQuestion` give a character a fixed job label, its own knowledge, opening line and suggested question, with no placeholders (they stay the same in every deal, so they never hint at the dealt part; the maker then hides the part fields they replace); `evidence: [{id, title, text}]` lists items the player examines with E, and the public view carries only `{id, title}`.
-- Talk cases (`renaissance-traveler` is the example) add optional fields. `talk` has `topics`, `lines` (the plain answer for each person and topic), `slips` (per person, one per topic: `term`, `aliases`, `line`, `clean`, `correction`, `followUps`, and `when`, which is `always`, `distracted` after two topics asked, or `pressed` after a first challenge), `replies` (`guarded`, `neverSaid`, `denial` and the rest), `glossary` and `rehearsal`. `tools: {inspect, talk}` switches a tool off for the case; an off tool answers 409 “Not in this case.” `characters[].reveal` is the traveller's debrief story. The modern-word lexicon is in `server/anachronism.mjs`, and `defineCase` rejects a modern word anywhere outside slip lines and reveals (the prompt included). A talk case may not use a placeholder in `copy` or `answer.feedback.other`: both show while the game is open and would name the dealt traveller. The maker does not offer part knowledge for talk cases, so the prompts stay identical across deals.
+- Optional: `characters[].label`, `characters[].knowledge`, `characters[].introduction` and `characters[].quickQuestion` give a character a fixed job label, its own knowledge, opening line and suggested question, with no placeholders (they stay the same in every deal, so they never hint at the dealt part; the admin page then hides the part fields they replace); `evidence: [{id, title, text}]` lists items the player examines with E, and the public view carries only `{id, title}`.
+- Talk cases (`renaissance-traveler` is the example) add optional fields. `talk` has `topics`, `lines` (the plain answer for each person and topic), `slips` (per person, one per topic: `term`, `aliases`, `line`, `clean`, `correction`, `followUps`, and `when`, which is `always`, `distracted` after two topics asked, or `pressed` after a first challenge), `replies` (`guarded`, `neverSaid`, `denial` and the rest), `glossary` and `rehearsal`. `tools: {inspect, talk}` switches a tool off for the case; an off tool answers 409 “Not in this case.” `characters[].reveal` is the traveller's debrief story. The modern-word lexicon is in `server/anachronism.mjs`, and `defineCase` rejects a modern word anywhere outside slip lines and reveals (the prompt included). A talk case may not use a placeholder in `copy` or `answer.feedback.other`: both show while the game is open and would name the dealt traveller. The admin page does not offer part knowledge for talk cases, so the prompts stay identical across deals.
 - A case may set `roles: [{id, label, hint}]` (2 to 9 entries, ids matching `/^[a-z][a-z0-9-]{1,23}$/`, unique) to replace the four standard roles for its verdict; every part's `role` must then be one of those ids, and the verdict accepts only them. `friends-roundtable` has eight roles: five held by parts, two decoy theories and `none` (“Not a conspiracist”).
 - Each world in `server/worlds.mjs` carries `frame` and `memory`, the two prompt sentences about what is fixed and what is learned in the chat. The grove and tower text is unchanged; the thread prompt uses only the first sentence of the frame. `friends` has 5 agents, so the coin-budget minimum is now 10.
 - Set `status: 'draft'` while writing. Draft cases are hidden unless the server runs with `OVERRIDE_DEV_TOOLS=1` (forced off when `NODE_ENV=production`).
@@ -148,7 +148,7 @@ Without `OVERRIDE_ENDPOINTS`, the legacy `OVERRIDE_LLM_BASE_URL`, `_API_KEY`, an
 
 ## Operating an event
 
-Set `OVERRIDE_ADMIN_TOKEN` to start the admin listener on `127.0.0.1:$OVERRIDE_ADMIN_PORT` (default 3002). It never binds a public address; reach it over an SSH port forward. Open `/admin` for the command centre (it asks for the token). Without the token there is no monitor.
+Set `OVERRIDE_ADMIN_PASSWORD` to start the admin listener on `127.0.0.1:$OVERRIDE_ADMIN_PORT` (default 3002). It never binds a public address; reach it over an SSH port forward. Open `/admin` for the command centre. It asks for the password once and keeps you signed in with a cookie. Without the password there is no monitor. The old name `OVERRIDE_ADMIN_TOKEN` still works, with a warning.
 
 ### The command centre
 
@@ -178,8 +178,8 @@ Grafana and Prometheus stay optional; the command centre does not need them.
 You can also use curl:
 
 ```sh
-export OVERRIDE_ADMIN_TOKEN=...   # the same value the server uses
-AUTH="Authorization: Bearer $OVERRIDE_ADMIN_TOKEN"
+export OVERRIDE_ADMIN_PASSWORD=...   # the same value the server uses
+AUTH="Authorization: Bearer $OVERRIDE_ADMIN_PASSWORD"
 curl -H "$AUTH" http://127.0.0.1:3002/admin/health
 curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"endpoint":"b","pinned":true,"reason":"a is slow"}' http://127.0.0.1:3002/admin/llm/active
 curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"endpoint":"b"}' http://127.0.0.1:3002/admin/llm/probe
@@ -203,31 +203,57 @@ curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"teamId":"<team-id>","h
 
 `/metrics` is Prometheus text: players (`override_sessions_*`), LLM per endpoint (`override_llm_*`: in flight, queue, failures by reason, failovers, durations), HTTP, log writes (`override_log_write_*`), and process and disk gauges. Labels never hold session IDs or text. [ops/prometheus.yml](ops/prometheus.yml) scrapes it every 5 s and includes example alert rules.
 
-## Tuning a case from the admin page
+## Editing text from the admin page
 
-For game makers who change the words of a case, not its structure. Open `http://127.0.0.1:3002/admin/maker.html?case=<caseId>` on the admin port, one link per game (for example `?case=banana-mystery`). Reach it over the same SSH forward as the command centre, over Tailscale, or over a protected hostname; see [DEPLOY](DEPLOY.md#6-run-the-event). The admin port is never on the public player tunnel.
+For game makers who change words, not structure. Every text a player reads or a model is told can be edited: case text, the shared prompt rules, the world prompts and all game UI text.
 
-Each maker gets a token of their own. Set `OVERRIDE_MAKER_TOKENS=alice:secret1,bob:secret2`, one `name:secret` pair per maker; a name is 1 to 32 characters of `a-z`, `0-9`, `_` or `-`, names must be unique, and `admin` is reserved for the operator. A maker token opens the editor page and the `/admin/content` routes only; every other admin route answers 403. The admin token can edit too, and its edits are logged as `admin`.
+**Sign in once.** There is one admin password, `OVERRIDE_ADMIN_PASSWORD`. Open `http://127.0.0.1:3002/admin`, enter it, and the page keeps you signed in. The editor is a link on that page (`/admin/maker.html`). There are no maker tokens. Reach the admin port over the SSH forward, Tailscale or a protected hostname; see [DEPLOY](DEPLOY.md#6-run-the-event). It is never on the public player tunnel.
 
-**Editable:** the setting and the use and avoid word lists; each part's knowledge, label, introduction, quick question and finding; the briefing, intro and report copy; the debrief and the feedback text.
+**What you can edit.**
+- **Cases.** One tab per game: the setting and the use and avoid word lists, each character and part, evidence, roles, topics, the briefing, intro and report copy, the debrief and the feedback text.
+- **Game text.** Three areas that apply to every case. *UI* lists every player-facing string by area (for example the label of the "Let them talk" tool). *Prompt rules* holds the interview and thread templates. *Worlds* holds the frame, persona and memory text of each world.
+- **Tokens.** Prompt templates have `[[tokens]]` such as `[[name]]`, `[[setting]]`, `[[use]]`, `[[avoid]]`, `[[persona]]`, `[[memory]]`, `[[knowledge]]` and, for threads, `[[others]]`. `[[knowledge]]` must appear exactly once. A template with an unknown token, or without `[[knowledge]]`, is refused with a 400. Unedited, every prompt is byte for byte what it was before.
 
-**Locked:** the case id, version, world, characters, part ids and roles, the rehearsal scripts, and the shared rule template in `server/interviews.mjs`. Structure stays in the case module (see [Writing a case](#writing-a-case)).
+**Not editable here.** Structure: the case id, version, world, character ids, part ids and the rehearsal scripts stay in the case module (see [Writing a case](#writing-a-case)). Two text fields are also left out. Part fields that every character overrides (`label`, `knowledge`, `introduction`, `quickQuestion` set on each character) would never show, so they are not offered. A talk case's shared `partsKnowledge` is not offered either, so talk prompts stay identical across deals.
 
-Each publish sends the whole set of edits, not a patch. It replaces the previous edits for that case. Entries equal to the authored text are dropped.
-
-Edits apply to new games only. A game in progress keeps the text it started with until it has been idle for 30 minutes or the server restarts. To test an edit in a running game, press **Reset session**.
+**When edits apply.** Each publish sends the whole set of edits for one case, or for the game document, and replaces the previous ones. Entries equal to the authored text are dropped. Edits reach new games only. A game in progress keeps the text it started with until it has been idle for 30 minutes or the server restarts. To test an edit in a running game, press **Reset session**. UI text reaches the next page load: reload the game to see it. The page the client loads comes from `GET /api/text`, which falls back to the built-in English if it cannot be reached.
 
 - **Preview** shows the exact prompt the model would receive for the draft. Nothing is sent to the model and nothing is saved.
 - **Try** asks the real model the question you type, with the draft text, and shows the answer and its reasoning. It is live mode only (409 in rehearsal). It uses the players' queue, and the trace row carries `tag: maker_try`.
-- **Publish** saves the draft as a new revision. It names the revision you based it on. If someone else published first, the server answers 409 and the page asks you to reload. The `content_published` admin action in `system.jsonl` holds the maker, the changed paths and the new `contentHash`, not the text.
+- **Publish** saves the draft. It names the revision you based it on. If someone else published first, the server answers 409 and the page asks you to reload. The `content_published` admin action in `system.jsonl` holds the editor, the changed paths and the new `contentHash`, not the text.
+- **History** and **Restore** use the local revision log. Rev 0 is the authored text. Restore adds a new revision that carries an earlier text, so the log is never rewritten. Restore authored returns to rev 0.
 
-Each publish or revert adds a revision: 1, 2, and so on. Rev 0 is the authored text. **Restore** sets an earlier revision as current by adding a new revision that carries its text, so the history is never rewritten. Restore authored returns to rev 0.
+### How edits are stored
 
-Edits live in `data/<env>/content/<caseId>.jsonl`, one line per revision, append-only. The server replays the file at boot. A revision whose case version no longer matches is skipped, so a new case version starts authored. If a stored text no longer validates against the case, the case stays authored and the page marks it stale, in the case tab and in the status line. If a line of the file cannot be read, the readable revisions are kept, the next revision number follows the highest one on file, and the status line says the history has an unreadable line until the file is repaired.
+Published edits are written to tracked JSON files in `content/` (or `OVERRIDE_CONTENT_DIR`):
+
+- `content/cases/<caseId>.json` holds `{id, version, edits}` for one case.
+- `content/game.json` holds the game document: `ui`, `prompt` and `worlds`.
+
+Keys are sorted and the files carry no revision number, date or author, so a diff shows only the words that changed. An empty overlay (everything back to authored) deletes the file. A case file whose version no longer matches the case is ignored, so a new case version starts authored.
+
+The revision log stays local, in `data/<env>/content/<id>.jsonl`, one line per revision, append-only. History and Restore read it. If the tracked file differs from the log's last revision at boot (someone pulled a change), the server appends a revision with `by: "file"`. A legacy log with edits and no tracked file is written to the tracked file once at boot.
+
+### Git workflow
+
+The server never runs git. After editing, do it by hand:
 
 ```sh
-export TOKEN=...   # a maker token from OVERRIDE_MAKER_TOKENS
-AUTH="Authorization: Bearer $TOKEN"
+git diff demos/override/content
+git add demos/override/content
+git commit -m "Tune banana-mystery text"
+git push
+```
+
+On the event machine, commit the folder after the event. On a deploy, pull the commit and restart.
+
+### Developing with the admin page
+
+Put `OVERRIDE_ADMIN_PASSWORD=dev` in `demos/override/.env`, run `npm run dev`, and open `http://127.0.0.1:3002/admin`. Edits write to `demos/override/content/`, so `git diff` shows them straight away.
+
+```sh
+export OVERRIDE_ADMIN_PASSWORD=...
+AUTH="Authorization: Bearer $OVERRIDE_ADMIN_PASSWORD"
 curl -H "$AUTH" http://127.0.0.1:3002/admin/content
 curl -H "$AUTH" http://127.0.0.1:3002/admin/content/banana-mystery
 curl -X PUT -H "$AUTH" -H 'Content-Type: application/json' -d '{"edits":{"copy.intro.lead":"New lead"},"baseRev":0}' http://127.0.0.1:3002/admin/content/banana-mystery
@@ -236,7 +262,7 @@ curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"edits":{},"characterId
 curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"rev":0}' http://127.0.0.1:3002/admin/content/banana-mystery/revert
 ```
 
-`GET /admin/content` lists every case with its revision, maker and content hash. `GET /admin/content/<caseId>` adds the structure, the authored and current text, and the history (no text). A `PUT` with a stale `baseRev` answers 409; a bad path answers 400 with `{error, path}`, and the 409 body is `{error, rev, by}` (the current revision and its maker). Request bodies are limited to 512 KB; in `preview` and `try`, the question and each history question are limited to 2000 characters and each history answer to 6000.
+`GET /admin/content` lists every case with its revision, editor and content hash. `GET /admin/content/<caseId>` adds the structure, the authored and current text, and the history (no text). A `PUT` with a stale `baseRev` answers 409; a bad path answers 400 with `{error, path}`, and the 409 body is `{error, rev, by}`. Request bodies are limited to 512 KB; in `preview` and `try`, the question and each history question are limited to 2000 characters and each history answer to 6000. `GET /api/text` on the game port is public and returns the current UI text.
 
 ## Rehearse the command centre
 
@@ -244,7 +270,7 @@ curl -H "$AUTH" -H 'Content-Type: application/json' -d '{"rev":0}' http://127.0.
 node scripts/admin-demo.mjs --players 60 --ramp 60000 --think 4000-20000 --burst-every 120 --port 3001 --admin-port 3002
 ```
 
-This starts the real server in live mode over two mock endpoints, plus simulated players who play whole games and send heartbeats. Every `--burst-every` seconds (0 turns it off), endpoint `a` fails for 30 s, so you can watch failover. Defaults are shown above; `--think` is a range in ms. The token is `OVERRIDE_ADMIN_TOKEN` or `demo`. Ctrl-C stops everything.
+This starts the real server in live mode over two mock endpoints, plus simulated players who play whole games and send heartbeats. Every `--burst-every` seconds (0 turns it off), endpoint `a` fails for 30 s, so you can watch failover. Defaults are shown above; `--think` is a range in ms. The password is `OVERRIDE_ADMIN_PASSWORD` (or the old `OVERRIDE_ADMIN_TOKEN`), else `demo`. Ctrl-C stops everything.
 
 ## Load test and preflight
 
@@ -287,9 +313,10 @@ It prints a table per endpoint with review flags (empty, length, a character out
 | `OVERRIDE_ACCESS_CODE` | empty | Shared access code; empty leaves the API open. |
 | `OVERRIDE_SECRET` | random per process | Signs sign-in tokens; set it so sign-ins survive restarts. |
 | `OVERRIDE_TRUST_PROXY` | off | `1` or `true` behind a proxy: client address from `CF-Connecting-IP`, else `X-Forwarded-For`. |
-| `OVERRIDE_ADMIN_TOKEN` | empty | Bearer token; the admin listener stays off while empty. |
+| `OVERRIDE_ADMIN_PASSWORD` | empty | The one admin password (sign-in page, or as a Bearer token). The admin listener stays off while empty. |
+| `OVERRIDE_ADMIN_TOKEN` | empty | Deprecated alias for `OVERRIDE_ADMIN_PASSWORD`; prints a warning. |
 | `OVERRIDE_ADMIN_PORT` | 3002 | Admin listener port (127.0.0.1). |
-| `OVERRIDE_MAKER_TOKENS` | empty | Maker `name:secret` pairs, comma separated. Content editing only: the editor page and `/admin/content`. |
+| `OVERRIDE_CONTENT_DIR` | `./content` | Folder for the tracked content edits (`cases/<id>.json`, `game.json`). |
 | `OVERRIDE_ADMIN_HOSTS` | empty | Extra `Host` names the admin listener accepts, comma separated, for a tunnel hostname. |
 | `OVERRIDE_DATA_DIR` | `./data` | Root for research records. |
 | `OVERRIDE_ENV` | `live` | Data subdirectory, e.g. `rehearsal`. |

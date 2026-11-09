@@ -14,7 +14,7 @@ class El {
   click() { return Promise.all((this.listeners.click ?? []).map(f => f({ target: this }))); }
   all(pred, out = []) { if (pred(this)) out.push(this); this.children.forEach(c => c.all(pred, out)); return out; }
 }
-const IDS = ['status', 'cases', 'form', 'character', 'question', 'preview', 'prompt', 'prompt-box', 'try', 'ask', 'thread', 'new-chat', 'try-note', 'publish', 'publish-note', 'history', 'sections', 'history-section', 'dirty-count'];
+const IDS = ['status', 'cases', 'form', 'character', 'question', 'preview', 'prompt', 'prompt-box', 'try', 'ask', 'thread', 'new-chat', 'try-note', 'publish', 'publish-note', 'history', 'sections', 'history-section', 'dirty-count', 'panel', 'field-search'];
 const shell = () => {
   const byId = {};
   const doc = { createElement: t => new El(t, doc), getElementById: id => byId[id] ?? null };
@@ -26,12 +26,14 @@ const shell = () => {
 const detail = (over = {}) => ({
   id: 'banana-mystery', title: 'Banana', rev: 2, by: 'alice', mode: 'live',
   structure: { characters: [{ id: 'momo', name: 'Momo', color: '#fff' }, { id: 'pip', name: 'Pip', color: '#000' }], parts: [{ id: 'boss', role: 'villain' }], world: 'grove', placeholders: ['{boss}'] },
-  authored: { 'copy.intro.lead': 'Old', 'parts.boss.knowledge': ['k'] },
-  current: { 'copy.intro.lead': 'Old', 'parts.boss.knowledge': ['k'] },
+  authored: { 'copy.intro.lead': 'Old', 'prompt.setting': 'S', 'parts.boss.knowledge': ['k'], 'debrief.title': 'D' },
+  current: { 'copy.intro.lead': 'Old', 'prompt.setting': 'S', 'parts.boss.knowledge': ['k'], 'debrief.title': 'D' },
+  order: ['copy.intro.lead', 'prompt.setting', 'parts.boss.knowledge', 'debrief.title'], skipped: [], stale: false, corrupt: false,
   history: [{ rev: 2, by: 'alice', timestamp: '2026-10-30T14:02:00.000Z', fields: ['copy.intro.lead', 'debrief.title'] }, { rev: 1, by: 'bob', timestamp: '2026-10-30T09:00:00.000Z', fields: ['copy.headline'] }],
   ...over,
 });
-const list = { cases: [{ id: 'banana-mystery', title: 'Banana', rev: 2 }, { id: 'tower-echo-bell', title: 'Tower', rev: 0 }] };
+const list = { cases: [{ id: 'banana-mystery', title: 'Banana', rev: 2 }, { id: 'game', title: 'Game text', rev: 0 }, { id: 'tower-echo-bell', title: 'Tower', rev: 0 }] };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function mount(t, { overrides = {}, caseId = null } = {}) {
   const s = shell();
@@ -54,7 +56,7 @@ test('load_renders_tabs_and_form', async t => {
   const s = mount(t);
   await s.app.load();
   const tabs = s.$('cases').all(e => e.tag === 'option');
-  assert.deepEqual(tabs.map(b => b.textContent), ['Banana · rev 2', 'Tower · authored']);
+  assert.deepEqual(tabs.map(b => b.textContent), ['Banana · rev 2', 'Tower · authored', 'Game text · authored']);
   assert.ok(area(s, 'copy.intro.lead'));
   assert.deepEqual(s.$('character').children.map(c => c.textContent), ['Momo · boss (villain)', 'Pip']);
   assert.equal(s.$('history').children.length, 3);
@@ -114,13 +116,16 @@ test('dirty_dot_and_count', async t => {
   type(s, 'copy.intro.lead', 'X');
   assert.equal(s.$('dirty-count').textContent, '1 unsaved change');
   assert.equal(s.$('status').dataset.state, 'unsaved');
+  await sleep(150);
   assert.equal(dots(), 1);
   type(s, 'parts.boss.knowledge', 'a\nb');
   assert.equal(s.$('dirty-count').textContent, '2 unsaved changes');
+  await sleep(150);
   assert.equal(dots(), 2);
   type(s, 'copy.intro.lead', 'Old');
   type(s, 'parts.boss.knowledge', 'k');
   assert.equal(s.$('dirty-count').textContent, '');
+  await sleep(150);
   assert.equal(dots(), 0);
 });
 
@@ -314,4 +319,64 @@ test('tab_switch_when_clean_never_asks', async t => {
   await pick(s, 'tower-echo-bell');
   assert.equal(s.asked.length, 0);
   assert.ok(s.calls.includes('/admin/content/tower-echo-bell'));
+});
+
+const GAME_ATH = { 'ui.tools.talk': 'Let them talk', 'ui.hud.notebook': 'Notes', 'prompt.interview': 'I [[knowledge]]', 'worlds.grove.frame': 'F' };
+const gameDetail = () => ({
+  id: 'game', title: 'Game text', version: null, rev: 0, by: null, stale: false, corrupt: false, skipped: ['ui.hud.gone'], mode: 'live',
+  structure: { characters: [], parts: [], world: null, placeholders: [], areas: ['hud', 'tools'], worlds: ['grove'] },
+  authored: GAME_ATH, current: GAME_ATH, order: Object.keys(GAME_ATH), history: [],
+});
+
+test('game_in_dropdown_last_and_hides_chat', async t => {
+  const s = mount(t, { overrides: { 'GET /admin/content/game': async () => gameDetail() } });
+  await s.app.load();
+  const opts = s.$('cases').all(e => e.tag === 'option');
+  assert.equal(opts.at(-1).textContent, 'Game text · authored');
+  assert.equal(opts.at(-1).value, 'game');
+  assert.equal(s.$('panel').hidden, false);
+  await pick(s, 'game');
+  assert.equal(s.$('panel').hidden, true);
+  const items = s.$('sections').all(e => e.tag === 'button').map(b => b.dataset.section);
+  assert.deepEqual(items, ['ui:hud', 'ui:tools', 'prompt-rules', 'world:grove', 'history']);
+  assert.match(s.$('status').textContent, /Skipped, no longer valid: ui\.hud\.gone/);
+  assert.ok(area(s, 'ui.tools.talk'));
+  await pick(s, 'banana-mystery');
+  assert.equal(s.$('panel').hidden, false);
+});
+
+test('search_filters_fields_and_nav', async t => {
+  const s = mount(t);
+  await s.app.load();
+  s.$('field-search').value = 'knowl';
+  await s.$('field-search').fire('input');
+  const shown = s.$('form').all(e => e.className === 'field').filter(f => !f.hidden);
+  assert.equal(shown.length, 1);
+  assert.deepEqual(s.$('sections').all(e => e.tag === 'button').map(b => b.dataset.section), ['part:boss', 'history']);
+  s.$('field-search').value = '';
+  await s.$('field-search').fire('input');
+  assert.equal(s.$('form').all(e => e.className === 'field' && e.hidden).length, 0);
+});
+
+test('typing_debounced', async t => {
+  const s = mount(t);
+  await s.app.load();
+  const nav = s.$('sections');
+  let builds = 0;
+  const desc = { set(v) { builds++; this._text = String(v); this.children = []; }, get() { return this._text + this.children.map(c => c.textContent).join(''); } };
+  Object.defineProperty(nav, 'textContent', desc);
+  for (let i = 0; i < 50; i++) type(s, 'copy.intro.lead', `x${i}`);
+  assert.equal(s.$('dirty-count').textContent, '1 unsaved change');
+  await sleep(200);
+  assert.ok(builds >= 1 && builds <= 2, `nav rebuilt ${builds} times`);
+});
+
+test('auth_markup_is_signin_form', async () => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('../server/admin/maker.html', import.meta.url), 'utf8');
+  for (const id of ['auth', 'password', 'signin', 'auth-error', 'signout', 'field-search']) assert.match(html, new RegExp(`id="${id}"`));
+  assert.equal(/id="token"/.test(html), false);
+  const js = readFileSync(new URL('../server/admin/maker.js', import.meta.url), 'utf8');
+  assert.match(js, /import \{ mountSignIn \} from '\.\/signin\.js'/);
+  assert.equal(/sessionStorage|adminToken|authorization/i.test(js), false);
 });

@@ -1,0 +1,6 @@
+{
+  "accuse.empty": "You have no quotes from {name} yet. Save some in their chat.",
+  "accuse.earlier": "Earlier accusations: {names}",
+  "accuse.submit": "Accuse",
+  "accuse.back": "Back"
+}

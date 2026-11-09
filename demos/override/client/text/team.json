@@ -1,0 +1,22 @@
+{
+  "team.nameError": "Team names are 2 to 24 letters, numbers and spaces.",
+  "team.taken": "“{name}” is already playing.",
+  "team.join": "Join {name}",
+  "team.other": "Pick another name",
+  "team.cancel": "Cancel",
+  "team.eyebrow": "TEAM CHECK-IN",
+  "team.title": "Who’s playing?",
+  "team.hint": "One screen per team. Type the same name on another screen to join your team.",
+  "team.nameLabel": "Team name",
+  "team.submit": "Start playing",
+  "team.note": "Each case scores once per team: your first guess counts.",
+  "team.ties.coins": "Ties by coins",
+  "team.ties.time": "Ties by time",
+  "team.col.cases": "Cases",
+  "team.col.rank": "Rank",
+  "team.col.team": "Team",
+  "team.col.points": "Points",
+  "team.col.time": "Time",
+  "team.col.coins": "Coins",
+  "team.playing": "Playing"
+}

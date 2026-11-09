@@ -1,7 +1,7 @@
-// The maker's editing form. One textarea per editable path; text goes in and out through
-// textContent and value only, so nothing a maker types is ever parsed as markup.
+// The editing form. One textarea per editable path, laid out in sections; text goes in and out
+// through textContent and value only, so nothing an admin types is ever parsed as markup.
 import { el, isNum } from './dom.js';
-import { fieldCopy } from './maker-copy.js';
+import { fieldCopy, routeOf, sectionKeys } from './maker-copy.js';
 
 /** Textarea text to a list: one item per line, trimmed, empty lines dropped. */
 export function knowledgeLines(text) {
@@ -13,15 +13,24 @@ export function linesText(items) {
   return (items ?? []).join('\n');
 }
 
-const PART_FIELDS = ['label', 'introduction', 'quickQuestion', 'knowledge', 'finding.classification', 'finding.explanation'];
+const TOKENS = ['name', 'label', 'setting', 'version', 'promptVersion', 'frame', 'frameFirst', 'use', 'avoid', 'persona', 'memory', 'knowledge'];
+const TEMPLATE_TOKENS = {
+  'prompt.interview': TOKENS,
+  'prompt.thread': [...TOKENS, 'others'],
+};
 const same = (a, b) => (Array.isArray(a) || Array.isArray(b)
   ? Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => x === b[i])
   : a === b);
 const toText = v => (Array.isArray(v) ? linesText(v) : String(v ?? ''));
+const idOf = x => (typeof x === 'string' ? x : x?.id);
 
 export function renderForm(root, detail, { onChange = () => {} } = {}) {
   let d = detail;
-  let fields = new Map(); // path -> { area, marker, error }
+  let fields = new Map(); // path -> { area, marker, error, wrap, section, hay }
+  let secs = []; // { key, title, node, titleEl, role? }
+  let dirtyPaths = new Set();
+  let shown = null;
+  let query = '';
   const doc = root.ownerDocument;
 
   const read = path => {
@@ -30,35 +39,41 @@ export function renderForm(root, detail, { onChange = () => {} } = {}) {
   };
   const paths = () => [...fields.keys()];
   const values = () => Object.fromEntries(paths().map(p => [p, read(p)]));
-  const overlayOf = (get) => {
-    const out = {};
-    for (const p of paths()) if (!same(get(p), d.authored[p])) out[p] = get(p);
-    return out;
-  };
   const overlay = () => {
-    const o = overlayOf(read);
-    return Object.keys(o).length ? o : null;
+    const out = {};
+    for (const p of paths()) {
+      const v = read(p);
+      if (!same(v, d.authored[p])) out[p] = v;
+    }
+    return Object.keys(out).length ? out : null;
   };
-  const dirty = () => JSON.stringify(overlayOf(read)) !== JSON.stringify(overlayOf(p => d.current[p]));
+  const isDirty = p => !same(read(p), d.current[p]);
 
   const refresh = path => {
-    const f = fields.get(path);
-    f.marker.hidden = same(read(path), d.authored[path]);
+    fields.get(path).marker.hidden = same(read(path), d.authored[path]);
+    if (isDirty(path)) dirtyPaths.add(path); else dirtyPaths.delete(path);
   };
 
   const grow = area => {
-    if (!area.style || !isNum(area.scrollHeight)) return;
+    if (!area.style || !isNum(area.scrollHeight) || !area.scrollHeight) return;
     area.style.height = 'auto';
     area.style.height = `${area.scrollHeight + 2}px`;
   };
 
-  const field = (parent, path) => {
+  const legend = (node, text, cls) => el(doc, 'p', cls, { text, parent: node });
+
+  const field = (parent, path, key) => {
     const copy = fieldCopy(path);
+    const template = path in TEMPLATE_TOKENS;
     const wrap = el(doc, 'div', 'field', { parent });
     const label = el(doc, 'label', 'field-label', { text: copy.label, parent: wrap });
     label.title = path;
-    el(doc, 'p', 'field-hint', { text: copy.hint, parent: wrap });
-    const area = el(doc, 'textarea', 'field-input', { parent: wrap });
+    el(doc, 'span', 'field-path', { text: path, parent: label });
+    if (copy.hint) el(doc, 'p', 'field-hint', { text: copy.hint, parent: wrap });
+    if (template) {
+      legend(wrap, `Slots: ${TEMPLATE_TOKENS[path].map(t => `[[${t}]]`).join(' ')}. [[knowledge]] must appear exactly once.`, 'token-legend');
+    }
+    const area = el(doc, 'textarea', template ? 'field-input mono' : 'field-input', { parent: wrap });
     area.dataset.path = path;
     area.value = toText(d.current[path]);
     const marker = el(doc, 'span', 'differs', { text: 'edited', parent: wrap });
@@ -66,84 +81,115 @@ export function renderForm(root, detail, { onChange = () => {} } = {}) {
     reset.type = 'button';
     const error = el(doc, 'div', 'field-error', { parent: wrap });
     error.hidden = true;
-    fields.set(path, { area, marker, error, section: current });
+    fields.set(path, { area, marker, error, wrap, section: key, hay: `${path} ${copy.label}`.toLowerCase() });
     refresh(path);
-    grow(area);
-    area.addEventListener('input', () => { refresh(path); grow(area); onChange(handle); });
+    area.addEventListener('input', () => { refresh(path); grow(area); if (query) applyFilter(); onChange(handle); });
     reset.addEventListener('click', () => {
       area.value = toText(d.authored[path]);
       refresh(path);
       grow(area);
+      if (query) applyFilter();
       onChange(handle);
     });
   };
 
-  let current = null;
-  let shown = null;
-  let secs = []; // { key, title, role?, node }
-
-  const sameAsPublished = p => same(read(p), d.current[p]);
-  const dirtySections = () => {
-    const out = [];
-    for (const s of secs) {
-      for (const [p, f] of fields) if (f.section === s.key && !sameAsPublished(p)) { out.push(s.key); break; }
-    }
-    return out;
+  // The structure with the names and labels as they are typed right now.
+  const liveStructure = () => {
+    const s = d.structure ?? {};
+    const live = (path, fallback) => (fields.has(path) ? read(path) : d.current[path]) || fallback;
+    return {
+      ...s,
+      characters: (s.characters ?? []).map(c => ({ id: idOf(c), name: live(`characters.${idOf(c)}.name`, c?.name) })),
+      parts: (s.parts ?? []).map(p => ({ ...p, label: live(`parts.${p.id}.label`, p.label) })),
+    };
   };
-  const dirtyCount = () => paths().filter(p => !sameAsPublished(p)).length;
 
-  const show = key => {
-    const target = secs.find(s => s.key === key) ?? secs[0];
+  function applyFilter() {
+    const q = query.trim().toLowerCase();
+    for (const [p, f] of fields) {
+      f.wrap.hidden = !!q && !(f.hay.includes(q) || toText(read(p)).toLowerCase().includes(q));
+    }
+    show(shown);
+  }
+  const visibleCount = s => {
+    let n = 0;
+    for (const f of fields.values()) if (f.section === s.key && !f.wrap.hidden) n++;
+    return n;
+  };
+  const listed = () => (query.trim() ? secs.filter(s => visibleCount(s) > 0) : secs);
+
+  function show(key) {
+    const target = secs.find(s => s.key === key) ?? listed()[0] ?? secs[0];
     if (!target) return;
     shown = target.key;
-    for (const s of secs) s.node.hidden = s !== target;
-    for (const f of fields.values()) if (f.section === shown) grow(f.area);
-  };
+    const all = !!query.trim();
+    for (const s of secs) {
+      s.node.hidden = all ? visibleCount(s) === 0 : s !== target;
+      if (!s.node.hidden) for (const f of fields.values()) if (f.section === s.key) grow(f.area);
+    }
+  }
 
-  const build = () => {
+  const sectionOfPath = new Map();
+  function build() {
     root.textContent = '';
     fields = new Map();
     secs = [];
-    const keys = Object.keys(d.authored);
+    dirtyPaths = new Set();
+    sectionOfPath.clear();
+    const order = d.order ?? Object.keys(d.authored);
+    const structure = liveStructure();
+    const groups = new Map(); // key -> { title, paths }
+    for (const p of order) {
+      if (!(p in d.authored)) continue;
+      const r = routeOf(p, structure);
+      if (!groups.has(r.key)) groups.set(r.key, { title: r.title, paths: [] });
+      groups.get(r.key).paths.push(p);
+    }
+    const canon = sectionKeys(structure);
+    const keys = [
+      ...canon.filter(k => groups.has(k)),
+      ...[...groups.keys()].filter(k => !canon.includes(k) && k !== 'other'),
+      ...(groups.has('other') ? ['other'] : []),
+    ];
     const tags = (d.structure?.placeholders ?? []).join(' ');
-    const section = (key, title, role) => {
+    for (const key of keys) {
+      const g = groups.get(key);
       const node = el(doc, 'section', 'form-section', { parent: root });
       node.dataset.section = key;
-      const h = el(doc, 'h2', 'section-title', { text: title, parent: node });
-      if (role) el(doc, 'span', 'badge role-badge', { text: role, parent: h });
-      secs.push({ key, title, ...(role ? { role } : {}), node });
-      current = key;
-      return node;
-    };
-    const legend = node => el(doc, 'p', 'placeholders', {
-      text: `Name tags: ${tags}. Each becomes the name of the character dealt that part in a session.`, parent: node,
-    });
-    const pick = prefix => keys.filter(k => k.startsWith(prefix));
-
-    const story = section('story', 'Story');
-    for (const k of pick('copy.')) field(story, k);
-
-    const prompt = section('prompt', 'Prompt');
-    legend(prompt);
-    for (const k of pick('prompt.')) field(prompt, k);
-
-    for (const part of d.structure?.parts ?? []) {
-      const node = section(`part:${part.id}`, d.current[`parts.${part.id}.label`] ?? part.id, part.role);
-      legend(node);
-      for (const name of PART_FIELDS) {
-        const path = `parts.${part.id}.${name}`;
-        if (path in d.authored) field(node, path);
+      const h = el(doc, 'h2', 'section-title', { parent: node });
+      const titleEl = el(doc, 'span', 'section-name', { text: g.title, parent: h });
+      const part = (d.structure?.parts ?? []).find(p => `part:${p.id}` === key);
+      if (part?.role) el(doc, 'span', 'badge role-badge', { text: part.role, parent: h });
+      if (tags && (key === 'prompt' || part)) {
+        legend(node, `Name tags: ${tags}. Each becomes the name of the character dealt that part in a session.`, 'placeholders');
       }
+      secs.push({ key, title: g.title, node, titleEl, ...(part?.role ? { role: part.role } : {}) });
+      for (const p of g.paths) { sectionOfPath.set(p, key); field(node, p, key); }
     }
-
-    const debrief = section('debrief', 'Debrief');
-    for (const k of [...pick('debrief.'), ...pick('answer.')]) field(debrief, k);
+    query = '';
     show(shown);
-  };
+  }
+
+  const dirtySections = () => [...new Set([...dirtyPaths].map(p => fields.get(p).section))];
 
   const handle = {
-    root, values, overlay, dirty, dirtySections, dirtyCount, show,
-    sections: () => secs.map(({ key, title, role }) => (role ? { key, title, role } : { key, title })),
+    root, values, overlay,
+    dirty: () => dirtyPaths.size > 0,
+    dirtySections,
+    dirtyCount: () => dirtyPaths.size,
+    show,
+    shownKey: () => shown,
+    sections() {
+      const s = liveStructure();
+      return listed().map(sec => {
+        const first = [...fields.entries()].find(([, f]) => f.section === sec.key)?.[0];
+        const title = first && sec.key !== 'other' ? routeOf(first, s).title : sec.title;
+        if (title !== sec.title) { sec.title = title; sec.titleEl.textContent = title; }
+        return { key: sec.key, title, ...(sec.role ? { role: sec.role } : {}) };
+      });
+    },
+    setFilter(text) { query = String(text ?? ''); applyFilter(); },
+    filter: () => query,
     setDetail(next) { d = next; build(); },
     setError(path, message) {
       handle.clearErrors();

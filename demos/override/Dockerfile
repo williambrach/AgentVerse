@@ -12,6 +12,8 @@ WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3001 OVERRIDE_DATA_DIR=/app/data
 COPY --from=build /app/dist ./dist
 COPY server ./server
+COPY client/text ./client/text
+COPY --chown=node:node content ./content
 RUN mkdir /app/data && chown node:node /app/data
 USER node
 EXPOSE 3001

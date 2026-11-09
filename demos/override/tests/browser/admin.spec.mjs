@@ -29,22 +29,23 @@ async function player(request) {
 
 async function connect(page) {
   await page.goto('/admin');
-  await page.locator('#token').fill(TOKEN);
-  await page.locator('#save').click();
+  await page.locator('#password').fill(TOKEN);
+  await page.locator('#signin').click();
   await expect(page.locator('#status')).toHaveText(/connected/, { timeout: 5000 });
 }
 
 test('connects', async ({ page }) => {
   const errors = [];
-  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  // The sign-in probe (GET /admin/session) answers 401 before sign-in; the browser logs that as a console error.
+  page.on('console', m => { if (m.type() === 'error' && !/status of 401/.test(m.text())) errors.push(m.text()); });
   page.on('pageerror', e => errors.push(String(e)));
   const res = await page.goto('/admin');
   const csp = res.headers()['content-security-policy'];
   expect(csp).toContain("script-src 'self'");
   expect(csp).not.toContain('unsafe-inline');
   await expect(page.locator('header.top h1')).toHaveText('Command centre');
-  await page.locator('#token').fill(TOKEN);
-  await page.locator('#save').click();
+  await page.locator('#password').fill(TOKEN);
+  await page.locator('#signin').click();
   await expect(page.locator('#status')).toHaveText(/connected/, { timeout: 5000 });
   await page.waitForTimeout(1500);
   expect(errors).toEqual([]);

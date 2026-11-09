@@ -1,13 +1,15 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve as resolvePath } from 'node:path';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, resolve as resolvePath } from 'node:path';
 import { defineCase } from './cases.mjs';
+import { rawOf, fieldsOf, getPath, setPath, editPathOf } from './content-paths.mjs';
 import { appendJsonl, readJsonl } from './dataset.mjs';
+import { gameFields, checkGameEdit, applyGame } from './game-text.mjs';
+import { ROLES } from './roles.mjs';
 import { worlds as liveWorlds } from './worlds.mjs';
 
 const MAX_TEXT = 2000;
-const PART_FIELDS = ['label', 'introduction', 'quickQuestion', 'knowledge', 'finding.classification', 'finding.explanation'];
-const OVERRIDDEN = ['label', 'introduction', 'quickQuestion'];
-const LISTS = new Set(['prompt.use', 'prompt.avoid']);
+const GAME = 'game';
 
 export class ContentError extends Error {
   constructor(status, message, path = null) {
@@ -18,65 +20,15 @@ export class ContentError extends Error {
   }
 }
 
-export function editablePaths(kase) {
-  // A part label, introduction or quick question that every character overrides is never shown, so it is not offered.
-  // Character knowledge is added to the part's, not a replacement, so part knowledge stays editable.
-  // A talk case gives every part the same knowledge so the prompt never depends on the deal; it is not offered for editing.
-  const shown = PART_FIELDS.filter(f => (f !== 'knowledge' || !kase.talk) && (!OVERRIDDEN.includes(f) || !kase.characters.every(c => c[f] !== undefined)));
-  return [
-    'copy.headline', 'copy.intro.lead', 'copy.intro.body',
-    'copy.briefing.title', 'copy.briefing.description', 'copy.briefing.question', 'copy.briefing.hint',
-    'copy.report.title', 'copy.report.description',
-    'prompt.setting', 'prompt.use', 'prompt.avoid',
-    ...kase.parts.flatMap(p => shown.map(f => `parts.${p.id}.${f}`)),
-    'debrief.title', 'debrief.summary', 'debrief.lesson',
-    'answer.feedback.correct', 'answer.feedback.other',
-  ];
-}
-
-const isList = path => LISTS.has(path) || path.endsWith('.knowledge');
+/** Editable paths of a case, in document order. */
+export const editablePaths = kase => fieldsOf(rawOf(kase)).map(f => f.path);
 
 const clone = v => (Array.isArray(v) ? v.map(clone) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clone(x)])) : v);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const sortedJson = o => JSON.stringify(Object.fromEntries(Object.keys(o).sort().map(k => [k, o[k]])));
-
-// Read a path out of a case; `parts.<id>.x.y` addresses the part by id.
-function getAt(kase, path) {
-  const segs = path.split('.');
-  let node = kase;
-  for (let i = 0; i < segs.length; i++) {
-    if (segs[i] === 'parts' && i === 0) {
-      node = kase.parts.find(p => p.id === segs[1]);
-      i++;
-    } else node = node?.[segs[i]];
-  }
-  return node;
-}
-
-function setAt(raw, path, value) {
-  const segs = path.split('.');
-  let node = raw;
-  let i = 0;
-  if (segs[0] === 'parts') { node = raw.parts.find(p => p.id === segs[1]); i = 2; }
-  for (; i < segs.length - 1; i++) node = node[segs[i]];
-  node[segs[segs.length - 1]] = value;
-}
-
-const rawOf = base => {
-  const { contentHash, ...rest } = base; // eslint-disable-line no-unused-vars
-  return { ...clone(rest), world: base.world.id, rehearsal: base.rehearsal, ...(base.rehearsalReasoning ? { rehearsalReasoning: base.rehearsalReasoning } : {}), ...(base.rehearsalChatter ? { rehearsalChatter: base.rehearsalChatter } : {}) };
-};
-
-// defineCase paths use indices (`parts[0].knowledge[2]`); map them back to edit paths.
-const editPathOf = (base, path) => {
-  const m = path.match(/^parts\[(\d+)\](?:\.(.*))?$/);
-  if (m) {
-    const id = base.parts[Number(m[1])]?.id;
-    const rest = (m[2] ?? '').replace(/\[\d+\]/g, '');
-    return id ? `parts.${id}${rest ? `.${rest}` : ''}` : path;
-  }
-  return path.replace(/\[\d+\]/g, '');
-};
+const sorted = o => Object.fromEntries(Object.keys(o).sort().map(k => [k, o[k]]));
+const sortedJson = o => JSON.stringify(sorted(o));
+const nonEmpty = o => (o && typeof o === 'object' && Object.keys(o).length ? o : null);
+const hashOf = o => (o ? createHash('sha256').update(sortedJson(o)).digest('hex').slice(0, 12) : null);
 
 // Every parsable record of a revision file. readJsonl repairs a partial last line but throws on a
 // corrupt line anywhere else; that must not drop the revisions around it, so fall back to a
@@ -96,46 +48,177 @@ const readRecords = file => {
   }
 };
 
-export function createContentStore({ cases, dataDir, worlds = liveWorlds, now = () => Date.now() }) {
+export function createContentStore({ cases, dataDir, contentDir, uiDefaults = {}, worlds = liveWorlds, now = () => Date.now() }) {
   const dir = resolvePath(dataDir, 'content');
   mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const trackedDir = resolvePath(contentDir ?? resolvePath(dataDir, 'content-files')); // callers without a tracked folder keep files beside the log
   const order = cases.map(c => c.id);
   const states = new Map();
+  const game = { id: GAME, version: null, base: null, overlay: null, skipped: [], records: [], stale: false, corrupt: false };
+  states.set(GAME, game);
+  const gameDefaults = Object.fromEntries(gameFields(uiDefaults, worlds).map(f => [f.path, f.value]));
+  let applied = { worlds, prompts: null, ui: {} };
 
-  const build = (base, edits) => {
+  const fileOf = id => resolvePath(trackedDir, id === GAME ? 'game.json' : `cases/${id}.json`);
+  const logOf = id => resolvePath(dir, `${id}.jsonl`);
+
+  // The tracked file: atomic tmp + rename, directories made on first write. No edits deletes it.
+  const writeTracked = (s, edits) => {
+    const file = fileOf(s.id);
+    if (!edits) { rmSync(file, { force: true }); return; }
+    mkdirSync(dirname(file), { recursive: true });
+    const doc = { id: s.id, ...(s.id === GAME ? {} : { version: s.base.version }), edits: sorted(edits) };
+    const tmp = `${file}.tmp-${process.pid}`;
+    writeFileSync(tmp, `${JSON.stringify(doc, null, 2)}\n`);
+    renameSync(tmp, file);
+  };
+  const readTracked = s => {
+    const file = fileOf(s.id);
+    if (!existsSync(file)) return { status: 'absent' };
+    try {
+      const doc = JSON.parse(readFileSync(file, 'utf8'));
+      const ok = doc && doc.id === s.id && doc.edits && typeof doc.edits === 'object' && !Array.isArray(doc.edits) && (s.id === GAME || doc.version === s.base.version);
+      return ok ? { status: 'ok', edits: nonEmpty(doc.edits) } : { status: 'bad' };
+    } catch { return { status: 'bad' }; }
+  };
+
+  // The case object for an overlay under the game's worlds and prompts. Unedited stays the authored object.
+  const compose = (base, edits, ctx = applied) => {
+    if (!edits && !ctx.prompts && ctx.worlds === worlds) return base;
     const raw = rawOf(base);
-    for (const [path, value] of Object.entries(edits)) setAt(raw, path, clone(value));
-    try { return defineCase(raw, { worlds }); } catch (error) {
+    const kinds = new Map(fieldsOf(raw).map(f => [f.path, f.kind]));
+    for (const [path, value] of Object.entries(edits ?? {})) {
+      const kind = kinds.get(path);
+      if (!kind) throw new ContentError(400, `Unknown field ${path}.`, path);
+      const fits = kind === 'list' ? Array.isArray(value) && value.every(x => typeof x === 'string') : typeof value === 'string';
+      if (!fits) throw new ContentError(400, kind === 'list' ? 'Must be a list of text.' : 'Must be text.', path);
+      setPath(raw, path, clone(value));
+    }
+    if (base.roles === undefined && same(raw.roles, ROLES)) delete raw.roles; // default roles stay implicit: same hash
+    const opts = { worlds: ctx.worlds, ...(ctx.prompts ? { prompts: ctx.prompts } : {}) };
+    try {
+      if (!edits && raw.world === 'grove') { // authored data may leave the default world implicit; keep its hash
+        const bare = defineCase({ ...raw, world: undefined }, opts);
+        if (bare.contentHash === base.contentHash) return bare;
+      }
+      return defineCase(raw, opts);
+    } catch (error) {
       const m = /^case [^:]*: ([^:]+): (.*)$/s.exec(error.message);
       if (!m) throw error;
-      throw new ContentError(400, m[2], editPathOf(base, m[1]));
+      throw new ContentError(400, m[2], editPathOf(raw, m[1]));
     }
   };
 
-  const validate = (base, edits) => {
-    if (!edits || typeof edits !== 'object' || Array.isArray(edits)) throw new ContentError(400, 'Edits must be an object.', null);
-    const allowed = new Set(editablePaths(base));
-    const out = {};
-    for (const [path, value] of Object.entries(edits)) {
-      if (!allowed.has(path)) throw new ContentError(400, `Unknown field ${path}.`, path);
-      const text = (s, where) => {
-        if (typeof s !== 'string') throw new ContentError(400, 'Must be text.', where);
-        if (s.length > MAX_TEXT) throw new ContentError(400, `Must be at most ${MAX_TEXT} characters.`, where);
-      };
-      if (isList(path)) {
-        if (!Array.isArray(value)) throw new ContentError(400, 'Must be a list of text.', path);
-        const max = path.endsWith('.knowledge') ? 20 : 30;
-        const min = path.endsWith('.knowledge') ? 1 : 0;
-        if (value.length < min || value.length > max) throw new ContentError(400, `Must hold ${min} to ${max} items.`, path);
-        value.forEach(item => { text(item, path); if (!item.trim()) throw new ContentError(400, 'Items must not be empty.', path); });
-      } else text(value, path);
-      out[path] = clone(value);
-    }
-    const merged = {};
-    for (const [path, value] of Object.entries(out)) if (!same(value, getAt(base, path))) merged[path] = value;
-    build(base, merged);
-    return Object.keys(merged).length ? merged : null;
+  const textCheck = (value, path) => {
+    if (typeof value !== 'string') throw new ContentError(400, 'Must be text.', path);
+    if (value.length > MAX_TEXT) throw new ContentError(400, `Must be at most ${MAX_TEXT} characters.`, path);
   };
+
+  // Case edits: known fields only, caps, no-ops dropped, then defineCase decides.
+  const validateCase = (base, edits, ctx = applied) => {
+    if (!edits || typeof edits !== 'object' || Array.isArray(edits)) throw new ContentError(400, 'Edits must be an object.', null);
+    const raw = rawOf(base);
+    const kinds = new Map(fieldsOf(raw).map(f => [f.path, f.kind]));
+    const merged = {};
+    for (const [path, value] of Object.entries(edits)) {
+      const kind = kinds.get(path);
+      if (!kind) throw new ContentError(400, `Unknown field ${path}.`, path);
+      if (kind === 'list') {
+        if (!Array.isArray(value)) throw new ContentError(400, 'Must be a list of text.', path);
+        const knowledge = path.endsWith('.knowledge') || path === 'partsKnowledge';
+        const [min, max] = knowledge ? [1, 20] : [0, 30];
+        if (value.length < min || value.length > max) throw new ContentError(400, `Must hold ${min} to ${max} items.`, path);
+        value.forEach(item => { textCheck(item, path); if (!item.trim()) throw new ContentError(400, 'Items must not be empty.', path); });
+      } else textCheck(value, path);
+      if (!same(value, getPath(raw, path))) merged[path] = clone(value);
+    }
+    compose(base, nonEmpty(merged), ctx);
+    return nonEmpty(merged);
+  };
+
+  // Game edits: each key on its own.
+  const validateGame = edits => {
+    if (!edits || typeof edits !== 'object' || Array.isArray(edits)) throw new ContentError(400, 'Edits must be an object.', null);
+    const merged = {};
+    for (const [path, value] of Object.entries(edits)) {
+      const problem = checkGameEdit(path, value, uiDefaults, worlds);
+      if (problem) throw new ContentError(400, problem, path);
+      if (value !== gameDefaults[path]) merged[path] = value;
+    }
+    return nonEmpty(merged);
+  };
+
+  const applyFor = overlay => applyGame(overlay ?? {}, worlds);
+  // Every case under a game overlay; throws if any case no longer builds.
+  const composeAll = (ctx, overlayOf) => order.map(id => compose(states.get(id).base, overlayOf(id), ctx));
+
+  const gameCurrent = () => ({ ...gameDefaults, ...(game.overlay ?? {}) });
+  const caseValues = kase => Object.fromEntries(fieldsOf(rawOf(kase)).map(f => [f.path, clone(f.value)]));
+  const effective = s => (s.id === GAME ? gameCurrent() : caseValues(s.current));
+  const changedKeys = (a, b) => [...new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])].filter(k => !same(a?.[k], b?.[k])).sort();
+
+  let listCache = null;
+  const rebuildList = () => { listCache = order.map(id => states.get(id).current); };
+  // The highest rev on file, not the last line: a corrupt line must never make a number repeat.
+  const revOf = s => s.records.reduce((max, r) => Math.max(max, r.rev), 0);
+
+  const record = (s, edits, by, extra) => ({
+    type: 'content_revision', caseId: s.id, version: s.id === GAME ? null : s.base.version, rev: revOf(s) + 1,
+    timestamp: new Date(now()).toISOString(), by: by ?? null, edits, tracked: true, ...extra,
+  });
+  const log = (s, r) => { appendJsonl(logOf(s.id), r, 'content'); s.records.push(r); };
+
+  // Boot: the tracked file wins; a legacy log without a file is imported; a removed file is recorded.
+  const boot = s => {
+    const { records, corrupt } = readRecords(logOf(s.id));
+    s.corrupt = corrupt;
+    const version = s.id === GAME ? null : s.base.version;
+    s.records = records.filter(r => r && r.type === 'content_revision' && r.version === version && Number.isInteger(r.rev));
+    const last = s.records.at(-1);
+    const logEdits = nonEmpty(last?.edits);
+    const file = readTracked(s);
+    const fileRecord = edits => {
+      const r = record(s, edits, 'file', { fields: changedKeys(logEdits ?? {}, edits ?? {}) });
+      try { r.contentHash = s.id === GAME ? hashOf(edits) : compose(s.base, edits).contentHash; } catch { r.contentHash = null; }
+      try { log(s, r); } catch { /* a read-only data dir must not stop the boot */ }
+    };
+    let overlay = null;
+    if (file.status === 'ok') {
+      overlay = file.edits;
+      if (!same(sorted(overlay ?? {}), sorted(logEdits ?? {}))) s.act = () => fileRecord(overlay);
+    } else if (file.status === 'bad') s.stale = true;
+    else if (logEdits && !last.tracked) {
+      overlay = logEdits;
+      s.act = () => { try { writeTracked(s, overlay); } catch { /* imported again next boot */ } };
+    } else if (logEdits) s.act = () => fileRecord(null);
+    return overlay;
+  };
+
+  // Game first: its worlds and prompts rebuild every case.
+  {
+    const overlay = boot(game);
+    const valid = {};
+    for (const [path, value] of Object.entries(overlay ?? {})) {
+      if (checkGameEdit(path, value, uiDefaults, worlds)) game.skipped.push(path); else valid[path] = value;
+    }
+    game.skipped.sort();
+    game.overlay = nonEmpty(valid);
+    applied = applyFor(game.overlay);
+  }
+  for (const base of cases) {
+    const s = { id: base.id, base, current: base, overlay: null, records: [], stale: false, corrupt: false };
+    states.set(base.id, s);
+    const overlay = boot(s);
+    if (!s.stale) {
+      try {
+        s.current = compose(base, overlay);
+        s.overlay = s.current === base || !overlay ? null : overlay;
+      } catch { s.stale = true; s.current = base; s.overlay = null; }
+    }
+    if (!s.stale) s.act?.();
+  }
+  game.act?.();
+  rebuildList();
 
   const state = id => {
     const s = states.get(id);
@@ -143,69 +226,63 @@ export function createContentStore({ cases, dataDir, worlds = liveWorlds, now = 
     return s;
   };
 
-  const effective = kase => Object.fromEntries(editablePaths(kase).map(p => [p, clone(getAt(kase, p))]));
-  const changed = (before, after) => Object.keys(after).filter(p => !same(before[p], after[p]));
-
-  let listCache = null;
-  const rebuildList = () => { listCache = order.map(id => states.get(id).current); };
-
-  for (const base of cases) {
-    const s = { base, current: base, overlay: null, records: [], stale: false, corrupt: false };
-    states.set(base.id, s);
-    const { records, corrupt } = readRecords(resolvePath(dir, `${base.id}.jsonl`));
-    s.corrupt = corrupt;
-    s.records = records.filter(r => r && r.type === 'content_revision' && r.version === base.version && Number.isInteger(r.rev));
-    const last = s.records.at(-1);
-    if (last) {
-      try {
-        const overlay = last.edits && typeof last.edits === 'object' ? last.edits : null;
-        s.current = overlay && Object.keys(overlay).length ? build(base, overlay) : base;
-        s.overlay = s.current === base ? null : overlay;
-      } catch { s.stale = true; s.current = base; s.overlay = null; }
-    }
-  }
-  rebuildList();
-
-  // The highest rev on file, not the last line: a corrupt line must never make a number repeat.
-  const revOf = s => s.records.reduce((max, r) => Math.max(max, r.rev), 0);
-
-  const append = (id, s, edits, by, revertOf) => {
-    const kase = edits ? build(s.base, edits) : s.base;
-    const before = effective(s.current);
-    const after = effective(kase);
-    const record = {
-      type: 'content_revision', caseId: id, version: s.base.version, rev: revOf(s) + 1,
-      timestamp: new Date(now()).toISOString(), by: by ?? null, edits, contentHash: kase.contentHash,
-      fields: changed(before, after), ...(revertOf === undefined ? {} : { revertOf }),
-    };
-    appendJsonl(resolvePath(dir, `${id}.jsonl`), record, 'content');
-    s.records.push(record);
-    s.current = kase;
-    s.overlay = edits;
+  // Commit one revision: tracked file, then log, then memory. Everything that can throw runs before the first write.
+  const commit = (s, edits, by, revertOf) => {
+    const before = effective(s);
+    let nextCases = null;
+    let nextApplied = applied;
+    let kase = null;
+    if (s.id === GAME) {
+      nextApplied = applyFor(edits);
+      try { nextCases = composeAll(nextApplied, id => states.get(id).overlay); } catch (e) { throw e instanceof ContentError ? new ContentError(400, e.message, null) : e; }
+    } else kase = compose(s.base, edits);
+    const after = s.id === GAME ? { ...gameDefaults, ...(edits ?? {}) } : caseValues(kase);
+    const r = record(s, edits, by, {
+      contentHash: s.id === GAME ? hashOf(edits) : kase.contentHash,
+      fields: changedKeys(before, after), ...(revertOf === undefined ? {} : { revertOf }),
+    });
+    writeTracked(s, edits);
+    log(s, r);
     s.stale = false;
+    s.overlay = edits;
+    if (s.id === GAME) {
+      applied = nextApplied;
+      order.forEach((id, i) => { states.get(id).current = nextCases[i]; });
+      game.skipped = [];
+    } else s.current = kase;
     rebuildList();
-    return record;
+    return r;
   };
 
   return {
     list: () => listCache,
     current: id => state(id).current,
     base: id => state(id).base,
+    uiText: () => ({ ...applied.ui }),
     info(id) {
       const s = state(id);
       const last = s.records.at(-1);
+      const common = { rev: revOf(s), by: last?.by ?? null, editedAt: last?.timestamp ?? null };
+      if (s.id === GAME) {
+        return { id: GAME, title: 'Game text', version: null, status: null, world: null, ...common, contentHash: hashOf(s.overlay), baseContentHash: null, stale: s.stale, corrupt: s.corrupt, skipped: [...s.skipped] };
+      }
       return {
-        id, title: s.base.title, version: s.base.version, status: s.base.status, world: s.base.world.id,
-        rev: revOf(s), by: last?.by ?? null, editedAt: last?.timestamp ?? null,
+        id, title: s.base.title, version: s.base.version, status: s.base.status, world: s.base.world.id, ...common,
         contentHash: s.current.contentHash, baseContentHash: s.base.contentHash, stale: s.stale, corrupt: s.corrupt,
       };
     },
     fields(id) {
       const s = state(id);
-      return { authored: effective(s.base), current: effective(s.current) };
+      if (s.id === GAME) return { authored: { ...gameDefaults }, current: gameCurrent(), order: Object.keys(gameDefaults) };
+      const authored = fieldsOf(rawOf(s.base));
+      return { authored: Object.fromEntries(authored.map(f => [f.path, clone(f.value)])), current: caseValues(s.current), order: authored.map(f => f.path) };
     },
     structure(id) {
-      const { base } = state(id);
+      const s = state(id);
+      if (s.id === GAME) {
+        return { characters: [], parts: [], world: null, placeholders: [], areas: [...new Set(Object.keys(uiDefaults).map(k => k.split('.')[0]))], worlds: Object.keys(worlds) };
+      }
+      const { base } = s;
       const { id: wid, place, agents } = base.world;
       return {
         characters: base.characters.map(({ id: cid, name, color }) => ({ id: cid, name, color })),
@@ -219,25 +296,30 @@ export function createContentStore({ cases, dataDir, worlds = liveWorlds, now = 
     },
     preview(id, edits) {
       const s = state(id);
-      const overlay = validate(s.base, edits);
-      return overlay ? build(s.base, overlay) : s.base;
+      if (s.id === GAME) throw new ContentError(409, 'Preview works on a case.');
+      return compose(s.base, validateCase(s.base, edits));
     },
     publish(id, edits, { by, baseRev } = {}) {
       const s = state(id);
       if (baseRev !== revOf(s)) throw new ContentError(409, 'The content changed since you loaded it.');
-      const overlay = validate(s.base, edits);
-      if ((overlay ? sortedJson(overlay) : null) === (s.overlay ? sortedJson(s.overlay) : null)) {
-        return { rev: revOf(s), contentHash: s.current.contentHash, fields: [] };
+      const overlay = s.id === GAME ? validateGame(edits) : validateCase(s.base, edits);
+      if (sortedJson(overlay ?? {}) === sortedJson(s.overlay ?? {})) {
+        return { rev: revOf(s), contentHash: s.id === GAME ? hashOf(s.overlay) : s.current.contentHash, fields: [] };
       }
-      const r = append(id, s, overlay, by);
+      const r = commit(s, overlay, by);
       return { rev: r.rev, contentHash: r.contentHash, fields: r.fields };
     },
     revert(id, rev, { by } = {}) {
       const s = state(id);
       const target = rev === 0 ? { edits: null } : s.records.find(r => r.rev === rev);
       if (!Number.isInteger(rev) || !target) throw new ContentError(404, 'Unknown revision.');
-      const r = append(id, s, target.edits && Object.keys(target.edits).length ? target.edits : null, by, rev);
+      const edits = nonEmpty(target.edits);
+      const r = commit(s, s.id === GAME && edits ? validGameOnly(edits) : edits, by, rev);
       return { rev: r.rev, contentHash: r.contentHash, fields: r.fields, revertOf: rev };
     },
   };
+
+  function validGameOnly(edits) {
+    return nonEmpty(Object.fromEntries(Object.entries(edits).filter(([p, v]) => !checkGameEdit(p, v, uiDefaults, worlds))));
+  }
 }

@@ -5,7 +5,8 @@ global:
 scrape_configs:
   - job_name: override
     metrics_path: /metrics
-    # File holding only the OVERRIDE_ADMIN_TOKEN value (no trailing text).
+    # File holding only the OVERRIDE_ADMIN_PASSWORD value (no trailing text).
+    # The admin listener still accepts it as a Bearer credential.
     authorization:
       type: Bearer
       credentials_file: /path/to/admin-token

@@ -19,13 +19,15 @@
   <span id="publish-note" class="muted"></span>
   <button id="publish" class="primary" type="button">Publish</button>
   <button id="theme-toggle" type="button" class="ghost" aria-pressed="false">Light mode</button>
-  <form class="auth" id="auth">
-    <input id="token" type="password" placeholder="maker token" autocomplete="off">
-    <button id="save" type="submit">Save</button>
+  <form class="auth" id="auth" hidden>
+    <input id="password" type="password" placeholder="admin password" autocomplete="current-password">
+    <button id="signin" type="submit">Sign in</button>
+    <span id="auth-error" class="auth-error" role="alert"></span>
   </form>
+  <button id="signout" type="button" class="ghost" hidden>Sign out</button>
 </header>
 <div class="maker">
-  <nav id="sections" aria-label="Sections"></nav>
+  <div class="side"><input id="field-search" type="search" placeholder="Search fields…" aria-label="Search fields" autocomplete="off"><nav id="sections" aria-label="Sections"></nav></div>
   <main id="editor"><div id="form"></div>
     <section id="history-section" class="form-section" data-section="history" hidden><h2 class="section-title">History</h2><ol id="history"></ol></section></main>
   <aside id="panel" class="card chat">

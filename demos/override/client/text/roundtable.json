@@ -1,0 +1,5 @@
+{
+  "roundtable.click": "Click to talk to {name}",
+  "roundtable.canvas": "{place}: {names} and you around a table. Click a friend to talk, or pick one in the list.",
+  "roundtable.canvas.default": "{place}: {names} and you around a table. Click a friend to talk."
+}

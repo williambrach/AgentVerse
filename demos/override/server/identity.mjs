@@ -1,20 +1,26 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { safeEqual } from './http-util.mjs';
 
-// Domain-separated so the same secret can't forge MACs for other uses.
-const mac = (secret, text) => createHmac('sha256', secret).update(`override-session-v1:${text}`).digest('hex');
+export const PLAYER_PURPOSE = 'override-session-v1';
+export const ADMIN_PURPOSE = 'override-admin-v1';
 
-export function signToken(secret, expiresAt) {
-  return `${expiresAt}.${mac(secret, String(expiresAt))}`;
+// Domain-separated so the same secret can't forge MACs for other uses.
+const mac = (secret, text, purpose) => createHmac('sha256', secret).update(`${purpose}:${text}`).digest('hex');
+
+// The admin MAC key also binds the password, so changing the password signs everyone out.
+export const adminKey = (secret, password) => createHash('sha256').update(`${ADMIN_PURPOSE}:${secret}:${password}`).digest('hex');
+
+export function signToken(secret, expiresAt, purpose = PLAYER_PURPOSE) {
+  return `${expiresAt}.${mac(secret, String(expiresAt), purpose)}`;
 }
 
-export function verifyToken(secret, token, now) {
+export function verifyToken(secret, token, now, purpose = PLAYER_PURPOSE) {
   if (typeof token !== 'string') return false;
   const dot = token.indexOf('.');
   if (dot < 1) return false;
   const exp = token.slice(0, dot);
   if (!/^\d+$/.test(exp)) return false;
-  if (!safeEqual(token.slice(dot + 1), mac(secret, exp))) return false;
+  if (!safeEqual(token.slice(dot + 1), mac(secret, exp, purpose))) return false;
   return Number(exp) > now;
 }
 

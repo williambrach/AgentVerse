@@ -48,11 +48,12 @@ const toolsOf = (data, fail) => {
   return Object.fromEntries(TOOL_KEYS.filter(k => data[k]).map(k => [k, data[k]]));
 };
 
-export function defineCase(data, { worlds = liveWorlds } = {}) {
+export function defineCase(data, { worlds = liveWorlds, prompts } = {}) {
   const id = data?.id;
   const fail = (path, message) => { throw new Error(`case ${id}: ${path}: ${message}`); };
   const str = (value, path) => { if (typeof value !== 'string' || !value) fail(path, 'must be a non-empty string'); };
   if (typeof id !== 'string' || !/^[a-z0-9-]{3,40}$/.test(id)) fail('id', 'must match /^[a-z0-9-]{3,40}$/');
+  if (id === 'game') fail('id', 'game is reserved');
   const worldId = (data.world && typeof data.world === 'object' ? data.world.id : data.world) ?? 'grove';
   if (!Object.hasOwn(worlds, worldId)) fail('world', `must be one of ${Object.keys(worlds).join(', ')}`);
   if (data.parts === undefined) fail('parts', 'is required');
@@ -150,7 +151,7 @@ export function defineCase(data, { worlds = liveWorlds } = {}) {
     try { checkTalk(data); } catch (e) { throw new Error(`case ${id}: ${e.message}`); }
   }
   if (typeof data.rehearsal !== 'function') fail('rehearsal', 'must be a function');
-  return deepFreeze({ ...clone(data), world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...toolsOf(data, fail), contentHash: contentHash(data) });
+  return deepFreeze({ ...clone(data), world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...toolsOf(data, fail), ...(prompts ? { prompts: clone(prompts) } : {}), contentHash: contentHash(data) });
 }
 
 const nameMap = (kase, cast) => {

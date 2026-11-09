@@ -56,7 +56,7 @@ export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw
     const dist = resolve(root, 'dist');
     running = await startServer({
       PORT: String(port), OVERRIDE_ADMIN_PORT: String(adminPort), OVERRIDE_ENV: 'demo', OVERRIDE_APP_COMMIT: process.env.OVERRIDE_APP_COMMIT || 'demo', OVERRIDE_DATA_DIR: join(dir, 'data'), OVERRIDE_SECRET: 'demo-secret',
-      OVERRIDE_ADMIN_TOKEN: token, OVERRIDE_ENDPOINTS: endpoints, OVERRIDE_ENDPOINT_A_KEY: 'demo-key-a', OVERRIDE_ENDPOINT_B_KEY: 'demo-key-b',
+      OVERRIDE_ADMIN_PASSWORD: token, OVERRIDE_CONTENT_DIR: join(dir, 'content'), OVERRIDE_ENDPOINTS: endpoints, OVERRIDE_ENDPOINT_A_KEY: 'demo-key-a', OVERRIDE_ENDPOINT_B_KEY: 'demo-key-b',
     }, { publicDir: publicDir !== undefined ? publicDir : existsSync(join(dist, 'index.html')) ? dist : null });
   } catch (error) { await close(); throw error; }
 
@@ -133,9 +133,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const demo = await runDemo({
     players: num('--players', 60), rampMs: num('--ramp', 60_000), thinkMs: range(arg('--think', '4000-20000')),
     burstEvery: num('--burst-every', 120), port: num('--port', 3001), adminPort: num('--admin-port', 3002),
-    token: process.env.OVERRIDE_ADMIN_TOKEN || 'demo', seconds: 0,
+    token: process.env.OVERRIDE_ADMIN_PASSWORD || process.env.OVERRIDE_ADMIN_TOKEN || 'demo', seconds: 0,
   });
-  console.log(`Player site: ${demo.url}\nAdmin: ${demo.adminUrl}/admin (token ${process.env.OVERRIDE_ADMIN_TOKEN ? 'from OVERRIDE_ADMIN_TOKEN' : 'demo'})`);
+  console.log(`Player site: ${demo.url}\nAdmin: ${demo.adminUrl}/admin (password ${process.env.OVERRIDE_ADMIN_PASSWORD || process.env.OVERRIDE_ADMIN_TOKEN ? 'from the environment' : 'demo'})`);
   const stop = () => demo.close().then(() => process.exit(0), () => process.exit(1));
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);

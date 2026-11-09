@@ -1,4 +1,5 @@
 import { escape as esc } from './html.ts';
+import { t } from './text.ts';
 
 export interface AccuseCharacter { id: string; name: string; role: string }
 export interface AccuseQuote { id: string; line: string; character: string; text: string; at: string }
@@ -27,14 +28,14 @@ export function accusePanel(v: AccuseView): string {
       const on = picked.has(q.id);
       return `<li><label class="accuse-quote"><input type="checkbox" name="accuse-quote" value="${esc(q.id)}"${on ? ' checked' : ''}${!on && full ? ' disabled' : ''}><span>“${esc(q.text)}”</span></label></li>`;
     }).join('')}</ul>`
-    : `<p class="accuse-empty">You have no quotes from ${esc(nameOf(who))} yet. Save some in their chat.</p>`;
+    : `<p class="accuse-empty">${t('accuse.empty', { name: nameOf(who) })}</p>`;
   const ready = !!who && picked.size >= 1 && picked.size <= MAX_ACCUSE_QUOTES && !v.busy;
   const last = v.accusations[v.accusations.length - 1];
   const earlier = v.accusations.slice(0, -1);
   const feedback = last
-    ? `<div class="accuse-feedback" data-accusation="${esc(last.id)}"><p><b>${esc(nameOf(last.character))}:</b> “${esc(last.denial)}”</p><p>${esc(last.feedback)}</p>${earlier.length ? `<small>Earlier accusations: ${earlier.map(a => esc(nameOf(a.character))).join(', ')}</small>` : ''}</div>`
+    ? `<div class="accuse-feedback" data-accusation="${esc(last.id)}"><p><b>${esc(nameOf(last.character))}:</b> “${esc(last.denial)}”</p><p>${esc(last.feedback)}</p>${earlier.length ? `<small>${t('accuse.earlier', { names: earlier.map(a => nameOf(a.character)).join(', ') })}</small>` : ''}</div>`
     : '';
   return `<div class="accuse-panel"><div class="panel-heading"><h2>${esc(v.copy.title)}</h2><p>${esc(v.copy.description)}</p></div>
   <div class="accuse-suspects">${suspects}</div>${list}${feedback}
-  <div class="accuse-actions"><button type="button" id="accuse-submit"${ready ? '' : ' disabled'}>Accuse</button><button type="button" id="accuse-back">Back</button></div></div>`;
+  <div class="accuse-actions"><button type="button" id="accuse-submit"${ready ? '' : ' disabled'}>${t('accuse.submit')}</button><button type="button" id="accuse-back">${t('accuse.back')}</button></div></div>`;
 }

@@ -1,5 +1,5 @@
-import { HINTS } from './tools.ts';
 import { escape as esc, svg as baseSvg } from './html.ts';
+import { t } from './text.ts';
 
 /** One cast member in the rail. `asked` forces the check on the talking card. */
 export interface CastCard {
@@ -26,53 +26,54 @@ const ICONS = {
   check: '<path d="M5 12l4 4 10-10"/>',
 };
 
+/** `label` is already HTML-safe (from t()). */
 const iconButton = (id: string, label: string, path: string): string =>
-  `<button type="button" class="hud-icon" id="${id}" title="${esc(label)}">${svg(path, 22)}<span class="sr-only">${esc(label)}</span></button>`;
+  `<button type="button" class="hud-icon" id="${id}" title="${label}">${svg(path, 22)}<span class="sr-only">${label}</span></button>`;
 
 /** The whole game screen: the world fills the window and the HUD floats over it. Dynamic parts are filled by main.ts. */
 export function hudShell(v: { teamName: string; headline: string; topline: string }): string {
   return `<div id="station"></div><div id="roundtable" hidden></div><div class="hud-scrim" aria-hidden="true"></div>
     <header class="topbar">
       <div class="hud-panel case-panel">
-        <a class="wordmark" href="/" aria-label="The Override home"><span class="banana-mark" id="world-icon"></span></a>
+        <a class="wordmark" href="/" aria-label="${t('hud.homeLabel')}"><span class="banana-mark" id="world-icon"></span></a>
         <div class="case-text"><span class="hud-label" id="case-eyebrow">${esc(v.topline)}</span><h1 id="case-headline">${esc(v.headline)}</h1></div>
       </div>
-      <div class="hud-panel world-panel"><span class="world-swatch" aria-hidden="true"></span><div class="hud-stack"><span class="hud-label">WORLD</span><span class="hud-value" id="world-name"></span></div></div>
+      <div class="hud-panel world-panel"><span class="world-swatch" aria-hidden="true"></span><div class="hud-stack"><span class="hud-label">${t('hud.world')}</span><span class="hud-value" id="world-name"></span></div></div>
       <div class="hud-panel timer-panel">${svg(ICONS.clock)}<span id="elapsed">0:00</span></div>
       <div class="hud-gap"></div>
-      <button type="button" class="hud-panel team-panel" id="team-button" title="Change team">${svg(ICONS.team)}<span class="hud-stack"><span class="hud-label">TEAM</span><span class="team-name">${esc(v.teamName)}</span></span></button>
-      <span class="coin-wrap"><span id="coin-counter" class="hud-panel coin-panel" tabindex="0" aria-describedby="coin-tip" hidden></span><span id="coin-tip" class="coin-tip" role="tooltip">${esc(HINTS.coins)}</span></span>
-      <button type="button" class="hud-panel notebook-panel" id="notebook-button">${svg(ICONS.notebook)}<span>Notebook</span></button>
+      <button type="button" class="hud-panel team-panel" id="team-button" title="${t('hud.teamTitle')}">${svg(ICONS.team)}<span class="hud-stack"><span class="hud-label">${t('hud.team')}</span><span class="team-name">${esc(v.teamName)}</span></span></button>
+      <span class="coin-wrap"><span id="coin-counter" class="hud-panel coin-panel" tabindex="0" aria-describedby="coin-tip" hidden></span><span id="coin-tip" class="coin-tip" role="tooltip">${t('tools.hint.coins')}</span></span>
+      <button type="button" class="hud-panel notebook-panel" id="notebook-button">${svg(ICONS.notebook)}<span>${t('hud.notebook')}</span></button>
       <div class="hud-panel hud-icons">
-        ${iconButton('leaderboard-button', 'Leaderboard', ICONS.board)}
-        ${iconButton('restart-button', 'Reset session', ICONS.reset)}
-        ${iconButton('reset-button', 'Cases', ICONS.cases)}
-        ${iconButton('export-button', 'Export session', ICONS.exportArrow)}
+        ${iconButton('leaderboard-button', t('hud.leaderboard'), ICONS.board)}
+        ${iconButton('restart-button', t('hud.restart'), ICONS.reset)}
+        ${iconButton('reset-button', t('hud.cases'), ICONS.cases)}
+        ${iconButton('export-button', t('hud.export'), ICONS.exportArrow)}
       </div>
     </header>
-    <div class="mode-strip"><div class="mode-strip-body"><span class="authored-label">AUTHORED DEMONSTRATION</span><span id="mode-badge" class="mode-badge"></span></div></div>
+    <div class="mode-strip"><div class="mode-strip-body"><span class="authored-label">${t('hud.authored')}</span><span id="mode-badge" class="mode-badge"></span></div></div>
     <div class="hud-body">
       <div class="hud-rail">
         <nav class="room-nav" id="room-nav"></nav>
-        <div class="toolbelt" id="toolbelt" role="group" aria-label="Arbiter tools"><span class="toolbelt-label" aria-hidden="true">ARBITER TOOLS</span><div class="toolbelt-cards" id="toolbelt-cards"></div></div>
-        <button type="button" class="verdict-button" data-go="report">${svg(ICONS.verdict, 22)}<span class="hud-stack"><b>Make your verdict</b><small id="quick-progress"></small></span></button>
+        <div class="toolbelt" id="toolbelt" role="group" aria-label="${t('hud.toolsAria')}"><span class="toolbelt-label" aria-hidden="true">${t('hud.toolsLabel')}</span><div class="toolbelt-cards" id="toolbelt-cards"></div></div>
+        <button type="button" class="verdict-button" data-go="report">${svg(ICONS.verdict, 22)}<span class="hud-stack"><b>${t('hud.verdict')}</b><small id="quick-progress"></small></span></button>
       </div>
-      <aside class="dossier" aria-label="Conversation">
-        <div class="dossier-top"><span id="notebook-section">Case briefing</span><button type="button" class="dossier-close" id="dialogue-close" aria-label="Close conversation">${svg(ICONS.close, 20)}</button></div>
+      <aside class="dossier" aria-label="${t('hud.conversation')}">
+        <div class="dossier-top"><span id="notebook-section">${t('hud.briefing')}</span><button type="button" class="dossier-close" id="dialogue-close" aria-label="${t('hud.closeConversation')}">${svg(ICONS.close, 20)}</button></div>
         <div id="panel"></div>
       </aside>
     </div>
-    <div id="movement-hint" class="movement-hint">WASD / ARROWS to walk · E to interact</div>
+    <div id="movement-hint" class="movement-hint">${t('hud.movement')}</div>
     <div id="toast" role="alert" hidden></div>
     <div id="overlay-root"></div>`;
 }
 
 /** One cast button in the rail. The portrait size comes from `--cell`, so the rail shares one rule with the dialogue and lineup. */
 export function castCard(c: CastCard): string {
-  const sub = c.state === 'talking' ? `${c.part} · talking` : c.state === 'new' ? `${c.part} · not asked` : c.part;
+  const sub = c.state === 'talking' ? t('hud.talking', { part: c.part }) : c.state === 'new' ? t('hud.notAsked', { part: c.part }) : esc(c.part);
   const check = c.state === 'asked' || (c.state === 'talking' && c.asked === true);
   return `<button data-go="${esc(c.id)}" class="cast-card ${c.state}"${c.state === 'talking' ? ' aria-current="true"' : ''}>` +
     `<span class="cast-tile"><i class="monkey-face ${esc(c.faceClass)}"></i></span>` +
-    `<span class="hud-stack cast-text"><b>${esc(c.name)}</b><small>${esc(sub)}</small></span>` +
-    `<span class="interview-check" data-check="${esc(c.id)}">${check ? `<span role="img" aria-label="Asked">${svg(ICONS.check, 18, 3)}</span>` : ''}</span></button>`;
+    `<span class="hud-stack cast-text"><b>${esc(c.name)}</b><small>${sub}</small></span>` +
+    `<span class="interview-check" data-check="${esc(c.id)}">${check ? `<span role="img" aria-label="${t('hud.asked')}">${svg(ICONS.check, 18, 3)}</span>` : ''}</span></button>`;
 }

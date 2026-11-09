@@ -1,4 +1,5 @@
 import { escape as esc } from './html.ts';
+import { t } from './text.ts';
 
 export interface WordToken { i: number; word: string; start: number; end: number }
 export interface Quote { id: string; line?: string; character: string; text: string; at?: string }
@@ -21,12 +22,12 @@ export function excerptOf(text: string, a: number, b: number): string {
 }
 
 export function quotesPanel(quotes: Quote[], characters: QuoteCharacter[]): string {
-  const head = '<div class="panel-heading"><span class="eyebrow">YOUR NOTEBOOK</span><h2>Quotes</h2></div>';
-  if (!quotes.length) return `${head}<div class="notebook-content quotes-content"><div class="subtle-note quotes-empty">No quotes yet. Press Save quote under a line to keep it here.</div></div>`;
+  const head = `<div class="panel-heading"><span class="eyebrow">${t('talk.quotes.kicker')}</span><h2>${t('talk.quotes.title')}</h2></div>`;
+  if (!quotes.length) return `${head}<div class="notebook-content quotes-content"><div class="subtle-note quotes-empty">${t('talk.quotes.empty')}</div></div>`;
   const groups = characters.map(c => {
     const mine = quotes.filter(q => q.character === c.id);
     if (!mine.length) return '';
-    return `<section class="quote-group" data-character="${esc(c.id)}"><h3 class="quote-head"><span class="monkey-face ${esc(c.id)}" aria-hidden="true"></span><b class="quote-name">${esc(c.name)}</b> <span class="role">${esc(c.role)}</span></h3><ul class="quote-list">${mine.map(q => `<li><blockquote>“${esc(q.text)}”</blockquote><button type="button" class="quote-remove" data-unquote="${esc(q.id)}">Remove</button></li>`).join('')}</ul></section>`;
+    return `<section class="quote-group" data-character="${esc(c.id)}"><h3 class="quote-head"><span class="monkey-face ${esc(c.id)}" aria-hidden="true"></span><b class="quote-name">${esc(c.name)}</b> <span class="role">${esc(c.role)}</span></h3><ul class="quote-list">${mine.map(q => `<li><blockquote>“${esc(q.text)}”</blockquote><button type="button" class="quote-remove" data-unquote="${esc(q.id)}">${t('talk.quotes.remove')}</button></li>`).join('')}</ul></section>`;
   }).join('');
   return `${head}<div class="notebook-content quotes-content">${groups}</div>`;
 }

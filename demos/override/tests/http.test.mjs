@@ -4,7 +4,8 @@ import http from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApp, startServer, makerTokens, adminHosts } from '../server/index.mjs';
+import { createAdmin } from '../server/admin.mjs';
+import { createApp, startServer, adminHosts } from '../server/index.mjs';
 import { readJsonl } from '../server/dataset.mjs';
 import { until } from './helpers/until.mjs';
 import { startMockLlm } from '../scripts/mock-llm.mjs';
@@ -105,9 +106,10 @@ const json = { 'Content-Type': 'application/json' };
 const tmp = t => { const dir = mkdtempSync(join(tmpdir(), 'override-http-')); t.after(() => rmSync(dir, { recursive: true, force: true })); return dir; };
 const boot = async (t, env, opts) => {
   const dir = tmp(t);
-  const running = await startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 'secret-one', ...env }, { publicDir: tmp(t), ...opts });
+  const contentDir = tmp(t);
+  const running = await startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_CONTENT_DIR: contentDir, OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 'secret-one', ...env }, { publicDir: tmp(t), ...opts });
   t.after(() => running.close());
-  return { ...running, dir };
+  return { ...running, dir, contentDir };
 };
 const login = (url, code, headers = {}) => fetch(`${url}/api/access`, { method: 'POST', headers: { ...json, ...headers }, body: JSON.stringify({ code }) });
 const rawGet = (url, headers) => new Promise((resolve, reject) => http.get(url, { headers }, res => { const chunks = []; res.on('data', c => chunks.push(c)); res.on('end', () => resolve({ res, body: Buffer.concat(chunks) })); }).on('error', reject));
@@ -339,7 +341,7 @@ test('monitor_wired: a played game reaches the admin stream and a heartbeat coun
 
 test('round_survives_restart: label, round count and recent rows come back from disk', async t => {
   const dir = tmp(t);
-  const env = { PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 'secret-one', OVERRIDE_ADMIN_TOKEN: 'admin-token' };
+  const env = { PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: dir, OVERRIDE_CONTENT_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_SECRET: 'secret-one', OVERRIDE_ADMIN_TOKEN: 'admin-token' };
   const first = await startServer(env, { publicDir: tmp(t) });
   let closed = false;
   t.after(() => { if (!closed) return first.close(); });
@@ -433,18 +435,18 @@ test('probe_messages_resolved: the admin probe prompt has no unresolved placehol
 test('admin_boot_failure_closes_the_player_listener: a taken admin port rejects and leaves nothing listening', async t => {
   const first = await boot(t, { OVERRIDE_ADMIN_TOKEN: 'admin-token' });
   const port = new URL(first.adminUrl).port;
-  await assert.rejects(startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: port, OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 's', OVERRIDE_ADMIN_TOKEN: 'admin-token' }, { publicDir: tmp(t) }), /EADDRINUSE/);
+  await assert.rejects(startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: port, OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_CONTENT_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 's', OVERRIDE_ADMIN_TOKEN: 'admin-token' }, { publicDir: tmp(t) }), /EADDRINUSE/);
 });
 
 test('a taken player port with an admin token rejects (a leaked tick timer would hang this run)', async t => {
   const first = await boot(t, {});
   const port = new URL(first.url).port;
-  await assert.rejects(startServer({ PORT: port, OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 's', OVERRIDE_ADMIN_TOKEN: 'admin-token' }, { publicDir: tmp(t) }), /EADDRINUSE/);
+  await assert.rejects(startServer({ PORT: port, OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_CONTENT_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 's', OVERRIDE_ADMIN_TOKEN: 'admin-token' }, { publicDir: tmp(t) }), /EADDRINUSE/);
 });
 
 test('startServer resolves with a working player url, with and without an admin token, and closes cleanly', async t => {
   for (const extra of [{}, { OVERRIDE_ADMIN_TOKEN: 'admin-token', OVERRIDE_ADMIN_PORT: '0' }]) {
-    const running = await startServer({ PORT: '0', HOST: '127.0.0.1', OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 's', ...extra }, { publicDir: tmp(t) });
+    const running = await startServer({ PORT: '0', HOST: '127.0.0.1', OVERRIDE_DATA_DIR: tmp(t), OVERRIDE_CONTENT_DIR: tmp(t), OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 's', ...extra }, { publicDir: tmp(t) });
     try {
       assert.match(running.url, /^http:\/\/127\.0\.0\.1:\d+$/);
       assert.equal((await fetch(`${running.url}/api/health`)).status, 200);
@@ -454,8 +456,8 @@ test('startServer resolves with a working player url, with and without an admin 
 });
 
 // ---- content editor wiring
-const makerEnv = { OVERRIDE_ADMIN_TOKEN: 'ops', OVERRIDE_MAKER_TOKENS: 'alice:s1' };
-const asAlice = { Authorization: 'Bearer s1' };
+const adminEnv = { OVERRIDE_ADMIN_PASSWORD: 'ops' };
+const asAdmin = { Authorization: 'Bearer ops' };
 const startGame = async url => {
   const r = await fetch(`${url}/api/start`, { method: 'POST', headers: json, body: '{}' });
   const view = await r.json();
@@ -464,71 +466,81 @@ const startGame = async url => {
 const startedEvent = (dir, id) => readJsonl(join(dir, 'test', 'sessions', `${id}.jsonl`)).find(e => e.type === 'session_started');
 
 test('content_publish_reaches_new_games', async t => {
-  const server = await boot(t, makerEnv);
-  const put = await fetch(`${server.adminUrl}/admin/content/banana-mystery`, { method: 'PUT', headers: { ...json, ...asAlice }, body: JSON.stringify({ edits: { 'copy.intro.lead': 'A new lead.' }, baseRev: 0 }) });
+  const server = await boot(t, adminEnv);
+  const put = await fetch(`${server.adminUrl}/admin/content/banana-mystery`, { method: 'PUT', headers: { ...json, ...asAdmin }, body: JSON.stringify({ edits: { 'copy.intro.lead': 'A new lead.' }, baseRev: 0 }) });
   assert.equal(put.status, 200);
   assert.equal((await put.json()).rev, 1);
   const { view, id } = await startGame(server.url);
   assert.equal(view.copy.intro.lead, 'A new lead.');
   const hash = startedEvent(server.dir, id).contentHash;
   assert.notEqual(hash, 'd891b333116d');
-  const list = await (await fetch(`${server.adminUrl}/admin/content`, { headers: asAlice })).json();
+  const list = await (await fetch(`${server.adminUrl}/admin/content`, { headers: asAdmin })).json();
   const info = list.cases.find(c => c.id === 'banana-mystery');
-  assert.equal(info.by, 'alice');
+  assert.equal(info.by, 'admin');
   assert.equal(info.rev, 1);
   assert.equal(info.contentHash, hash);
 });
 
 test('content_survives_restart', async t => {
-  const first = await boot(t, makerEnv);
-  await fetch(`${first.adminUrl}/admin/content/banana-mystery`, { method: 'PUT', headers: { ...json, ...asAlice }, body: JSON.stringify({ edits: { 'copy.intro.lead': 'Kept lead.' }, baseRev: 0 }) });
+  const first = await boot(t, adminEnv);
+  await fetch(`${first.adminUrl}/admin/content/banana-mystery`, { method: 'PUT', headers: { ...json, ...asAdmin }, body: JSON.stringify({ edits: { 'copy.intro.lead': 'Kept lead.' }, baseRev: 0 }) });
   await first.close();
-  const again = await startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: first.dir, OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 'secret-one', ...makerEnv }, { publicDir: tmp(t) });
+  const again = await startServer({ PORT: '0', OVERRIDE_ADMIN_PORT: '0', OVERRIDE_DATA_DIR: first.dir, OVERRIDE_CONTENT_DIR: first.contentDir, OVERRIDE_ENV: 'test', OVERRIDE_APP_COMMIT: 'test', OVERRIDE_SECRET: 'secret-one', ...adminEnv }, { publicDir: tmp(t) });
   t.after(() => again.close());
   assert.equal((await startGame(again.url)).view.copy.intro.lead, 'Kept lead.');
-  const detail = await (await fetch(`${again.adminUrl}/admin/content/banana-mystery`, { headers: asAlice })).json();
+  const detail = await (await fetch(`${again.adminUrl}/admin/content/banana-mystery`, { headers: asAdmin })).json();
   assert.equal(detail.rev, 1);
-  assert.equal(detail.history[0].by, 'alice');
-});
-
-test('maker_scope_end_to_end', async t => {
-  const server = await boot(t, makerEnv);
-  assert.equal((await fetch(`${server.adminUrl}/admin/health`, { headers: asAlice })).status, 403);
-  assert.equal((await fetch(`${server.adminUrl}/admin/health`, { headers: { Authorization: 'Bearer ops' } })).status, 200);
-  assert.equal((await fetch(`${server.adminUrl}/admin/content`, { headers: asAlice })).status, 200);
-  assert.equal((await fetch(`${server.adminUrl}/admin/content`, { headers: { Authorization: 'Bearer nope' } })).status, 401);
+  assert.equal(detail.history[0].by, 'admin');
 });
 
 test('admin_hosts_env', async t => {
-  const server = await boot(t, { ...makerEnv, OVERRIDE_ADMIN_HOSTS: ' X.test , ' });
+  const server = await boot(t, { ...adminEnv, OVERRIDE_ADMIN_HOSTS: ' X.test , ' });
   const get = host => rawGet(`${server.adminUrl}/admin/health`, { Host: host, Authorization: 'Bearer ops' });
   assert.equal((await get('x.test')).res.statusCode, 200);
   assert.equal((await get('y.test')).res.statusCode, 403);
 });
 
-test('maker_tokens_parse', () => {
-  assert.deepEqual(makerTokens({ OVERRIDE_MAKER_TOKENS: 'alice:s1,bob:s2' }), [{ name: 'alice', token: 's1' }, { name: 'bob', token: 's2' }]);
-  assert.deepEqual(makerTokens({}), []);
-  assert.deepEqual(makerTokens({ OVERRIDE_MAKER_TOKENS: '  ' }), []);
-  for (const bad of ['alice:s1,alice:s2', 'bad name:x', 'alice:', 'alice', 'a:s,b:s', 'admin:s1', 'alice:s1,admin:s2']) {
-    assert.throws(() => makerTokens({ OVERRIDE_MAKER_TOKENS: bad }), /OVERRIDE_MAKER_TOKENS/, bad);
-  }
-  assert.throws(() => makerTokens({ OVERRIDE_MAKER_TOKENS: 'alice:ops', OVERRIDE_ADMIN_TOKEN: 'ops' }), /OVERRIDE_MAKER_TOKENS/);
-  assert.deepEqual(adminHosts({ OVERRIDE_ADMIN_HOSTS: ' X.test, y.test ,' }), ['x.test', 'y.test']);
-  assert.deepEqual(adminHosts({}), []);
-});
-
-test('bad_maker_tokens_fail_startup', async t => {
-  await assert.rejects(boot(t, { OVERRIDE_ADMIN_TOKEN: 'ops', OVERRIDE_MAKER_TOKENS: 'alice:' }), /OVERRIDE_MAKER_TOKENS/);
-});
-
 test('content_publish_reaches_probe: the probe prompt is built from the current content at probe time', async t => {
-  const server = await liveServer(t, 5, { OVERRIDE_MAKER_TOKENS: 'alice:s1' });
+  const server = await liveServer(t, 5);
   const marker = 'Zebra-probe-marker question?';
-  const put = await fetch(`${server.adminUrl}/admin/content/banana-mystery`, { method: 'PUT', headers: { ...json, ...asAlice }, body: JSON.stringify({ edits: { 'parts.planner.quickQuestion': marker }, baseRev: 0 }) });
+  const put = await fetch(`${server.adminUrl}/admin/content/banana-mystery`, { method: 'PUT', headers: { ...json, Authorization: 'Bearer admin-token' }, body: JSON.stringify({ edits: { 'parts.planner.quickQuestion': marker }, baseRev: 0 }) });
   assert.equal(put.status, 200);
   const probe = await fetch(`${server.adminUrl}/admin/llm/probe`, { method: 'POST', headers: { ...json, Authorization: 'Bearer admin-token' }, body: JSON.stringify({ endpoint: 'a' }) });
   assert.equal(probe.status, 200);
   const traces = readJsonl(join(server.dir, 'test', 'traces', 'probes.jsonl'));
   assert.ok(traces.some(r => r.probe && JSON.stringify(r.request.messages).includes(marker)), 'the probe request carries the edited question');
+});
+
+test('admin_hosts_parse', () => {
+  assert.deepEqual(adminHosts({ OVERRIDE_ADMIN_HOSTS: ' X.test, y.test ,' }), ['x.test', 'y.test']);
+  assert.deepEqual(adminHosts({}), []);
+});
+
+test('csp_on_admin_pages: html pages carry the CSP header, scripts do not', async t => {
+  const server = await boot(t, adminEnv);
+  const get = path => fetch(`${server.adminUrl}${path}`);
+  const csp = (await get('/admin')).headers.get('content-security-policy');
+  assert.match(csp, /default-src 'none'/);
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.equal((await get('/admin/maker.html')).headers.get('content-security-policy'), csp);
+  assert.equal((await get('/admin/app.js')).headers.get('content-security-policy'), null);
+});
+
+test('probe_thunk_called_per_probe: the probe messages are built again for every probe', async t => {
+  const calls = [];
+  let n = 0;
+  const pageDir = tmp(t);
+  const srv = createAdmin({
+    token: 'admin-t', pageDir, dataDir: pageDir, content: { list: () => [] },
+    router: { snapshot: () => ({ active: 'a', pinned: false, inFlight: 0, queued: 0, maxInFlight: 200, endpoints: [] }), async probe(name, msgs) { calls.push(msgs); return { ok: true }; } },
+    investigations: { stats: () => ({}) }, registry: { render: () => '' },
+    probeMessages: () => { n++; return [{ role: 'user', content: 'a' }, { role: 'user', content: `b${n}` }]; },
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  t.after(() => { srv.close(); srv.closeAllConnections(); });
+  const url = `http://127.0.0.1:${srv.address().port}/admin/llm/probe`;
+  for (let i = 0; i < 2; i++) await fetch(url, { method: 'POST', headers: { ...json, Authorization: 'Bearer admin-t' }, body: JSON.stringify({ endpoint: 'a' }) });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0][1].content, 'b1');
+  assert.equal(calls[1][1].content, 'b2');
 });

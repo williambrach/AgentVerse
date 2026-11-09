@@ -5,6 +5,7 @@ import { MonkeyIdle, groveIdle, idleSpec, reskinIdle, type IdleSpec } from './mo
 import { sliceAtlas, type Frame } from './atlas';
 import { placeholderAtlas, ATLAS_DIMS } from './placeholder-art';
 import { worldFor, type WorldPack } from './worlds';
+import { plain } from './text.ts';
 import * as factoryFigures from './factory-figures';
 import { evidenceKey, type EvidenceMark } from './hall-layout';
 import type { Pose } from './factory-figures';
@@ -24,12 +25,12 @@ const groveCast: Character[] = ['Momo', 'Pip', 'Nori'].map((name, i) => ({
 
 function buildStops(world: WorldPack, cast: Character[], marks: Map<string, EvidenceMark> = new Map()): Record<string, Stop> {
   const stops: Record<string, Stop> = {
-    report: { ...(world.stops?.report ?? { x: 132, y: 276 }), title: 'Pick the roles', label: 'YOUR GUESS' },
-    briefing: { ...(world.stops?.briefing ?? { x: 244, y: 276 }), title: 'Read the case', label: 'START HERE' },
+    report: { ...(world.stops?.report ?? { x: 132, y: 276 }), title: plain('station.report.title'), label: plain('station.report.label') },
+    briefing: { ...(world.stops?.briefing ?? { x: 244, y: 276 }), title: plain('station.briefing.title'), label: plain('station.briefing.label') },
   };
-  cast.forEach((c, slot) => { stops[c.id] = { ...world.slots[slot], title: `Ask ${c.name}`, label: c.name.toUpperCase() }; });
+  cast.forEach((c, slot) => { stops[c.id] = { ...world.slots[slot], title: plain('station.ask', { name: c.name }), label: c.name.toUpperCase() }; });
   // Evidence spots are stops too: no name tag, the [E] prompt sits just above the item.
-  world.evidence?.forEach(e => { stops[evidenceKey(e.id)] = { x: e.x, y: e.y, title: `Examine ${marks.get(e.id)?.title ?? e.id}`, label: '', bare: true }; });
+  world.evidence?.forEach(e => { stops[evidenceKey(e.id)] = { x: e.x, y: e.y, title: plain('station.examine', { title: marks.get(e.id)?.title ?? e.id }), label: '', bare: true }; });
   return stops;
 }
 const keyOf = (world: WorldPack, cast: Character[]) => `${world.id}|${cast.map(c => c.id).join(',')}`;
@@ -430,7 +431,7 @@ export class Station extends Phaser.Scene {
     this.prompt = this.label(0, 0, '', 'station-prompt');
     this.prompt.hidden = true;
     this.promptKey = '';
-    this.game.canvas.setAttribute('aria-label', `${this.world.text.place} with ${this.cast.map(c => c.name).join(', ')} and your ${this.world.text.investigator}. Walk with WASD or the arrow keys, press E to talk, or use the destination buttons.`);
+    this.game.canvas.setAttribute('aria-label', plain('station.canvas', { place: this.world.text.place, names: this.cast.map(c => c.name).join(', '), investigator: this.world.text.investigator }));
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,E,SPACE', false) as typeof this.keys;
     this.input.keyboard!.removeCapture(['W', 'A', 'S', 'D', 'E', 'SPACE', 'UP', 'DOWN', 'LEFT', 'RIGHT']);
@@ -480,13 +481,13 @@ export class Station extends Phaser.Scene {
     this.marks = new Map(items.map(m => [m.id, m]));
     this.world.evidence?.forEach(e => {
       const stop = this.stops[evidenceKey(e.id)];
-      if (stop) stop.title = `Examine ${this.marks.get(e.id)?.title ?? e.id}`;
+      if (stop) stop.title = plain('station.examine', { title: this.marks.get(e.id)?.title ?? e.id });
       this.markers.get(e.id)?.setVisible(!this.marks.get(e.id)?.examined);
     });
     this.currentHint = '';
     // The prompt is cached per stop: a title that arrives while the detective stands at the item must reach it too.
     const prompt = this.prompt, shownStop = prompt && !prompt.hidden ? this.stops[this.promptKey] : undefined;
-    if (prompt && shownStop?.bare) prompt.textContent = `[E] ${shownStop.title}`;
+    if (prompt && shownStop?.bare) prompt.textContent = plain('station.prompt', { title: shownStop.title });
   }
 
   private figureImage(art: NonNullable<WorldPack['figures']>, sprite: string, pose: Pose, x: number, y: number) {
@@ -825,7 +826,7 @@ export class Station extends Phaser.Scene {
     this.shadow.setPosition(this.player.x, this.player.y + 1);
     if (this.shadowDepth !== this.player.y - 1) this.shadow.setDepth(this.shadowDepth = this.player.y - 1);
     const near = Object.entries(this.stops).find(([, p]) => Phaser.Math.Distance.Between(this.player.x, this.player.y, p.x, p.y) < 18);
-    const hint = near ? `E / SPACE · ${near[1].title}` : this.world.text.hint;
+    const hint = near ? plain('station.hint.near', { title: near[1].title }) : this.world.text.hint;
     if (hint !== this.currentHint) { this.currentHint = hint; this.onHint(hint); }
     const shown = Boolean(near && this.enabled && !this.typing());
     // The prompt sits on the stop's own name tag, never under the player, where it could land on a neighbour's tag.
@@ -837,7 +838,7 @@ export class Station extends Phaser.Scene {
       const tag = shown && !near![1].bare ? this.labels.get(promptKey) : undefined;
       if (shown) {
         const p = near![1];
-        this.prompt.textContent = `[E] ${p.title}`;
+        this.prompt.textContent = plain('station.prompt', { title: p.title });
         this.prompt.style.left = tag?.style.left ?? `${p.x / width * 100}%`;
         this.prompt.style.top = tag?.style.top ?? `${(p.y - this.lift()) / height * 100}%`;
         tag?.style.setProperty('visibility', 'hidden');
@@ -852,7 +853,7 @@ export function createStation(onArrival: (location: LocationId) => void, onHint:
   const first = windowLayout();
   const game = new Phaser.Game({ type: Phaser.AUTO, parent: 'station', width: first.width, height: first.height, backgroundColor: '#82a75e', pixelArt: true,
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }, physics: { default: 'arcade', arcade: { debug: false } }, audio: { noAudio: true }, scene: [scene], input: { keyboard: true }, autoFocus: false });
-  game.canvas.setAttribute('aria-label', 'Banana Grove with Momo, Pip, Nori and your monkey investigator. Walk with WASD or the arrow keys, press E to talk, or use the destination buttons.');
+  game.canvas.setAttribute('aria-label', plain('station.canvas', { place: worldFor('grove').text.place, names: groveCast.map(c => c.name).join(', '), investigator: worldFor('grove').text.investigator }));
   game.canvas.setAttribute('role', 'img');
   return scene;
 }

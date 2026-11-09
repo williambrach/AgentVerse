@@ -258,7 +258,7 @@ export class Investigation {
       caseId: this.kase.id,
       caseVersion: this.kase.version,
       contentHash: this.kase.contentHash,
-      promptVersion,
+      promptVersion: this.kase.prompts?.interviewVersion ?? promptVersion,
       sequence: state.revision + 1,
       timestamp: new Date(now).toISOString(),
       elapsedMs: now - Date.parse(state.startedAt),
@@ -758,7 +758,7 @@ export class Investigation {
       if (typeof text !== 'string' || !text) text = `${speaker.name} has nothing to add.`;
     }
     const paid = starting ? spend(s.economy, ['continue']) : null;
-    const event = this.log('chatter_line', { character: speaker.id, text, round, line, roundLines, provenance, threadPromptVersion, spend: paid });
+    const event = this.log('chatter_line', { character: speaker.id, text, round, line, roundLines, provenance, threadPromptVersion: this.kase.prompts?.threadVersion ?? threadPromptVersion, spend: paid });
     this.remember(speaker.id, event.eventId, reasoning);
     s.thread.push({ character: speaker.id, text, round, timestamp: event.timestamp });
     s.chatter = { round, pending: roundLines - line };

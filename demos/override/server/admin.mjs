@@ -2,7 +2,9 @@ import http from 'node:http';
 import { accessSync, constants, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { extname, join } from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { RequestError } from './session.mjs';
+import { ADMIN_PURPOSE, WindowCounter, adminKey, clientAddress, signToken, verifyToken } from './identity.mjs';
 import { readJsonBody, safeEqual, sendJson } from './http-util.mjs';
 import { diskFreeBytes } from './monitor-sources.mjs';
 import { ContentError } from './content.mjs';
@@ -40,14 +42,30 @@ function loadPage(dir) {
   return files;
 }
 
-export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = new URL('./admin/', import.meta.url), router = null, content = null, makers = [], investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {}, leaderboard = null, boardUrl = '' }) {
+export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = new URL('./admin/', import.meta.url), router = null, content = null, secret = randomBytes(32).toString('hex'), investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {}, leaderboard = null, boardUrl = '', trustProxy = false }) {
   if (typeof token !== 'string' || !token) throw new Error('An admin token is required.');
+  // `token` is the admin password. A Bearer header or a signed cookie both open the panel.
+  const key = adminKey(secret, token);
+  const COOKIE = 'override_admin';
+  const TTL_MS = 12 * 60 * 60_000;
+  const failures = new WindowCounter({ limit: 10, windowMs: 60_000 });
+  // Bearer guesses get their own, wider window: scripts poll with the password and may hold a stale one.
+  const bearerFailures = new WindowCounter({ limit: 60, windowMs: 60_000 });
+  const cookieOf = (req) => new RegExp(`(?:^|; )${COOKIE}=([^;]+)`).exec(req.headers.cookie || '')?.[1];
+  const setCookie = (req, res, value, maxAge) => {
+    res.setHeader('Set-Cookie', `${COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${(req.socket.encrypted || (trustProxy && String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https')) ? '; Secure' : ''}`);
+  };
   const actor = (req) => {
     const m = /^bearer (.+)$/i.exec(req.headers.authorization || '');
-    if (!m) return null;
-    let found = safeEqual(m[1], token) ? { by: 'admin', scope: 'all' } : null;
-    for (const mk of makers) if (safeEqual(m[1], mk.token) && !found) found = { by: mk.name, scope: 'content' };
-    return found;
+    if (m) return safeEqual(m[1], token) ? { by: 'admin', via: 'bearer' } : null;
+    return verifyToken(key, cookieOf(req), Date.now(), ADMIN_PURPOSE) ? { by: 'admin', via: 'cookie' } : null;
+  };
+  // Only cookie requests need this: a browser attaches cookies on its own, never a Bearer header.
+  const sameSite = (req) => {
+    const site = req.headers['sec-fetch-site'];
+    if (site !== undefined && site !== 'same-origin') return false;
+    const origin = req.headers.origin;
+    return origin === undefined || origin === `http://${req.headers.host}` || origin === `https://${req.headers.host}`;
   };
   // DNS-rebinding guard: only loopback host names (any port) plus explicit extras.
   const hostOk = (h) => { const n = String(h || '').toLowerCase().replace(/:\d+$/, ''); return ['127.0.0.1', 'localhost', '[::1]'].includes(n) || allowedHosts.includes(n); };
@@ -123,11 +141,16 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
   // /admin/content*: the maker routes. A ContentError keeps its own status and path.
   const contentRoute = async (req, who, id, sub) => {
     if (!content) throw new RequestError(409, 'Content editing is off.');
+    if (id === 'game' && sub && sub !== 'revert') throw new RequestError(409, 'Preview works on a case.');
     const method = req.method;
     const allowed = !id ? ['GET'] : !sub ? ['GET', 'PUT'] : ['POST'];
     if (!allowed.includes(method)) throw new RequestError(405, 'Method not allowed.');
     try {
-      if (!id) return { cases: content.list().map((c) => content.info(c.id)) };
+      if (!id) {
+        const cases = content.list().map((c) => content.info(c.id));
+        try { cases.push(content.info('game')); } catch (e) { if (!(e instanceof ContentError)) throw e; }
+        return { cases };
+      }
       const info = content.info(id);
       if (method === 'GET') return { ...info, mode: router ? 'live' : 'rehearsal', structure: content.structure(id), ...content.fields(id), history: content.history(id) };
       const body = await readJsonBody(req, MAX_CONTENT_BODY);
@@ -235,9 +258,42 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
       }
       const known = path === '/metrics' || path.startsWith('/admin/');
       if (!known) throw new RequestError(404, 'Not found.');
+      if (path === '/admin/login') {
+        if (req.method !== 'POST') throw new RequestError(405, 'Method not allowed.');
+        if (!sameSite(req)) throw new RequestError(403, 'Cross-site requests are not allowed.');
+        const body = await readJsonBody(req, MAX_BODY);
+        const ip = clientAddress(req, trustProxy);
+        const now = Date.now();
+        if (!failures.allowed(ip, now)) throw new RequestError(429, 'Too many attempts. Try again in a minute.');
+        if (typeof body.password !== 'string' || !safeEqual(body.password, token)) {
+          failures.add(ip, now);
+          throw new RequestError(401, 'Wrong password.');
+        }
+        setCookie(req, res, signToken(key, now + TTL_MS, ADMIN_PURPOSE), TTL_MS / 1000);
+        res.writeHead(204, { 'Cache-Control': 'no-store' });
+        return res.end();
+      }
+      if (path === '/admin/logout') {
+        if (req.method !== 'POST') throw new RequestError(405, 'Method not allowed.');
+        if (!sameSite(req)) throw new RequestError(403, 'Cross-site requests are not allowed.');
+        setCookie(req, res, '', 0);
+        res.writeHead(204, { 'Cache-Control': 'no-store' });
+        return res.end();
+      }
+      // A Bearer guess is a password guess: it is throttled, so it cannot sidestep the sign-in limit.
+      const guessing = /^bearer /i.test(req.headers.authorization || '');
+      const ip = clientAddress(req, trustProxy);
+      if (guessing && !bearerFailures.allowed(ip, Date.now())) throw new RequestError(429, 'Too many attempts. Try again in a minute.');
       const who = actor(req);
-      if (!who) throw new RequestError(401, 'Unauthorized.');
-      if (who.scope === 'content' && !(path === '/admin/content' || path.startsWith('/admin/content/'))) throw new RequestError(403, 'Maker tokens can only edit content.');
+      if (!who) {
+        if (guessing) bearerFailures.add(ip, Date.now());
+        throw new RequestError(401, 'Unauthorized.');
+      }
+      if (who.via === 'cookie' && req.method !== 'GET' && req.method !== 'HEAD' && !sameSite(req)) throw new RequestError(403, 'Cross-site requests are not allowed.');
+      if (path === '/admin/session') {
+        if (req.method !== 'GET') throw new RequestError(405, 'Method not allowed.');
+        return send(res, 200, { signedIn: true });
+      }
       if (path === '/metrics') {
         if (req.method !== 'GET') throw new RequestError(405, 'Method not allowed.');
         return send(res, 200, registry.render(), 'text/plain; version=0.0.4');

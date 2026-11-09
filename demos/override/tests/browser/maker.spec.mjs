@@ -23,8 +23,8 @@ test('maker_edits_publishes_and_restores', async ({ page }) => {
     const response = await page.goto('/admin/maker.html?case=banana-mystery');
     expect(response.headers()['content-security-policy']).toBeTruthy();
 
-    await page.locator('#token').fill('maker-e2e');
-    await page.locator('#save').click();
+    await page.locator('#password').fill('admin-e2e');
+    await page.locator('#signin').click();
     const lead = page.locator('textarea[data-path="copy.intro.lead"]');
     await expect(lead).toBeVisible({ timeout: 5000 });
     await lead.fill('E2E lead');
@@ -33,7 +33,7 @@ test('maker_edits_publishes_and_restores', async ({ page }) => {
     await expect(page.locator('#prompt')).toContainText('You play Momo');
 
     await page.locator('#publish').click();
-    await expect(page.locator('#publish-note')).toContainText('rev 1 by maker');
+    await expect(page.locator('#publish-note')).toContainText(/rev \d+ by admin/);
 
     const edited = await freshView();
     expect(edited.lead).toBe('E2E lead');

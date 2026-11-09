@@ -1,13 +1,12 @@
 import { test, expect } from '@playwright/test';
 
 const ADMIN = 'admin-e2e';
-const MAKER = 'maker-e2e';
 const CASE = 'banana-mystery';
 
-async function openMaker(page, token = MAKER) {
+async function openMaker(page, token = ADMIN) {
   await page.goto(`/admin/maker.html?case=${CASE}`);
-  await page.locator('#token').fill(token);
-  await page.locator('#save').click();
+  await page.locator('#password').fill(token);
+  await page.locator('#signin').click();
   await expect(page.locator('textarea[data-path="copy.intro.lead"]')).toBeVisible({ timeout: 5000 });
 }
 const nav = (page, key) => page.locator(`#sections .nav-item[data-section="${key}"]`);
@@ -38,12 +37,15 @@ test('editor_sidebar_sections', async ({ page }) => {
 test('editor_labels_and_hints', async ({ page }) => {
   await openMaker(page);
   const head = page.locator('.field').filter({ has: page.locator('textarea[data-path="copy.headline"]') });
-  await expect(head.locator('.field-label')).toHaveText('Headline');
+  // The label holds its text node first, then a small path span (set by maker-form.js).
+  const own = l => l.evaluate(n => n.firstChild.textContent);
+  expect(await own(head.locator('.field-label'))).toBe('Headline');
+  await expect(head.locator('.field-label .field-path')).toHaveText('copy.headline');
   await expect(head.locator('.field-label')).toHaveAttribute('title', 'copy.headline');
   expect((await head.locator('.field-hint').textContent()).trim().length).toBeGreaterThan(5);
   const lead = page.locator('.field').filter({ has: page.locator('textarea[data-path="copy.intro.lead"]') });
-  await expect(lead.locator('.field-label')).toHaveText('Intro lead');
-  const labels = await page.locator('#form [data-section="story"] .field-label').allTextContents();
+  expect(await own(lead.locator('.field-label'))).toBe('Intro lead');
+  const labels = await page.locator('#form [data-section="story"] .field-label').evaluateAll(els => els.map(e => e.firstChild.textContent));
   expect(labels.every(l => !l.includes('.'))).toBe(true);
   await nav(page, 'prompt').click();
   await expect(page.locator('.placeholders:visible')).toContainText('Name tags: {');

@@ -18,12 +18,12 @@ async function start({ router = null, store = true } = {}) {
   const content = store ? createContentStore({ cases: [kase], dataDir: mkdtempSync(join(tmpdir(), 'cont-')), worlds }) : null;
   const system = [];
   const srv = createAdmin({
-    token: T, makers: [{ name: 'alice', token: 'mk' }], content, router,
+    token: T, content, router,
     investigations: { stats: () => ({}) }, registry: { render: () => '' }, dataDir: '.', onSystem: (e) => system.push(e),
   });
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${srv.address().port}`;
-  const call = async (method, path, body, token = 'mk') => {
+  const call = async (method, path, body, token = T) => {
     const r = await fetch(base + path, { method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body) });
     return { status: r.status, json: await r.json() };
   };
@@ -52,7 +52,7 @@ test('publish_records_fields_not_text', async () => {
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.fields, ['copy.intro.lead']);
   const rec = a.system.find((e) => e.action === 'content_published');
-  assert.equal(rec.by, 'alice');
+  assert.equal(rec.by, 'admin');
   assert.deepEqual(rec.fields, ['copy.intro.lead']);
   assert.equal(JSON.stringify(a.system).includes('New lead'), false);
   assert.equal('edits' in rec, false);
@@ -62,7 +62,7 @@ test('publish_records_fields_not_text', async () => {
   assert.equal(a.system.filter((e) => e.action === 'content_published').length, 1);
   const rv = await a.call('POST', `/admin/content/${ID}/revert`, { rev: 0 });
   assert.equal(rv.status, 200);
-  assert.deepEqual(a.system.at(-1), { ...a.system.at(-1), action: 'content_reverted', by: 'alice', caseId: ID, revertOf: 0 });
+  assert.deepEqual(a.system.at(-1), { ...a.system.at(-1), action: 'content_reverted', by: 'admin', caseId: ID, revertOf: 0 });
   a.close();
 });
 
@@ -73,7 +73,7 @@ test('publish_stale_409', async () => {
   const r = await a.call('PUT', `/admin/content/${ID}`, body);
   assert.equal(r.status, 409);
   assert.equal(r.json.rev, 1);
-  assert.equal(r.json.by, 'alice');
+  assert.equal(r.json.by, 'admin');
   assert.ok(r.json.error);
   a.close();
 });
@@ -116,7 +116,7 @@ test('try_returns_answer_reasoning_provenance', async () => {
   assert.deepEqual(r.json, { answer: 'Hi', reasoning: 'r', provenance: { endpoint: 'a' } });
   assert.equal(calls[0].tag, 'maker_try');
   assert.equal(calls[0].sessionId, null);
-  assert.deepEqual(a.system.at(-1), { ...a.system.at(-1), action: 'content_try', by: 'alice', characterId: 'momo', ok: true });
+  assert.deepEqual(a.system.at(-1), { ...a.system.at(-1), action: 'content_try', by: 'admin', characterId: 'momo', ok: true });
   assert.equal((await a.call('GET', `/admin/content/${ID}`)).json.mode, 'live');
   a.close();
 });

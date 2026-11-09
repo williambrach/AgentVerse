@@ -93,5 +93,7 @@ test('case_board_faces_per_world', () => {
 test('no pad stub in the scene', () => {
   const src = readFileSync(new URL('../client/station.ts', import.meta.url), 'utf8');
   assert.ok(!/[?&]pad|get\('pad'\)/.test(src));
-  assert.ok(src.includes("title: 'Pick the roles'"));
+  assert.ok(src.includes("station.report.title"));
+  const text = JSON.parse(readFileSync(new URL('../client/text/station.json', import.meta.url), 'utf8'));
+  assert.equal(text['station.report.title'], 'Pick the roles');
 });

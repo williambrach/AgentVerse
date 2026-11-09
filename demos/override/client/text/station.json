@@ -1,0 +1,11 @@
+{
+  "station.report.title": "Pick the roles",
+  "station.report.label": "YOUR GUESS",
+  "station.briefing.title": "Read the case",
+  "station.briefing.label": "START HERE",
+  "station.ask": "Ask {name}",
+  "station.examine": "Examine {title}",
+  "station.prompt": "[E] {title}",
+  "station.hint.near": "E / SPACE · {title}",
+  "station.canvas": "{place} with {names} and your {investigator}. Walk with WASD or the arrow keys, press E to talk, or use the destination buttons."
+}

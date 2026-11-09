@@ -3,6 +3,7 @@ import type { Character, Inspection, Turn, CaseCopy, EvidenceCard } from './type
 import { noThoughtBlock, reasoningBlock } from './tools.ts';
 import { escape as esc, heading } from './html.ts';
 import { wordTokens } from './talk-ui.ts';
+import { plain, t } from './text.ts';
 
 const ARROW = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg>';
 const COIN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg>';
@@ -55,15 +56,15 @@ export interface BriefingView {
 const price = (label: string): string => label.match(/^\d+/)?.[0] ?? label;
 
 /** The question line as in the design: `You asked: “…”`. */
-const asked = (q: unknown): string => `You asked: “${esc(q)}”`;
+const asked = (q: unknown): string => t('dialogue.asked', { question: q });
 
 export function briefingPanel(v: BriefingView): string {
   const b = v.copy.briefing;
-  return `${heading('THE CASE / 2–3 MINUTES', esc(b.title), esc(b.description))}
-    <div class="notebook-content briefing-content"><div class="briefing-note"><span class="eyebrow">YOUR QUESTION</span><p>${esc(b.question)}</p><small>${esc(b.hint)}</small></div>
-    ${v.steps ?? `<ol class="task-list"><li><b>Ask ${esc(v.cast)} ${esc(v.many)}</b><span>One quick question each.</span></li><li class="tool-step"><b>Use your Arbiter tools</b><span>Optional. They cost coins and sit in the left rail.</span>${v.guide}</li><li><b>Make your verdict</b><span>${v.verdict !== undefined ? esc(v.verdict) : `Pick a role for each ${esc(v.one)}. Then see what happened.`}</span></li></ol>`}
-    <button class="primary-button" data-go="${esc(v.firstId)}">Ask ${esc(v.firstName)} ${ARROW}</button>
-    <div class="subtle-note">${v.howTo !== undefined ? esc(v.howTo) : `Walk with WASD or the arrow keys and press E next to ${esc(v.oneWithArticle || `a ${v.one}`)} to talk. The cards on the left open a page straight away.`}</div></div>`;
+  return `${heading(t('dialogue.briefing.kicker'), esc(b.title), esc(b.description))}
+    <div class="notebook-content briefing-content"><div class="briefing-note"><span class="eyebrow">${t('dialogue.briefing.question')}</span><p>${esc(b.question)}</p><small>${esc(b.hint)}</small></div>
+    ${v.steps ?? `<ol class="task-list"><li><b>${t('dialogue.briefing.ask.title', { cast: v.cast, many: v.many })}</b><span>${t('dialogue.briefing.ask.body')}</span></li><li class="tool-step"><b>${t('dialogue.briefing.tools.title')}</b><span>${t('dialogue.briefing.tools.body')}</span>${v.guide}</li><li><b>${t('dialogue.briefing.verdict.title')}</b><span>${v.verdict !== undefined ? esc(v.verdict) : t('dialogue.briefing.verdict.body', { one: v.one })}</span></li></ol>`}
+    <button class="primary-button" data-go="${esc(v.firstId)}">${t('dialogue.briefing.go', { name: v.firstName })} ${ARROW}</button>
+    <div class="subtle-note">${v.howTo !== undefined ? esc(v.howTo) : t('dialogue.briefing.howTo', { article: v.oneWithArticle || plain('dialogue.briefing.article', { one: v.one }) })}</div></div>`;
 }
 
 /** One authored answer with its quote tools; the line under picking shows word buttons. */
@@ -71,7 +72,7 @@ function talkLine(v: InterviewView, id: string, text: string): string {
   const pick = v.talk?.pick;
   const sid = esc(id);
   if (!pick || pick.line !== id) {
-    return `<p class="talk-line" data-line="${sid}">${esc(text)}</p><div class="line-tools"><button type="button" data-pick-line="${sid}">Pick words</button><button type="button" data-save-quote="${sid}">Save quote</button></div>`;
+    return `<p class="talk-line" data-line="${sid}">${esc(text)}</p><div class="line-tools"><button type="button" data-pick-line="${sid}">${t('dialogue.line.pick')}</button><button type="button" data-save-quote="${sid}">${t('dialogue.line.saveQuote')}</button></div>`;
   }
   const toks = wordTokens(text);
   let body = '', at = 0;
@@ -83,7 +84,7 @@ function talkLine(v: InterviewView, id: string, text: string): string {
   }
   body += esc(text.slice(at));
   const ranged = lo >= 0;
-  return `<p class="talk-line" data-line="${sid}">${body}</p><div class="line-tools"><button type="button" data-save-quote="${sid}">${ranged ? 'Save excerpt' : 'Save whole line'}</button><button type="button" data-ask-about="${sid}"${ranged ? '' : ' disabled'}>What did you mean?</button><button type="button" data-pick-cancel>Cancel</button></div>`;
+  return `<p class="talk-line" data-line="${sid}">${body}</p><div class="line-tools"><button type="button" data-save-quote="${sid}">${ranged ? t('dialogue.line.saveExcerpt') : t('dialogue.line.saveWhole')}</button><button type="button" data-ask-about="${sid}"${ranged ? '' : ' disabled'}>${t('dialogue.line.mean')}</button><button type="button" data-pick-cancel>${t('dialogue.line.cancel')}</button></div>`;
 }
 
 const topicChips = (v: InterviewView): string => `<div class="topic-chips">${v.talk!.topics.map(t => {
@@ -103,23 +104,23 @@ export function interviewPanel(v: InterviewView): string {
     ...v.inspections.map(n => ({ at: n.timestamp, order: 1, html: reasoningBlock(n, character.name) })),
   ].sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.order - b.order);
   const waiting = pending
-    ? `<div class="speech investigator latest" data-motion-key="question-${turns.length}"><p>${asked(v.draft)}</p></div><div class="speech character waiting latest" data-motion-key="waiting"><span>${name}</span><p class="thinking">Thinking<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></p></div>`
+    ? `<div class="speech investigator latest" data-motion-key="question-${turns.length}"><p>${asked(v.draft)}</p></div><div class="speech character waiting latest" data-motion-key="waiting"><span>${name}</span><p class="thinking">${t('dialogue.thinking')}<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></p></div>`
     : '';
   const blocked = busy || !!v.askOff;
   const hasEconomy = v.askLabel !== null && v.askLabel !== undefined;
-  const form = v.closed ? '<div class="subtle-note">This conversation is saved in your session export.</div>' : `<form class="interview-compose" id="interview-form">
-    ${v.talk ? topicChips(v) : !turns.length ? `<button class="quick-question" type="button" data-quick-question="${esc(character.quickQuestion)}" ${busy ? 'disabled' : ''}><small>QUICK QUESTION · TAP TO ASK</small><span>${esc(character.quickQuestion)} ${ARROW}</span></button>` : ''}
-    <label class="sr-only" for="question">Your question for ${esc(character.name)}</label>
-    <div class="compose-row"><textarea id="question" name="question" rows="1" minlength="3" maxlength="1200" placeholder="${turns.length ? 'Ask a follow-up…' : 'Or type your own question…'}" required ${busy ? 'disabled' : ''}>${esc(v.draft)}</textarea>
-    <button type="submit" class="primary-button ask-button" ${hasEconomy ? `aria-describedby="tip-ask${v.askOff ? ' ask-off' : ''}"` : ''} ${blocked ? 'disabled' : ''}><span>${busy ? 'Thinking…' : 'Ask'}</span>${hasEconomy ? `<span class="coin-price"${busy || v.askOff ? ' hidden' : ''}>${COIN}<span class="tool-chip" data-tool="ask">${esc(v.askOff || price(v.askLabel!))}</span></span>` : ''}</button></div>
+  const form = v.closed ? `<div class="subtle-note">${t('dialogue.saved')}</div>` : `<form class="interview-compose" id="interview-form">
+    ${v.talk ? topicChips(v) : !turns.length ? `<button class="quick-question" type="button" data-quick-question="${esc(character.quickQuestion)}" ${busy ? 'disabled' : ''}><small>${t('dialogue.quick')}</small><span>${esc(character.quickQuestion)} ${ARROW}</span></button>` : ''}
+    <label class="sr-only" for="question">${t('dialogue.questionFor', { name: character.name })}</label>
+    <div class="compose-row"><textarea id="question" name="question" rows="1" minlength="3" maxlength="1200" placeholder="${turns.length ? t('dialogue.placeholder.followUp') : t('dialogue.placeholder.first')}" required ${busy ? 'disabled' : ''}>${esc(v.draft)}</textarea>
+    <button type="submit" class="primary-button ask-button" ${hasEconomy ? `aria-describedby="tip-ask${v.askOff ? ' ask-off' : ''}"` : ''} ${blocked ? 'disabled' : ''}><span>${busy ? t('dialogue.thinkingButton') : t('dialogue.ask')}</span>${hasEconomy ? `<span class="coin-price"${busy || v.askOff ? ' hidden' : ''}>${COIN}<span class="tool-chip" data-tool="ask">${esc(v.askOff || price(v.askLabel!))}</span></span>` : ''}</button></div>
     ${hasEconomy && v.askOff ? `<p class="ask-off" id="ask-off" role="status">${esc(v.askOff)}</p>` : ''}
-    <div class="compose-bottom"><small>Short answers. Curious ${esc(v.many)}.</small>
+    <div class="compose-bottom"><small>${t('dialogue.curious', { many: v.many })}</small>
     ${hasEconomy ? `<span class="tool-hint sr-only" id="tip-ask">${esc(v.hint)}</span>` : ''}
-    ${turns.length ? `<button class="secondary-button next-monkey" type="button" data-go="${esc(v.next?.id || 'report')}" ${busy ? 'disabled' : ''}>${v.next ? `Next: ask ${esc(v.next.name)}` : 'Make your verdict'} ${ARROW}</button>` : ''}</div></form>`;
-  return `<section class="dialogue" aria-label="Conversation with ${esc(character.name)}">
+    ${turns.length ? `<button class="secondary-button next-monkey" type="button" data-go="${esc(v.next?.id || 'report')}" ${busy ? 'disabled' : ''}>${v.next ? t('dialogue.next', { name: v.next.name }) : t('dialogue.verdict')} ${ARROW}</button>` : ''}</div></form>`;
+  return `<section class="dialogue" aria-label="${t('dialogue.aria.conversation', { name: character.name })}">
     <div class="speaker-tag"><b>${name}</b><span>${esc(character.role)}</span></div>
     <div class="portrait dialogue-portrait ${esc(v.faceClass)}"><span class="pixel-person"></span></div>
-    <div class="dialogue-body"><div class="interview-transcript" id="transcript" role="log" aria-label="Interview transcript" aria-live="polite">${intro}${items.map(i => i.html).join('')}${v.noThought ? noThoughtBlock(character.name, turns.length) : ''}${waiting}</div>
+    <div class="dialogue-body"><div class="interview-transcript" id="transcript" role="log" aria-label="${t('dialogue.aria.transcript')}" aria-live="polite">${intro}${items.map(i => i.html).join('')}${v.noThought ? noThoughtBlock(character.name, turns.length) : ''}${waiting}</div>
     ${form}</div></section>`;
 }
 
@@ -127,6 +128,6 @@ export function interviewPanel(v: InterviewView): string {
 export function evidencePanel(cards: EvidenceCard[], focusId: string | null, total: number): string {
   const body = cards.length
     ? `<div class="evidence-list">${[...cards].reverse().map(c => `<article class="evidence-card${c.id === focusId ? ' focus open' : ''}" data-evidence="${esc(c.id)}"${c.id === focusId ? ' aria-current="true"' : ''}><img class="evidence-prop" src="/assets/department/props/${encodeURIComponent(c.id)}.png" width="48" height="48" alt=""><div><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></div></article>`).join('')}</div>`
-    : '<div class="subtle-note evidence-empty">Nothing examined yet. Walk up to a yellow marker and press E.</div>';
-  return `${heading('THE EVIDENCE', 'Evidence', `${cards.length} of ${total} examined`)}<div class="notebook-content evidence-content">${body}</div>`;
+    : `<div class="subtle-note evidence-empty">${t('dialogue.evidence.empty')}</div>`;
+  return `${heading(t('dialogue.evidence.kicker'), t('dialogue.evidence.title'), t('dialogue.evidence.count', { shown: cards.length, total }))}<div class="notebook-content evidence-content">${body}</div>`;
 }
