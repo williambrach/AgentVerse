@@ -1,4 +1,6 @@
-// Pure helpers for the factory floor: static pose images, no animation. No Phaser, no DOM.
+// Pure helpers for the pose-image figures (factory, department, renaissance): urls, boxes, poses. No Phaser, no DOM.
+// Their motion lives in figure-motion.ts.
+import type { Drawn } from './figure-motion';
 
 export type Pose = 'listening' | 'speaking' | 'thinking';
 
@@ -12,8 +14,11 @@ export interface FigureArt {
   scale: number;
   density: number;
   labelLift: number;
-  /** Walk-cycle frames `<detective>-walk-<i>.png`; absent: the detective only swaps poses. */
+  /** Walk-cycle frames `<detective>-walk-<i>.png`; absent: the detective hops in its still pose. */
   walkFrames?: number;
+  /** Drawn loops `<sprite>-idle-<i>.png` (every sprite) and `<sprite>-talk-<i>.png` (count by sprite);
+   * absent: the still poses breathe and bob in code. */
+  loops?: { idle: number; talk: Record<string, number> };
   /** Names of the two desk props at the stops; absent: case-folder and notebook. */
   stopProps?: { briefing: string; report: string };
 }
@@ -26,9 +31,17 @@ export function walkFrameUrl(art: FigureArt, i: number): string {
   return `${art.base}/${art.detective}-walk-${i}.png`;
 }
 
-/** Which walk frame shows after `elapsedMs` of walking: one frame per 120 ms. */
-export function walkFrameAt(frames: number, elapsedMs: number): number {
-  return Math.floor(elapsedMs / 120) % frames;
+export function loopUrl(art: FigureArt, sprite: string, kind: 'idle' | 'talk', i: number): string {
+  return `${art.base}/${sprite}-${kind}-${i}.png`;
+}
+
+/** The drawn frames one sprite has; the walk cycle belongs to the detective alone. */
+export function drawnOf(art: FigureArt, sprite: string): Drawn {
+  return {
+    idle: art.loops?.idle ?? 0,
+    talk: art.loops?.talk[sprite] ?? 0,
+    walk: sprite === art.detective ? art.walkFrames ?? 0 : 0,
+  };
 }
 
 export function poseUrl(art: FigureArt, sprite: string, pose: Pose): string {

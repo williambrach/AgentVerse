@@ -16,7 +16,7 @@ export interface WorldPack {
   slots: SlotPoint[];
   /** Measured art only: on-screen height of the sheet's tallest cast frame and of the investigator, in px. */
   heights?: { cast: number; investigator: number };
-  /** Static-pose figures (factory): one image per pose, drawn at figures.scale. */
+  /** Pose-image figures (factory, department, renaissance): one image per pose, drawn at figures.scale and moved by figure-motion.ts. */
   figures?: FigureArt;
   /** Factory floor: props by bottom-centre point, and the exit door's foot. */
   floor?: { props: FloorProp[]; exit: { x: number; y: number } };
@@ -137,12 +137,14 @@ const renaissance: WorldPack = {
     props: '/assets/renaissance/props',
     sprites: { ottavio: 'wizard', matteo: 'inventor', beatrice: 'noble', bruno: 'guard', agnese: 'apothecary' },
     detective: 'scout',
-    frame: { w: 125, h: 188 },
-    anchor: { x: 62, y: 182 },
+    // Frames are registered on the head column and the feet line (art/renaissance/cut.py), the head at the frame's centre.
+    frame: { w: 132, h: 188 },
+    anchor: { x: 66, y: 185 },
     scale: 1 / 3,
     density: 3,
     labelLift: 66,
     walkFrames: 4,
+    loops: { idle: 4, talk: { wizard: 1, inventor: 1, noble: 2, guard: 1, apothecary: 2, scout: 1 } },
     stopProps: { briefing: 'scroll', report: 'seal' },
   },
   backdrop: { url: '/assets/renaissance/town-square.png', width: 1536, height: 1024, scale: 1 / 3, x: -16, y: 0, fill: '#2a2018' },

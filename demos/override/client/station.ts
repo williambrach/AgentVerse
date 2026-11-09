@@ -6,6 +6,7 @@ import { sliceAtlas, type Frame } from './atlas';
 import { placeholderAtlas, ATLAS_DIMS } from './placeholder-art';
 import { worldFor, type WorldPack } from './worlds';
 import * as factoryFigures from './factory-figures';
+import * as motion from './figure-motion';
 import { evidenceKey, type EvidenceMark } from './hall-layout';
 import type { Pose } from './factory-figures';
 import { hueShift, faceSheetPlan, SHEET_CAST } from './recolor';
@@ -38,6 +39,7 @@ function artKeys(world: WorldPack): Record<ArtKind, string> {
   return { cast: `${world.id}-cast`, idle: `${world.id}-idle`, walk: `${world.id}-walk`, props: `${world.id}-props` };
 }
 const walkKey = (sprite: string, i: number) => `factory-${sprite}-walk-${i}`;
+const loopKey = (sprite: string, kind: 'idle' | 'talk', i: number) => `factory-${sprite}-${kind}-${i}`;
 const poses: Pose[] = ['listening', 'speaking', 'thinking'];
 const figureKey = (sprite: string, pose: Pose) => `factory-${sprite}-${pose}`;
 const width = WORLD_WIDTH;
@@ -110,13 +112,14 @@ export class Station extends Phaser.Scene {
   private recolorSources = new Map<string, unknown>();
   // Blob URLs of the recoloured face sheets, by world and cast index; kept per world+cast and revoked when replaced.
   private faceSheets = new Map<string, { key: string; url: string }>();
-  // Factory worlds (world.figures): one static image per pose, swapped on think/speak/detective; nothing here cycles on its own.
-  private figs = new Map<string, { img: Phaser.GameObjects.Image; sprite: string; shadow: Phaser.GameObjects.Ellipse; label: HTMLSpanElement }>();
+  // Pose-image worlds (world.figures): the pose follows think/speak/detective; figure-motion.ts moves it every frame.
+  // walkFrom: set while the figure walks off to the exit; its tween moves it then.
+  private figs = new Map<string, { img: Phaser.GameObjects.Image; sprite: string; shadow: Phaser.GameObjects.Ellipse; label: HTMLSpanElement; foot: Point; seed: number; pose: Pose; poseSince: number; walkFrom?: Point }>();
   private detectiveImg?: Phaser.GameObjects.Image;
   private detectiveMarker?: HTMLSpanElement;
   private detectivePose: Pose = 'listening';
-  private walkMs = 0;
-  private walkShown = false;
+  private detectivePoseSince = 0;
+  private stride: motion.Stride = motion.STANDING;
   private thinkingId: string | null = null;
   private speakingId: string | null = null;
   private speakTimer?: ReturnType<typeof setTimeout>;
@@ -194,7 +197,7 @@ export class Station extends Phaser.Scene {
     this.detectiveMarker = undefined;
     this.thinkingId = null;
     this.speakingId = null;
-    this.detectivePose = 'listening'; this.walkMs = 0; this.walkShown = false;
+    this.detectivePose = 'listening'; this.detectivePoseSince = 0; this.stride = motion.STANDING;
   }
 
   preload() {
@@ -203,6 +206,9 @@ export class Station extends Phaser.Scene {
       // Factory art is plain files, loaded by key; there is no placeholder or recolour path.
       for (const sprite of [...Object.values(art.sprites), art.detective]) {
         for (const pose of poses) this.load.image(figureKey(sprite, pose), factoryFigures.poseUrl(art, sprite, pose));
+        const drawn = factoryFigures.drawnOf(art, sprite);
+        for (let i = 0; i < drawn.idle; i++) this.load.image(loopKey(sprite, 'idle', i), factoryFigures.loopUrl(art, sprite, 'idle', i));
+        for (let i = 0; i < drawn.talk; i++) this.load.image(loopKey(sprite, 'talk', i), factoryFigures.loopUrl(art, sprite, 'talk', i));
       }
       for (let i = 0; i < (art.walkFrames ?? 0); i++) this.load.image(walkKey(art.detective, i), factoryFigures.walkFrameUrl(art, i));
       this.world.floor?.props.forEach(p => this.load.image(`factory-prop-${p.id}`, factoryFigures.propUrl(art, p.id)));
@@ -500,8 +506,38 @@ export class Station extends Phaser.Scene {
     const label = this.label(p.x, p.y - art.labelLift, text);
     label.dataset.figure = id;
     label.dataset.pose = 'listening';
-    this.figs.set(id, { img, sprite, shadow, label });
+    this.figs.set(id, { img, sprite, shadow, label, foot: { x: p.x, y: p.y }, seed: motion.seedOf(id), pose: 'listening', poseSince: -motion.POP_MS });
     this.labels.set(id, label);
+  }
+
+  /** The texture a look names for one sprite. */
+  private lookKey(sprite: string, look: motion.Look): string {
+    const t = look.texture;
+    if (t.kind === 'pose') return figureKey(sprite, t.pose);
+    if (t.kind === 'walk') return walkKey(sprite, t.frame);
+    return loopKey(sprite, t.kind, t.frame);
+  }
+
+  /** Put a look on a figure standing at foot (x, y): whole canvas pixels of stretch and lift, leaning about the feet. */
+  private wear(img: Phaser.GameObjects.Image, sprite: string, look: motion.Look, x: number, y: number) {
+    const art = this.world.figures!;
+    const key = this.lookKey(sprite, look);
+    if (img.texture.key !== key) img.setTexture(key);
+    const tall = art.frame.h * art.scale * art.density;
+    img.setScale(art.scale, art.scale * (1 + look.stretch / tall));
+    img.setPosition(x, y - look.lift / art.density);
+    img.setAngle(img.flipX ? -look.lean : look.lean);
+  }
+
+  /** Every standing figure's look for this frame; still poses under reduced motion. */
+  private animateFigures(time: number) {
+    const art = this.world.figures;
+    if (!art) return;
+    this.figs.forEach(f => {
+      if (f.walkFrom) return;
+      const look = reducedMotion.matches ? motion.stillLook(f.pose) : motion.standLook(f.pose, time, f.seed, time - f.poseSince, factoryFigures.drawnOf(art, f.sprite));
+      this.wear(f.img, f.sprite, look, f.foot.x, f.foot.y);
+    });
   }
 
   private addDetective(art: NonNullable<WorldPack['figures']>) {
@@ -516,19 +552,22 @@ export class Station extends Phaser.Scene {
     this.applyPoses();
   }
 
-  /** Each figure shows the pose the shared state gives it; poses change only through think/speak/detective. */
+  /** Each figure takes the pose the shared state gives it; poses change only through think/speak/detective.
+   * A change starts the pose pop; the next frame draws it (animateFigures and update). */
   private applyPoses() {
     const art = this.world.figures;
     if (!art) return;
     const state = { thinking: this.thinkingId, speaking: this.speakingId, typing: false };
+    const now = this.time?.now ?? 0;
     this.figs.forEach((f, id) => {
       const pose = factoryFigures.poseFor(state, id);
-      if (f.label.dataset.pose === pose) return;
-      f.img.setTexture(figureKey(f.sprite, pose));
+      if (f.pose === pose) return;
+      f.pose = pose;
+      f.poseSince = now;
       f.label.dataset.pose = pose;
     });
     if (this.detectiveImg && this.detectiveMarker && this.detectiveMarker.dataset.pose !== this.detectivePose) {
-      this.detectiveImg.setTexture(figureKey(art.detective, this.detectivePose));
+      this.detectivePoseSince = now;
       this.detectiveMarker.dataset.pose = this.detectivePose;
     }
   }
@@ -554,19 +593,27 @@ export class Station extends Phaser.Scene {
     this.applyPoses();
   }
 
-  /** The figure walks to the floor's exit, then it and its tag are gone. Works while covered: the loop wakes for the walk. */
+  /** The figure walks to the floor's exit, stepping as it goes, then it and its tag are gone. Works while covered: the loop wakes for the walk. */
   escape(id: string): Promise<void> {
-    const f = this.figs.get(id), exit = this.world.floor?.exit;
-    if (!f || !exit) return Promise.resolve();
+    const f = this.figs.get(id), exit = this.world.floor?.exit, art = this.world.figures;
+    if (!f || !exit || !art) return Promise.resolve();
     f.label.hidden = true;
     f.shadow.setVisible(false);
-    const done = () => { f.img.setVisible(false); if (this.covered) this.scheduleSleep(); };
-    if (reducedMotion.matches) { f.img.setPosition(exit.x, exit.y); done(); return Promise.resolve(); }
+    const from = f.walkFrom = { ...f.foot };
+    const done = () => { f.img.setPosition(exit.x, exit.y).setVisible(false); if (this.covered) this.scheduleSleep(); };
+    if (reducedMotion.matches) { done(); return Promise.resolve(); }
     this.cancelSleep();
     this.game.loop.wake();
+    f.img.setFlipX(exit.x < from.x);
+    const at = { x: from.x, y: from.y };
     return new Promise<void>(resolve => {
-      this.tweens.add({ targets: f.img, x: exit.x, y: exit.y, duration: 1400, ease: 'Sine.easeInOut',
-        onUpdate: () => f.img.setDepth(f.img.y), onComplete: () => { done(); resolve(); } });
+      this.tweens.add({ targets: at, x: exit.x, y: exit.y, duration: 1400, ease: 'Sine.easeInOut',
+        onUpdate: () => {
+          const look = motion.walkLook(Math.hypot(at.x - from.x, at.y - from.y), 'listening', factoryFigures.drawnOf(art, f.sprite));
+          this.wear(f.img, f.sprite, look, at.x, at.y);
+          f.img.setDepth(at.y);
+        },
+        onComplete: () => { done(); resolve(); } });
     });
   }
 
@@ -759,6 +806,7 @@ export class Station extends Phaser.Scene {
       if (!this.created) return; // create() applies it after its first render
       this.npcs.forEach(npc => npc.reset());
       if (this.player) this.walk?.reset(this.player.x, this.player.y);
+      this.stride = motion.STANDING;
       this.scheduleSleep();
     } else {
       this.cancelSleep();
@@ -787,6 +835,7 @@ export class Station extends Phaser.Scene {
       this.lastX = this.player.x; this.lastY = this.player.y; this.moving = false;
       this.direction = 'down';
       this.walk?.reset(this.player.x, this.player.y);
+      this.stride = motion.STANDING;
     }
   }
   update(time: number, delta: number) {
@@ -800,26 +849,24 @@ export class Station extends Phaser.Scene {
       if (dx || dy) { body.setVelocity(dx, dy).velocity.normalize().scale(120); this.direction = Math.abs(dx) > Math.abs(dy) ? dx > 0 ? 'right' : 'left' : dy > 0 ? 'down' : 'up'; }
     }
     const moved = Math.abs(this.player.x - this.lastX) + Math.abs(this.player.y - this.lastY) > .01;
+    const traveled = Math.hypot(this.player.x - this.lastX, this.player.y - this.lastY);
     this.lastX = this.player.x; this.lastY = this.player.y;
     if (moved && !this.moving) this.onWalk();
     this.moving = moved;
     this.walk?.update(this.player.x, this.player.y, this.direction, Boolean(dx || dy), reducedMotion.matches, delta);
     if (this.detectiveImg) {
+      const art = this.world.figures!;
       if (this.direction === 'left' || this.direction === 'right') this.facing = this.direction === 'left';
-      this.detectiveImg.setPosition(this.player.x, this.player.y).setFlipX(this.facing).setDepth(this.player.y);
-      const frames = this.world.figures?.walkFrames ?? 0;
-      if (frames > 0) {
-        const art = this.world.figures!;
-        if (moved && !reducedMotion.matches) {
-          this.walkMs += delta;
-          this.detectiveImg.setTexture(walkKey(art.detective, factoryFigures.walkFrameAt(frames, this.walkMs)));
-          this.walkShown = true;
-        } else if (this.walkShown) {
-          this.walkMs = 0; this.walkShown = false;
-          this.detectiveImg.setTexture(figureKey(art.detective, this.detectivePose));
-        }
-      }
+      // The stride survives render frames without a physics step, so a 120 Hz screen does not flicker between walk and stand.
+      this.stride = motion.strideNext(this.stride, traveled, Boolean(dx || dy) && !reducedMotion.matches, delta);
+      const drawn = factoryFigures.drawnOf(art, art.detective);
+      const look = reducedMotion.matches ? motion.stillLook(this.detectivePose)
+        : this.stride.walking ? motion.walkLook(this.stride.distance, this.detectivePose, drawn)
+        : motion.standLook(this.detectivePose, time, motion.seedOf('detective'), time - this.detectivePoseSince, drawn);
+      this.detectiveImg.setFlipX(this.facing).setDepth(this.player.y);
+      this.wear(this.detectiveImg, art.detective, look, this.player.x, this.player.y);
     }
+    this.animateFigures(time);
     this.npcs.forEach(npc => npc.update(delta, this.enabled, reducedMotion.matches,
       Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 54));
     this.shadow.setPosition(this.player.x, this.player.y + 1);
