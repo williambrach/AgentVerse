@@ -1,4 +1,4 @@
-import type { FigureArt } from './factory-figures.ts';
+import type { FigureArt, WalkSheet } from './factory-figures.ts';
 import type { Walk } from './hall-layout.ts';
 
 export type SlotPoint = { x: number; y: number };
@@ -96,6 +96,21 @@ const factory: WorldPack = {
   },
 };
 
+// The detective's walk (art request D1): the supplied 4 x 2 sheet, drawn as delivered. Measured on the art
+// (alpha >= 128): her head column is x 202 in every cell and her shoes end at y 470..476, so the pivot is
+// (207, 477), which puts head and feet where the still poses have them (head 4 px left of the foot point,
+// shoes 2 px above it). Scale: the still poses are 352 px tall and the walk 413..429 (head width 120 vs
+// 146..148), so 352/429 of the pose scale. Known art faults: see art/requests/department.md, D1.
+const departmentWalk: WalkSheet = {
+  url: '/assets/department/characters/player-walk.png',
+  cell: { w: 384, h: 512 },
+  columns: 4,
+  frames: 8,
+  pivot: { x: 207, y: 477 },
+  scale: (1 / 6) * (352 / 429),
+  frameMs: 100,
+};
+
 const department: WorldPack = {
   id: 'department',
   text: { place: 'Department Hall', eyebrow: 'DEPARTMENT', day: 'FRIDAY MORNING', one: 'colleague', many: 'colleagues', castLabel: 'COLLEAGUE', hint: 'Walk with WASD / arrows. Press E next to a colleague or a piece of evidence.', oneWithArticle: 'a colleague', investigator: 'detective', icon: '<path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm4.5 10.5L20 20"/>' },
@@ -112,6 +127,7 @@ const department: WorldPack = {
     scale: 1 / 6,
     density: 3,
     labelLift: 68,
+    walkSheet: departmentWalk,
   },
   backdrop: { url: '/assets/department/department-hall.png', width: 1536, height: 1024, scale: 1 / 3, x: -16, y: 0, fill: '#1b1714' },
   walk: {

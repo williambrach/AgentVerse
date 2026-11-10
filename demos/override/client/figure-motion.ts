@@ -85,10 +85,14 @@ export const WALK_FRAME_UNITS = 9.5;
 /** World units per step for static art: a hop and a lean each step, leaning the other way the next. */
 export const STEP_UNITS = 30;
 
-/** A walking figure, `distance` world units into its walk. Static art hops; drawn art cycles frames. */
-export function walkLook(distance: number, pose: Pose, drawn: Drawn = NO_DRAWN): Look {
+/** A walking figure, `distance` world units into its walk. Static art hops; drawn art cycles frames,
+ * by distance, or by walking time when `clock` gives a frame duration (a sheet's frameMs). */
+export function walkLook(distance: number, pose: Pose, drawn: Drawn = NO_DRAWN, clock?: { ms: number; frameMs: number }): Look {
   const d = Math.max(0, distance);
-  if (drawn.walk > 0) return { texture: { kind: 'walk', frame: Math.floor(d / WALK_FRAME_UNITS) % drawn.walk }, stretch: 0, lift: 0, lean: 0 };
+  if (drawn.walk > 0) {
+    const step = clock && clock.frameMs > 0 ? Math.floor(Math.max(0, clock.ms) / clock.frameMs) : Math.floor(d / WALK_FRAME_UNITS);
+    return { texture: { kind: 'walk', frame: step % drawn.walk }, stretch: 0, lift: 0, lean: 0 };
+  }
   const phase = Math.sin(Math.PI * d / STEP_UNITS);
   const up = Math.abs(phase);
   return { texture: { kind: 'pose', pose }, stretch: up < .2 ? -2 : 0, lift: Math.round(3 * up), lean: Math.round(4 * phase) / 2 };
@@ -96,12 +100,14 @@ export function walkLook(distance: number, pose: Pose, drawn: Drawn = NO_DRAWN):
 
 /** Travel along a walk. `held`: a direction key is down. Physics can tick slower than rendering (60 Hz
  * physics on a 120 Hz screen), so a render frame without travel keeps the stride; only 80 ms without
- * travel, a release, or a jump of more than 24 units ends it. */
-export type Stride = { distance: number; stillMs: number; walking: boolean };
-export const STANDING: Stride = { distance: 0, stillMs: 0, walking: false };
+ * travel (a wall), a release, or a jump of more than 24 units ends it. `ms` is walking time, for
+ * time-played sheets; a new walk starts it, and so frame 1, from zero. */
+export type Stride = { distance: number; ms: number; stillMs: number; walking: boolean };
+export const STANDING: Stride = { distance: 0, ms: 0, stillMs: 0, walking: false };
 export function strideNext(prev: Stride, traveled: number, held: boolean, deltaMs: number): Stride {
   if (!held || traveled > 24) return STANDING;
-  if (traveled >= .01) return { distance: (prev.distance + traveled) % 1e6, stillMs: 0, walking: true };
+  const ms = prev.walking ? (prev.ms + Math.max(0, deltaMs)) % 1e9 : 0;
+  if (traveled >= .01) return { distance: (prev.distance + traveled) % 1e6, ms, stillMs: 0, walking: true };
   const stillMs = prev.stillMs + deltaMs;
-  return stillMs >= 80 ? { distance: 0, stillMs, walking: false } : { ...prev, stillMs };
+  return stillMs >= 80 ? { ...STANDING, stillMs } : { ...prev, ms, stillMs };
 }

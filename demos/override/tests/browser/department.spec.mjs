@@ -228,3 +228,120 @@ test('department_prompt_clear_of_rail: the evidence prompt never sits under the 
     expect(box.x, `${id} prompt left vs rail right`).toBeGreaterThanOrEqual(rail.x + rail.width - 1);
   }
 });
+
+// The detective's drawn walk sheet (art request D1): sampled on every rendered frame while a key is held.
+const look = page => scene(page, s => {
+  const img = s.detectiveImg;
+  return { key: img.texture.key, frame: String(img.frame.name), ox: img.originX, oy: img.originY, x: img.x, y: img.y, px: s.player.x, py: s.player.y, flip: img.flipX, h: img.displayHeight };
+});
+// Samples every rendered frame until the stride has walked `gameMs` of game time (Phaser's clock, which
+// also moves the body; headless Chromium renders slower than the wall clock), or `wallMs` passes.
+const sampleWalk = (page, gameMs, wallMs = 15_000) => page.evaluate(({ gameMs, wallMs }) => new Promise(done => {
+  const s = window.walkingTestGame.scene.getScene('banana-grove'), out = [], end = performance.now() + wallMs;
+  const tick = () => {
+    const img = s.detectiveImg;
+    out.push({ key: img.texture.key, frame: String(img.frame.name), ms: s.stride.ms, walking: s.stride.walking });
+    if (s.stride.ms < gameMs && performance.now() < end) requestAnimationFrame(tick); else done(out);
+  };
+  requestAnimationFrame(tick);
+}), { gameMs, wallMs });
+const SHEET = 'factory-player-walk-sheet';
+
+test('department_walk_sheet: frames 1..8 by walking time, back to 1, still pose on release, at a wall and in dialogue', async ({ page }, testInfo) => {
+  await start(page);
+  expect(await scene(page, s => s.textures.exists('factory-player-walk-sheet'))).toBe(true);
+  expect(await scene(page, s => s.textures.get('factory-player-walk-sheet').getFrameNames().sort())).toEqual(['0', '1', '2', '3', '4', '5', '6', '7']);
+  const still = await look(page);
+  expect(still.key).toBe('factory-player-listening');
+  await teleport(page, 120, 300);
+  await page.waitForTimeout(150);
+  await page.keyboard.down('d');
+  const samples = await sampleWalk(page, 950);
+  const walking = await look(page);
+  await shot(page, testInfo, 'department-walk-sheet-walking');
+  await page.keyboard.up('d');
+  // Playback: from frame 1, each frame for 100 ms of walking time, in order, wrapping 8 -> 1.
+  const onSheet = samples.filter(s => s.key === SHEET);
+  expect(onSheet.length).toBeGreaterThan(20);
+  expect(onSheet[0].frame).toBe('0');
+  // The image is worn before the stride steps, so it may trail the clock by one render frame.
+  for (const [i, s] of onSheet.entries()) expect([Math.floor(s.ms / 100) % 8, Math.floor((s.ms - 20) / 100) % 8], `sample ${i} at ${s.ms} ms`).toContain(Number(s.frame));
+  const runs = onSheet.map(s => s.frame).filter((f, i, all) => i === 0 || all[i - 1] !== f);
+  for (let i = 1; i < runs.length; i++) expect(Number(runs[i]), `run ${i}`).toBe((Number(runs[i - 1]) + 1) % 8);
+  expect(runs.slice(0, 10)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '0', '1'].slice(0, Math.min(10, runs.length)));
+  expect(runs.length).toBeGreaterThanOrEqual(9);
+  // The feet stay on the world foot point in both looks; the sheet has its own pivot.
+  expect(walking.key).toBe(SHEET);
+  // Walking, the image is placed before the physics step, so it trails the body by one step (2 units at 120/s).
+  expect(Math.abs(walking.x - walking.px)).toBeLessThanOrEqual(2.5);
+  expect(walking.y).toBe(walking.py);
+  expect(walking.ox).toBe(.5);
+  expect(walking.oy).toBeCloseTo(477 / 512, 5);
+  await expect.poll(async () => (await look(page)).key, { timeout: 1000 }).toBe('factory-player-listening');
+  const stopped = await look(page);
+  expect([stopped.x, stopped.y]).toEqual([stopped.px, stopped.py]);
+  expect(stopped.ox).toBeCloseTo(96 / 192, 5);
+  expect(stopped.oy).toBeCloseTo(376 / 384, 5);
+  await shot(page, testInfo, 'department-walk-sheet-stopped');
+  // A new walk starts again at frame 1.
+  await page.keyboard.down('a');
+  const again = await sampleWalk(page, 150);
+  await page.keyboard.up('a');
+  expect(again.find(s => s.key === SHEET)?.frame).toBe('0');
+  expect((await look(page)).flip).toBe(true);
+  // Held against the top edge: no travel, so she stands.
+  const walk = await scene(page, s => s.world.walk);
+  await teleport(page, 200, walk.bounds.y + 2);
+  await page.keyboard.down('w');
+  await page.waitForTimeout(700);
+  const atWall = await look(page);
+  await page.keyboard.up('w');
+  expect(atWall.key).not.toBe(SHEET);
+  // Dialogue: walk, stop, open a conversation: she stands in her still pose; typing a question puts her in
+  // the thinking pose, and a held key does not walk her while the question box has focus.
+  await teleport(page, 120, 300);
+  await page.keyboard.down('d');
+  await expect.poll(async () => (await look(page)).key, { timeout: 1000 }).toBe(SHEET);
+  await page.keyboard.up('d');
+  await page.locator('#room-nav [data-go="freja"]').click();
+  await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('FREJA', { timeout: 15_000 });
+  await expect.poll(async () => (await look(page)).key, { timeout: 1000 }).toBe('factory-player-listening');
+  await page.locator('#question').fill('Where were you');
+  await expect.poll(async () => (await look(page)).key, { timeout: 2000 }).toBe('factory-player-thinking');
+  const before = await player(page);
+  await page.keyboard.down('d');
+  const typed = await sampleWalk(page, 1e9, 400);
+  await page.keyboard.up('d');
+  expect(typed.every(s => s.key !== SHEET && !s.walking)).toBe(true);
+  expect(await player(page)).toEqual(before);
+});
+
+for (const [name, size] of [['desktop', { width: 1440, height: 900 }], ['phone', { width: 390, height: 844 }]]) {
+  test(`department_walk_sheet_${name}: the walking detective draws inside the station`, async ({ page }, testInfo) => {
+    await page.setViewportSize(size);
+    await start(page);
+    await teleport(page, 200, 260);
+    await page.keyboard.down('d');
+    await expect.poll(async () => (await look(page)).key, { timeout: 1000 }).toBe(SHEET);
+    await page.waitForTimeout(350);
+    await shot(page, testInfo, `department-walk-${name}`);
+    const inStation = await scene(page, s => {
+      const b = s.detectiveImg.getBounds(), w = Number(s.sys.game.config.width), h = Number(s.sys.game.config.height);
+      return b.x >= 0 && b.y >= 0 && b.right <= w && b.bottom <= h;
+    });
+    await page.keyboard.up('d');
+    expect(inStation).toBe(true);
+  });
+}
+
+test('department_walk_sheet_missing: a sheet that fails to load leaves the still pose hopping, never a missing texture', async ({ page }) => {
+  await page.route('**/assets/department/characters/player-walk.png', route => route.fulfill({ status: 404, body: '' }));
+  await start(page);
+  expect(await scene(page, s => s.textures.exists('factory-player-walk-sheet'))).toBe(false);
+  await teleport(page, 120, 300);
+  await page.keyboard.down('d');
+  const samples = await sampleWalk(page, 600);
+  await page.keyboard.up('d');
+  expect(samples.some(s => s.walking)).toBe(true);
+  expect(samples.every(s => s.key === 'factory-player-listening'), JSON.stringify([...new Set(samples.map(s => s.key))])).toBe(true);
+});

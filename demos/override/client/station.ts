@@ -39,6 +39,7 @@ function artKeys(world: WorldPack): Record<ArtKind, string> {
   return { cast: `${world.id}-cast`, idle: `${world.id}-idle`, walk: `${world.id}-walk`, props: `${world.id}-props` };
 }
 const walkKey = (sprite: string, i: number) => `factory-${sprite}-walk-${i}`;
+const walkSheetKey = (sprite: string) => `factory-${sprite}-walk-sheet`;
 const loopKey = (sprite: string, kind: 'idle' | 'talk', i: number) => `factory-${sprite}-${kind}-${i}`;
 const poses: Pose[] = ['listening', 'speaking', 'thinking'];
 const figureKey = (sprite: string, pose: Pose) => `factory-${sprite}-${pose}`;
@@ -210,7 +211,9 @@ export class Station extends Phaser.Scene {
         for (let i = 0; i < drawn.idle; i++) this.load.image(loopKey(sprite, 'idle', i), factoryFigures.loopUrl(art, sprite, 'idle', i));
         for (let i = 0; i < drawn.talk; i++) this.load.image(loopKey(sprite, 'talk', i), factoryFigures.loopUrl(art, sprite, 'talk', i));
       }
-      for (let i = 0; i < (art.walkFrames ?? 0); i++) this.load.image(walkKey(art.detective, i), factoryFigures.walkFrameUrl(art, i));
+      const sheet = art.walkSheet;
+      if (sheet) this.load.image(walkSheetKey(art.detective), sheet.url);
+      else for (let i = 0; i < (art.walkFrames ?? 0); i++) this.load.image(walkKey(art.detective, i), factoryFigures.walkFrameUrl(art, i));
       this.world.floor?.props.forEach(p => this.load.image(`factory-prop-${p.id}`, factoryFigures.propUrl(art, p.id)));
       const back = this.world.backdrop;
       if (back) {
@@ -510,21 +513,43 @@ export class Station extends Phaser.Scene {
     this.labels.set(id, label);
   }
 
-  /** The texture a look names for one sprite. */
-  private lookKey(sprite: string, look: motion.Look): string {
-    const t = look.texture;
-    if (t.kind === 'pose') return figureKey(sprite, t.pose);
-    if (t.kind === 'walk') return walkKey(sprite, t.frame);
-    return loopKey(sprite, t.kind, t.frame);
+  /** Name the walk sheet's frames 0..n-1 on its texture, once: the same pivot-centred window in every cell. */
+  private addWalkSheetFrames(art: NonNullable<WorldPack['figures']>) {
+    const sheet = art.walkSheet, key = walkSheetKey(art.detective);
+    if (!sheet || !this.textures.exists(key)) return;
+    const texture = this.textures.get(key);
+    for (let i = 0; i < sheet.frames; i++) {
+      if (texture.has(String(i))) continue;
+      const r = factoryFigures.sheetRect(sheet, i);
+      texture.add(String(i), 0, r.x, r.y, r.w, r.h);
+    }
   }
 
-  /** Put a look on a figure standing at foot (x, y): whole canvas pixels of stretch and lift, leaning about the feet. */
+  /** The texture (and sheet frame) a look names for one sprite. */
+  private lookKey(sprite: string, look: motion.Look): { key: string; frame?: number } {
+    const t = look.texture;
+    if (t.kind === 'pose') return { key: figureKey(sprite, t.pose) };
+    if (t.kind === 'walk' && this.world.figures?.walkSheet && sprite === this.world.figures.detective) {
+      // A sheet that failed to load has no per-frame files behind it: show the still pose instead.
+      return this.textures.exists(walkSheetKey(sprite)) ? { key: walkSheetKey(sprite), frame: t.frame } : { key: figureKey(sprite, this.detectivePose) };
+    }
+    if (t.kind === 'walk') return { key: walkKey(sprite, t.frame) };
+    return { key: loopKey(sprite, t.kind, t.frame) };
+  }
+
+  /** Put a look on a figure standing at foot (x, y): whole canvas pixels of stretch and lift, leaning about the feet.
+   * A walk-sheet frame keeps the sheet's own pivot and scale; everything else uses the pose frame's. */
   private wear(img: Phaser.GameObjects.Image, sprite: string, look: motion.Look, x: number, y: number) {
     const art = this.world.figures!;
-    const key = this.lookKey(sprite, look);
-    if (img.texture.key !== key) img.setTexture(key);
-    const tall = art.frame.h * art.scale * art.density;
-    img.setScale(art.scale, art.scale * (1 + look.stretch / tall));
+    const { key, frame } = this.lookKey(sprite, look);
+    if (img.texture.key !== key) img.setTexture(key, frame);
+    else if (frame !== undefined && String(img.frame.name) !== String(frame)) img.setFrame(frame);
+    const sheet = frame !== undefined ? art.walkSheet! : undefined;
+    const origin = sheet ? factoryFigures.sheetOrigin(sheet) : { x: art.anchor.x / art.frame.w, y: art.anchor.y / art.frame.h };
+    const scale = sheet ? sheet.scale : art.scale;
+    if (img.originX !== origin.x || img.originY !== origin.y) img.setOrigin(origin.x, origin.y);
+    const tall = (sheet ? sheet.cell.h : art.frame.h) * scale * art.density;
+    img.setScale(scale, scale * (1 + look.stretch / tall));
     img.setPosition(x, y - look.lift / art.density);
     img.setAngle(img.flipX ? -look.lean : look.lean);
   }
@@ -541,6 +566,7 @@ export class Station extends Phaser.Scene {
   }
 
   private addDetective(art: NonNullable<WorldPack['figures']>) {
+    this.addWalkSheetFrames(art);
     this.detectiveImg = this.figureImage(art, art.detective, this.detectivePose, this.player.x, this.player.y);
     this.shadow.setFillStyle(0x000000, .25);
     // An empty, hidden marker carries the detective's pose beside the name tags.
@@ -859,9 +885,11 @@ export class Station extends Phaser.Scene {
       if (this.direction === 'left' || this.direction === 'right') this.facing = this.direction === 'left';
       // The stride survives render frames without a physics step, so a 120 Hz screen does not flicker between walk and stand.
       this.stride = motion.strideNext(this.stride, traveled, Boolean(dx || dy) && !reducedMotion.matches, delta);
-      const drawn = factoryFigures.drawnOf(art, art.detective);
+      const drawnArt = factoryFigures.drawnOf(art, art.detective);
+      // A walk sheet that failed to load leaves the still pose hopping, as before the sheet.
+      const drawn = art.walkSheet && !this.textures.exists(walkSheetKey(art.detective)) ? { ...drawnArt, walk: 0 } : drawnArt;
       const look = reducedMotion.matches ? motion.stillLook(this.detectivePose)
-        : this.stride.walking ? motion.walkLook(this.stride.distance, this.detectivePose, drawn)
+        : this.stride.walking ? motion.walkLook(this.stride.distance, this.detectivePose, drawn, art.walkSheet && { ms: this.stride.ms, frameMs: art.walkSheet.frameMs })
         : motion.standLook(this.detectivePose, time, motion.seedOf('detective'), time - this.detectivePoseSince, drawn);
       this.detectiveImg.setFlipX(this.facing).setDepth(this.player.y);
       this.wear(this.detectiveImg, art.detective, look, this.player.x, this.player.y);

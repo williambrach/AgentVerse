@@ -8,6 +8,16 @@ Only the detective walks here, so the colleagues need idle and talk frames only.
 
 ### D1 · Detective (player) walk · P1
 
+> **Status: delivered as a prototype and in the game (2026-11-10).** The sheet ships byte for byte as `public/assets/department/characters/player-walk.png` (a SHA-256 test pins it to the delivered file) and plays frames 1 to 8 at 100 ms of walking time each (`departmentWalk` in `client/worlds.ts`). One fixed pivot for all eight cells, (207, 477), puts the head and shoes where the still poses have them; the scale is 352/429 of the pose scale, so walking and standing are the same height on screen.
+>
+> Faults still in the art (measured at alpha >= 128; a regenerated sheet only needs the same 4 x 2 layout to drop in):
+> - The legs barely alternate: row 2 repeats much of row 1's leg geometry, so the near and far legs do not clearly swap supporting roles. It reads as a walk at game size, but not a clean two-step cycle.
+> - The bob is too big: head tops vary by 21 px (42..63) against the requested 2 art pixels. The game shows it as drawn.
+> - Shoes end at y 470..476 instead of one line at 472. With the fixed pivot, frames 4 and 8 float up to 7 cell px (about 1 world unit, 3 canvas px).
+> - The figure is drawn about 11 px right of the cell centre (head column x 198..204). The pivot is set to match the art, so this needs no fix, but a redraw should keep it.
+> - About 90,000 background pixels have alpha 1..15. They are invisible over light and dark grounds, so they are left as delivered.
+> - The correction prompt in the README fixes the first three; Codex's last attempt hit the image usage limit.
+
 - **Save as:** `/Users/williambrach/Developer/arbiter/assets/motion-v1/department/player-walk.png`
 - **Canvas:** 1536 x 1024, 4 x 2 cells of 384 x 512
 - **Attach:**
