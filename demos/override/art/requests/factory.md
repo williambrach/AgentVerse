@@ -10,6 +10,12 @@ All sheets are 1536 x 1024, 4 columns x 2 rows. Save them untouched (no cropping
 
 ### F1 · Detective (player) walk · P1
 
+> **Status: delivered and in the game (2026-11-11).** The sheet ships byte for byte as `public/assets/factory/characters/detective-walk.png` (a SHA-256 test pins it to the delivered file) and plays frames 1 to 8 at 100 ms of walking time each (`factoryWalk` in `client/worlds.ts`). One pivot, (195, 475), for all eight cells puts the head and shoes where the still poses have them. The scale is 353/407 of the pose scale.
+>
+> Faults still in the art (measured at alpha >= 128):
+> - Frame 4's shoes end at y 464, 9 px above the others. The game draws that frame 8 px lower and frame 8 2 px lower (per-frame `offsets`).
+> - The head bob is 10 px (tops 63..73), so the game shows it as drawn.
+
 - **Save as:** `/Users/williambrach/Developer/arbiter/assets/motion-v1/factory/detective-walk.png`
 - **Canvas:** 1536 x 1024, 4 x 2 cells of 384 x 512
 - **Attach:**

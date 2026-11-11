@@ -11,6 +11,13 @@ The wizard, the apothecary and the town square are still placeholders (recolours
 
 ### R1 · Scout walk · P1
 
+> **Status: delivered and in the game (2026-11-11).** The accepted sheet (`scout-walk.png`) ships byte for byte as `public/assets/renaissance/characters/scout-walk.png` (SHA-256 pinned) and plays frames 1 to 8 at 100 ms of walking time each (`scoutWalk` in `client/worlds.ts`). It replaces the four frames that `cut.py` cut from the old character sheet (`scout-walk-0..3.png`, which the game no longer loads). One pivot, (210, 473), for all eight cells. The scale is 180/448 of the pose scale.
+>
+> - **Bob:** the head tops are drawn at 24 35 24 12 24 36 24 12, a 24 px bob. Per-frame offsets (0 -7 0 8 0 -8 0 8) hold the head within 4 px of y 24. The cost is that the shoes leave the floor line by up to 8 px (about 1 world unit, 3 canvas px): frames 2 and 6 hover slightly and frames 4 and 8 sink slightly.
+> - **Gait:** row 2 repeats row 1, so the cycle is one step drawn twice and the same leg always leads. It reads as a walk at game size.
+> - **v2 candidate (`scout-walk-v2.png`, not used):** its row 2 has different leg poses, but frames 3 and 7 are drawn 32 px left of the others, and frame 8 is a second contact pose straight into frame 1, which stutters at the seam. Mixing R1 frames 1-4 with v2 frames 5-8 has the same seam fault. Kept untouched in the motion folder.
+> - A redraw only needs row 2 to mirror the legs of row 1 (the far leg leading) and the same 4 x 2 layout.
+
 - **Save as:** `/Users/williambrach/Developer/arbiter/assets/motion-v1/renaissance/scout-walk.png`
 - **Canvas:** 1536 x 1024, 4 x 2 cells of 384 x 512
 - **Attach:**

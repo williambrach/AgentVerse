@@ -20,7 +20,7 @@ Row 4 (suspicious action) is never used, and no glowing frame is used.
 | noble (and apothecary) | r1c1..r1c4 | r1c3 | r3c3, r3c2 |
 | guard | r1c1..r1c4 | r1c3 | r3c4 |
 | scout | r1c1..r1c4 | r1c3 | r3c2 |
-`listening` = the first idle frame. Scout walk: `scout-walk-0..3` = r2c1..r2c4, one frame per 9.5 world units walked.
+`listening` = the first idle frame. Scout walk: the game plays the R1 walk sheet (`scout-walk.png`, see art/requests/renaissance.md). `scout-walk-0..3` = r2c1..r2c4 are still cut but no longer loaded.
 The scout's r3c3 opens the map wide and the guard's r3c2 and r3c3 walk, so neither loops as talk.
 
 Cutting: cell edges round(i*1254/4). Registration: each frame is shifted so its feet line (alpha box bottom) and its head

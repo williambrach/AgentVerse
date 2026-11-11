@@ -1,4 +1,5 @@
 import { test, expect, joinTeam } from './team.mjs';
+import { walkSheetTests } from './walk-sheet.mjs';
 import { castOf, sessionIdOf } from './cast.mjs';
 import { mkdirSync, readFileSync } from 'node:fs';
 import kase from '../../server/cases/renaissance-traveler.mjs';
@@ -284,4 +285,14 @@ test('renaissance_phone: 390x844 has no horizontal scroll and a chat opens', asy
   await expect(page.locator('.talk-line')).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await shot(page, '07-phone-chat');
+});
+
+// The scout's drawn walk (art request R1).
+walkSheetTests({
+  test, expect, level: 'renaissance', start,
+  at: { x: 160, y: 240, top: 122 },
+  open: async page => {
+    await page.locator(`[data-go="${IDS[0]}"]`).first().click();
+    await expect(page.locator('[data-topic]').first()).toBeVisible({ timeout: 15_000 });
+  },
 });

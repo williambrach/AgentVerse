@@ -40,6 +40,9 @@ export interface WalkSheet {
   scale: number;
   /** How long each frame shows while walking, in ms of walking time. */
   frameMs: number;
+  /** Per-frame vertical registration in cell px (positive draws the frame lower), one entry per frame:
+   * damps a drawn head bob or puts a lifted frame's feet back on the floor. Absent: all 0. */
+  offsets?: number[];
 }
 
 /** Cell i's rectangle in the sheet, read left to right, row by row. */
@@ -54,9 +57,10 @@ export function sheetRect(sheet: WalkSheet, i: number): { x: number; y: number; 
   return { x: cell.x + sheet.pivot.x - half, y: cell.y, w: 2 * half, h: cell.h };
 }
 
-/** Where a sheet frame's origin sits, as fractions of the frame: the pivot. */
-export function sheetOrigin(sheet: WalkSheet): { x: number; y: number } {
-  return { x: .5, y: sheet.pivot.y / sheet.cell.h };
+/** Where sheet frame i's origin sits, as fractions of the frame: the pivot, raised by the frame's offset
+ * (a frame drawn lower has its foot point higher inside it). x stays at the window centre in every frame. */
+export function sheetOrigin(sheet: WalkSheet, i = 0): { x: number; y: number } {
+  return { x: .5, y: (sheet.pivot.y - (sheet.offsets?.[i] ?? 0)) / sheet.cell.h };
 }
 
 export function stopPropsOf(art: FigureArt): { briefing: string; report: string } {

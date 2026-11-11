@@ -545,7 +545,7 @@ export class Station extends Phaser.Scene {
     if (img.texture.key !== key) img.setTexture(key, frame);
     else if (frame !== undefined && String(img.frame.name) !== String(frame)) img.setFrame(frame);
     const sheet = frame !== undefined ? art.walkSheet! : undefined;
-    const origin = sheet ? factoryFigures.sheetOrigin(sheet) : { x: art.anchor.x / art.frame.w, y: art.anchor.y / art.frame.h };
+    const origin = sheet ? factoryFigures.sheetOrigin(sheet, frame) : { x: art.anchor.x / art.frame.w, y: art.anchor.y / art.frame.h };
     const scale = sheet ? sheet.scale : art.scale;
     if (img.originX !== origin.x || img.originY !== origin.y) img.setOrigin(origin.x, origin.y);
     const tall = (sheet ? sheet.cell.h : art.frame.h) * scale * art.density;

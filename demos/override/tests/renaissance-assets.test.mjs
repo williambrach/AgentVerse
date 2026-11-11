@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readPng } from './png.mjs';
+import { createHash } from 'node:crypto';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..');
@@ -68,4 +69,16 @@ test('cut.py frame map never uses row 4', () => {
   const rows = [...m[0].matchAll(/\((\d), (\d)\)/g)].map((x) => Number(x[1]));
   assert.ok(rows.length >= 14);
   assert.ok(rows.every((r) => r <= 2), 'rows are 0..2 only (row index 3 is the suspicious action)');
+});
+
+test('scout walk sheet (art request R1) ships byte for byte as delivered', (t) => {
+  const source = '/Users/williambrach/Developer/arbiter/assets/motion-v1/renaissance/scout-walk.png';
+  const shipped = path.join(assets, 'characters', 'scout-walk.png');
+  const i = ihdr(shipped);
+  assert.deepEqual([i.w, i.h, i.colour], [1536, 1024, 6]);
+  const sha = f => createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+  // The delivered R1 sheet's digest, pinned so the check runs without the motion pack.
+  assert.equal(sha(shipped), '9aab2585cccaf6404ef62817dd49c7e0cb9d037fb9107d657d522553f3d1834d');
+  if (!fs.existsSync(source)) return t.skip('motion pack not present');
+  assert.equal(sha(shipped), sha(source));
 });
