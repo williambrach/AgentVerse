@@ -107,32 +107,24 @@ const BASE = {
     "chars": "73ebc57d6d79cd93",
     "roles": "6ea8e1ad0448ab4b",
     "msgs": "5a823fc4c2bc99d9",
-    "thread": "71ebe8d87cf11d55",
+    "thread": "44a55501f9587173",
     "contentHash": "d891b333116d"
   },
-  "tower-echo-bell": {
-    "view": "ab9e048578719ead",
-    "chars": "1d06c8356f57290b",
-    "roles": "6ea8e1ad0448ab4b",
-    "msgs": "288b918a225f646f",
-    "thread": "8c7b5a42c7dc20f6",
-    "contentHash": "6508e9784a90"
-  },
   "friends-roundtable": {
-    "view": "1b9a94ac1357aee7",
-    "chars": "aaabe7b1ec67c6dd",
-    "roles": "84f32a9e6c4daa42",
-    "msgs": "37688b7d13743b4b",
-    "thread": "d287cab8586f258a",
-    "contentHash": "abe99bc0d29a"
+    "view": "63c1d09788fb26f9",
+    "chars": "a649ab932c68ee4f",
+    "roles": "da52c5588cfffe9a",
+    "msgs": "f4f09e31070f1ea6",
+    "thread": "5f609ee8c5301faf",
+    "contentHash": "c097961cadff"
   },
   "factory-escape": {
-    "view": "a8b347d0ca9388e8",
+    "view": "bd471bee05707dcf",
     "chars": "f92df788e9ae6d4c",
     "roles": "8205567f12253456",
     "msgs": "01d099cd2e72c55d",
-    "thread": "5db147f572b8e1ae",
-    "contentHash": "660d1ebbc219"
+    "thread": "2eac89e5b3351413",
+    "contentHash": "2171e3404532"
   }
 };
 

@@ -111,7 +111,7 @@ export function interviewPanel(v: InterviewView): string {
   const form = v.closed ? `<div class="subtle-note">${t('dialogue.saved')}</div>` : `<form class="interview-compose" id="interview-form">
     ${v.talk ? topicChips(v) : !turns.length ? `<button class="quick-question" type="button" data-quick-question="${esc(character.quickQuestion)}" ${busy ? 'disabled' : ''}><small>${t('dialogue.quick')}</small><span>${esc(character.quickQuestion)} ${ARROW}</span></button>` : ''}
     <label class="sr-only" for="question">${t('dialogue.questionFor', { name: character.name })}</label>
-    <div class="compose-row"><textarea id="question" name="question" rows="1" minlength="3" maxlength="1200" placeholder="${turns.length ? t('dialogue.placeholder.followUp') : t('dialogue.placeholder.first')}" required ${busy ? 'disabled' : ''}>${esc(v.draft)}</textarea>
+    <div class="compose-row"><textarea id="question" name="question" rows="1" minlength="1" maxlength="280" placeholder="${turns.length ? t('dialogue.placeholder.followUp') : t('dialogue.placeholder.first')}" required ${busy ? 'disabled' : ''}>${esc(v.draft)}</textarea>
     <button type="submit" class="primary-button ask-button" ${hasEconomy ? `aria-describedby="tip-ask${v.askOff ? ' ask-off' : ''}"` : ''} ${blocked ? 'disabled' : ''}><span>${busy ? t('dialogue.thinkingButton') : t('dialogue.ask')}</span>${hasEconomy ? `<span class="coin-price"${busy || v.askOff ? ' hidden' : ''}>${COIN}<span class="tool-chip" data-tool="ask">${esc(v.askOff || price(v.askLabel!))}</span></span>` : ''}</button></div>
     ${hasEconomy && v.askOff ? `<p class="ask-off" id="ask-off" role="status">${esc(v.askOff)}</p>` : ''}
     <div class="compose-bottom"><small>${t('dialogue.curious', { many: v.many })}</small>

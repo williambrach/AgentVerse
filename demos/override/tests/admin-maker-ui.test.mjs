@@ -32,7 +32,7 @@ const detail = (over = {}) => ({
   history: [{ rev: 2, by: 'alice', timestamp: '2026-10-30T14:02:00.000Z', fields: ['copy.intro.lead', 'debrief.title'] }, { rev: 1, by: 'bob', timestamp: '2026-10-30T09:00:00.000Z', fields: ['copy.headline'] }],
   ...over,
 });
-const list = { cases: [{ id: 'banana-mystery', title: 'Banana', rev: 2 }, { id: 'game', title: 'Game text', rev: 0 }, { id: 'tower-echo-bell', title: 'Tower', rev: 0 }] };
+const list = { cases: [{ id: 'banana-mystery', title: 'Banana', rev: 2 }, { id: 'game', title: 'Game text', rev: 0 }, { id: 'factory-escape', title: 'Factory', rev: 0 }] };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function mount(t, { overrides = {}, caseId = null } = {}) {
@@ -56,7 +56,7 @@ test('load_renders_tabs_and_form', async t => {
   const s = mount(t);
   await s.app.load();
   const tabs = s.$('cases').all(e => e.tag === 'option');
-  assert.deepEqual(tabs.map(b => b.textContent), ['Banana · rev 2', 'Tower · authored', 'Game text · authored']);
+  assert.deepEqual(tabs.map(b => b.textContent), ['Banana · rev 2', 'Factory', 'Game text']);
   assert.ok(area(s, 'copy.intro.lead'));
   assert.deepEqual(s.$('character').children.map(c => c.textContent), ['Momo · boss (villain)', 'Pip']);
   assert.equal(s.$('history').children.length, 3);
@@ -65,8 +65,8 @@ test('load_renders_tabs_and_form', async t => {
   assert.equal(s.$('status').textContent, 'Up to date');
   type(s, 'copy.intro.lead', 'X');
   assert.equal(s.$('status').textContent, 'Unsaved changes');
-  await pick(s, 'tower-echo-bell');
-  assert.equal(s.calls.at(-1)[0], '/admin/content/tower-echo-bell');
+  await pick(s, 'factory-escape');
+  assert.equal(s.calls.at(-1)[0], '/admin/content/factory-escape');
 });
 
 test('publish_sends_overlay_and_base_rev', async t => {
@@ -146,7 +146,7 @@ test('case_switch_returns_to_story', async t => {
   await s.app.load();
   await s.$('sections').all(e => e.dataset.section === 'debrief')[0].click();
   assert.equal(s.$('sections').all(e => e.attrs['aria-current'] === 'true')[0].dataset.section, 'debrief');
-  await s.app.select('tower-echo-bell');
+  await s.app.select('factory-escape');
   assert.equal(s.$('sections').all(e => e.attrs['aria-current'] === 'true')[0].dataset.section, 'story');
 });
 
@@ -194,9 +194,9 @@ test('restore_posts_revert', async t => {
 });
 
 test('case_param_selects_case', async t => {
-  const s = mount(t, { caseId: 'tower-echo-bell' });
+  const s = mount(t, { caseId: 'factory-escape' });
   await s.app.load();
-  assert.equal(s.calls[1][0], '/admin/content/tower-echo-bell');
+  assert.equal(s.calls[1][0], '/admin/content/factory-escape');
 });
 
 test('double_click_publish_sends_one_put', async t => {
@@ -214,20 +214,20 @@ test('double_click_publish_sends_one_put', async t => {
 });
 
 test('tab_click_failure_is_shown_not_thrown', async t => {
-  const s = mount(t, { overrides: { 'GET /admin/content/tower-echo-bell': () => { throw new Error('boom'); } } });
+  const s = mount(t, { overrides: { 'GET /admin/content/factory-escape': () => { throw new Error('boom'); } } });
   await s.app.load();
-  await pick(s, 'tower-echo-bell');
+  await pick(s, 'factory-escape');
   assert.equal(s.$('status').textContent, 'boom');
 });
 
 test('stale_detail_response_is_ignored', async t => {
   let release;
   const slow = new Promise(r => { release = r; });
-  const s = mount(t, { overrides: { 'GET /admin/content/tower-echo-bell': () => slow } });
+  const s = mount(t, { overrides: { 'GET /admin/content/factory-escape': () => slow } });
   await s.app.load();
-  const p = s.app.select('tower-echo-bell');
+  const p = s.app.select('factory-escape');
   await s.app.select('banana-mystery');
-  release(detail({ id: 'tower-echo-bell', title: 'Tower', by: 'zed' }));
+  release(detail({ id: 'factory-escape', title: 'Factory', by: 'zed' }));
   await p;
   assert.ok(area(s, 'copy.intro.lead'));
   assert.equal(s.$('history').children.length, 3);
@@ -240,7 +240,7 @@ function mountWithConfirm(t, answer) {
   const api = async (path, body) => {
     calls.push(path);
     if (path === '/admin/content') return list;
-    if (path === '/admin/content/tower-echo-bell') return detail({ id: 'tower-echo-bell', title: 'Tower', authored: { 'copy.intro.lead': 'Tower lead' }, current: { 'copy.intro.lead': 'Tower lead' } });
+    if (path === '/admin/content/factory-escape') return detail({ id: 'factory-escape', title: 'Factory', authored: { 'copy.intro.lead': 'Factory lead' }, current: { 'copy.intro.lead': 'Factory lead' } });
     if (/^\/admin\/content\/[a-z-]+$/.test(path) && !body) return detail();
     return {};
   };
@@ -252,9 +252,9 @@ test('tab_switch_while_dirty_asks_and_can_cancel', async t => {
   const s = mountWithConfirm(t, false);
   await s.app.load();
   type(s, 'copy.intro.lead', 'Edited');
-  await pick(s, 'tower-echo-bell');
+  await pick(s, 'factory-escape');
   assert.deepEqual(s.asked, ['Discard unsaved changes?']);
-  assert.ok(!s.calls.includes('/admin/content/tower-echo-bell'));
+  assert.ok(!s.calls.includes('/admin/content/factory-escape'));
   assert.equal(area(s, 'copy.intro.lead').value, 'Edited');
   assert.equal(s.$('status').textContent, 'Unsaved changes');
 });
@@ -263,10 +263,10 @@ test('tab_switch_while_dirty_confirmed_discards', async t => {
   const s = mountWithConfirm(t, true);
   await s.app.load();
   type(s, 'copy.intro.lead', 'Edited');
-  await pick(s, 'tower-echo-bell');
+  await pick(s, 'factory-escape');
   assert.equal(s.asked.length, 1);
-  assert.ok(s.calls.includes('/admin/content/tower-echo-bell'));
-  assert.equal(area(s, 'copy.intro.lead').value, 'Tower lead');
+  assert.ok(s.calls.includes('/admin/content/factory-escape'));
+  assert.equal(area(s, 'copy.intro.lead').value, 'Factory lead');
 });
 
 test('restore_while_dirty_asks_and_can_cancel', async t => {
@@ -299,15 +299,15 @@ test('restore_when_clean_never_asks', async t => {
 
 test('stale_and_corrupt_cases_are_shown', async t => {
   const s = mount(t, { overrides: {
-    'GET /admin/content': () => ({ cases: [{ id: 'banana-mystery', title: 'Banana', rev: 0, stale: true }, { id: 'tower-echo-bell', title: 'Tower', rev: 1, stale: false, corrupt: true }] }),
+    'GET /admin/content': () => ({ cases: [{ id: 'banana-mystery', title: 'Banana', rev: 0, stale: true }, { id: 'factory-escape', title: 'Factory', rev: 1, stale: false, corrupt: true }] }),
     'GET /admin/content/banana-mystery': () => detail({ rev: 0, stale: true }),
-    'GET /admin/content/tower-echo-bell': () => detail({ id: 'tower-echo-bell', title: 'Tower', rev: 1, corrupt: true }),
+    'GET /admin/content/factory-escape': () => detail({ id: 'factory-escape', title: 'Factory', rev: 1, corrupt: true }),
   } });
   await s.app.load();
   const tabs = s.$('cases').all(e => e.tag === 'option').map(b => b.textContent);
-  assert.deepEqual(tabs, ['Banana · authored · stale', 'Tower · rev 1']);
+  assert.deepEqual(tabs, ['Banana · stale', 'Factory · rev 1']);
   assert.match(s.$('status').textContent, /^Stale: /);
-  await s.app.select('tower-echo-bell');
+  await s.app.select('factory-escape');
   assert.match(s.$('status').textContent, /unreadable line/);
   type(s, 'copy.intro.lead', 'Edited');
   assert.equal(s.$('status').textContent, 'Unsaved changes');
@@ -316,9 +316,9 @@ test('stale_and_corrupt_cases_are_shown', async t => {
 test('tab_switch_when_clean_never_asks', async t => {
   const s = mountWithConfirm(t, false);
   await s.app.load();
-  await pick(s, 'tower-echo-bell');
+  await pick(s, 'factory-escape');
   assert.equal(s.asked.length, 0);
-  assert.ok(s.calls.includes('/admin/content/tower-echo-bell'));
+  assert.ok(s.calls.includes('/admin/content/factory-escape'));
 });
 
 const GAME_ATH = { 'ui.tools.talk': 'Let them talk', 'ui.hud.notebook': 'Notes', 'prompt.interview': 'I [[knowledge]]', 'worlds.grove.frame': 'F' };
@@ -332,7 +332,7 @@ test('game_in_dropdown_last_and_hides_chat', async t => {
   const s = mount(t, { overrides: { 'GET /admin/content/game': async () => gameDetail() } });
   await s.app.load();
   const opts = s.$('cases').all(e => e.tag === 'option');
-  assert.equal(opts.at(-1).textContent, 'Game text · authored');
+  assert.equal(opts.at(-1).textContent, 'Game text');
   assert.equal(opts.at(-1).value, 'game');
   assert.equal(s.$('panel').hidden, false);
   await pick(s, 'game');

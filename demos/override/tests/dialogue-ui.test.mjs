@@ -51,7 +51,7 @@ test('ask off, closed, waiting', () => {
 test('form controls', () => {
   const h = interviewPanel(view());
   assert.match(h, /<button type="submit"[^>]*>\s*(<span[^>]*>)?Ask/);
-  assert.match(h, /<textarea id="question"[^>]*minlength="3"[^>]*maxlength="1200"/);
+  assert.match(h, /<textarea id="question"[^>]*minlength="1"[^>]*maxlength="280"/);
   assert.doesNotMatch(h, /class="tool-row"/);
 });
 

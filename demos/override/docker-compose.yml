@@ -1,0 +1,32 @@
+# Runs the game and the admin page in Docker, from this checkout.
+#
+#   docker compose up --build -d
+#
+# Game:  http://127.0.0.1:3001
+# Admin: http://127.0.0.1:3002/admin   (needs OVERRIDE_ADMIN_PASSWORD in .env)
+#
+# Text edits published on the admin page are written to ./content in this checkout,
+# so `git status` shows them. Commit and push them yourself.
+services:
+  override:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3001
+      OVERRIDE_ADMIN_HOST: 0.0.0.0
+      OVERRIDE_ADMIN_PORT: 3002
+      OVERRIDE_DATA_DIR: /app/data
+      OVERRIDE_CONTENT_DIR: /app/content
+    ports:
+      # Loopback only. Put a tunnel or reverse proxy in front of the game port for players;
+      # reach the admin port over SSH (`ssh -L 3002:127.0.0.1:3002 user@host`).
+      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:3002:3002"
+    volumes:
+      - override-data:/app/data
+      - ./content:/app/content
+
+volumes:
+  override-data:

@@ -38,15 +38,6 @@ test('the prompt has no records block and takes only a question', () => {
   assert.match(run('banana-mystery', 'momo', '--chapter', '1').stderr, /usage: node scripts\/case-prompt\.mjs <caseId> <characterId> \[--question/);
 });
 
-test('prints a tower character with names resolved', () => {
-  const r = run('tower-echo-bell', 'wren');
-  assert.equal(r.status, 0, r.stderr);
-  assert.ok(r.stdout.startsWith('--- system'));
-  assert.match(r.stdout, /You play Wren \(/);
-  assert.match(r.stdout, /tower-echo-bell-v3\.0\.0, interview-v5/);
-  assert.doesNotMatch(r.stdout.split('--- user')[0], /[{}]/);
-});
-
 test('--part puts the character in that part by swapping with its holder', () => {
   const r = run('banana-mystery', 'momo', '--part', 'carrier');
   assert.equal(r.status, 0, r.stderr);

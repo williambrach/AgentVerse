@@ -20,7 +20,7 @@
   "worlds.friends.hint": "Click a friend at the table, or pick one on the left.",
   "worlds.friends.oneWithArticle": "a friend",
   "worlds.friends.investigator": "friend",
-  "worlds.friends.threadNote": "They only hear what is said at the table, never your private chats.",
+  "worlds.friends.threadNote": "They hear what is said at the table. Each remembers only their own chat with you.",
   "worlds.factory.place": "Brightwell Factory",
   "worlds.factory.eyebrow": "FACTORY",
   "worlds.factory.one": "worker",

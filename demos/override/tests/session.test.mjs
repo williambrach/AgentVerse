@@ -114,7 +114,7 @@ test('invalid and stale requests cannot change progress or skip hearing all thre
   await act('visit', { location: 'report' });
   await assert.rejects(investigation.mutate('reset', old), /another window/);
   await assert.rejects(act('interview', { character: 'intruder', question: 'Hello there' }), /3 monkeys/);
-  await assert.rejects(act('interview', { character: 'pip', question: '  ' }), /3 and 1,200/);
+  await assert.rejects(act('interview', { character: 'pip', question: '  ' }), /1 and 280/);
   await assert.rejects(act('verdict', { roles: ALL_HONEST, confidence: 70 }), /Ask all 3 monkeys/);
   assert.equal(investigation.session.status, 'active');
 });

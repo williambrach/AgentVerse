@@ -6,7 +6,7 @@ const SID = '7f3a0000-0000-4000-8000-000000000000';
 const T0 = Date.parse('2026-10-29T14:00:00.000Z');
 const CASES = [
   { id: 'banana-mystery', title: 'Banana', world: { id: 'grove' }, characters: [{ id: 'momo', name: 'Momo' }] },
-  { id: 'tower-echo-bell', title: 'Tower', world: 'grove', characters: [{ id: 'wren', name: 'Wren' }] },
+  { id: 'factory-escape', title: 'Factory', world: 'grove', characters: [{ id: 'wren', name: 'Wren' }] },
 ];
 const q = { eventId: 'e1', sessionId: SID, caseId: 'banana-mystery', type: 'interview_question', character: 'pip', question: 'Where were you?', timestamp: '2026-10-29T14:00:00.000Z', elapsedMs: 5000 };
 const a = { eventId: 'e2', sessionId: SID, caseId: 'banana-mystery', type: 'interview_answer', character: 'pip', questionEventId: 'e1', answer: 'In the library.', provenance: { endpoint: 'a', failedOver: true }, timestamp: '2026-10-29T14:00:02.140Z', elapsedMs: 7140 };
@@ -34,7 +34,7 @@ test('toRow maps question, answer, rehearsal, ignored and verdict', () => {
   assert.equal(r.kind, 'answer'); assert.equal(r.text, 'In the library.'); assert.equal(r.ms, 2140); assert.equal(r.endpoint, 'a'); assert.equal(r.failedOver, true);
   assert.equal(toRow({ ...a, provenance: null }, { ...ctx, mode: 'rehearsal' }).endpoint, 'rehearsal');
   assert.equal(toRow({ type: 'interview_provider_response', timestamp: q.timestamp }, ctx), null);
-  const v = toRow({ ...q, type: 'verdict_submitted', caseId: 'tower-echo-bell', verdict: { roles: {}, truth: {}, results: {}, score: 3, total: 4, confidence: 70 } }, ctx);
+  const v = toRow({ ...q, type: 'verdict_submitted', caseId: 'factory-escape', verdict: { roles: {}, truth: {}, results: {}, score: 3, total: 4, confidence: 70 } }, ctx);
   assert.deepEqual(v.verdict, { score: 3, total: 4, confidence: 70 });
   assert.deepEqual(toRow({ ...q, type: 'verdict_submitted', verdict: { suspect: 'momo', confidence: 50 } }, ctx).verdict, { score: null, total: null, confidence: 50 });
   const f = toRow({ ...q, type: 'interview_failed', reason: 'timeout', provenance: null }, ctx);
@@ -129,7 +129,7 @@ test('recent(0) is empty; startRound trims label', () => {
 });
 
 test('story_revealed and evidence_selected (old logs) produce no row', () => {
-  const base = { eventId: 'c1', sessionId: SID, caseId: 'tower-echo-bell', timestamp: q.timestamp };
+  const base = { eventId: 'c1', sessionId: SID, caseId: 'factory-escape', timestamp: q.timestamp };
   assert.equal(toRow({ ...base, type: 'story_revealed', revealedPosition: 1 }, {}), null);
   assert.equal(toRow({ ...base, type: 'evidence_selected', selectedEvidence: 'x' }, {}), null);
 });

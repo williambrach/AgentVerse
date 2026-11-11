@@ -177,6 +177,12 @@ export function adminHosts(env) {
   return String(env.OVERRIDE_ADMIN_HOSTS ?? '').split(',').map(h => h.trim().toLowerCase()).filter(Boolean);
 }
 
+// OVERRIDE_ADMIN_HOST: the address the admin listener binds. Loopback unless set; a container sets 0.0.0.0
+// and publishes the port on the host's loopback only.
+export function adminListenHost(env) {
+  return String(env.OVERRIDE_ADMIN_HOST ?? '').trim() || '127.0.0.1';
+}
+
 // The admin page puts this in an href: only an http(s) origin and path survive, never javascript: or credentials.
 export function boardUrlOf(base, port) {
   const raw = String(base ?? '').trim();
@@ -301,7 +307,9 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
           setHidden: (teamId, hidden) => { board.setHidden(teamId, hidden); onSystem({ type: 'team_hidden', timestamp: Date.now(), teamId, hidden }); },
         },
       });
-      await new Promise((resolve, reject) => { admin.once('error', reject); admin.listen(integerEnv(env.OVERRIDE_ADMIN_PORT, 3002, 'OVERRIDE_ADMIN_PORT'), '127.0.0.1', resolve); });
+      const adminHost = adminListenHost(env);
+      if (!['127.0.0.1', 'localhost', '::1'].includes(adminHost)) console.warn(`The admin listener binds ${adminHost}. Publish its port on a loopback address only.`);
+      await new Promise((resolve, reject) => { admin.once('error', reject); admin.listen(integerEnv(env.OVERRIDE_ADMIN_PORT, 3002, 'OVERRIDE_ADMIN_PORT'), adminHost, resolve); });
     }
   }
   } catch (error) { abort(error); }

@@ -12,7 +12,7 @@ test('plays on the first open only, unless the URL asks', () => {
   assert.equal(wantSplash(q('?splash=1'), true), true);
   assert.equal(wantSplash(q('?splash'), true), true);
   assert.equal(wantSplash(q('?splash=0'), false), false);
-  assert.equal(wantSplash(q('?case=tower-echo-bell'), false), true);
+  assert.equal(wantSplash(q('?case=factory-escape'), false), true);
 });
 
 test('the big screen never plays it', () => {

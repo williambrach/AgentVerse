@@ -6,8 +6,6 @@ const unique = () => `Team ${randomUUID().slice(0, 8)}`;
 
 // Every grove character marked honest: whatever the cast, exactly one (the bell-minder) is right, so one point.
 const ALL_HONEST = { momo: 'honest', nori: 'honest', pip: 'honest', kiki: 'honest' };
-// The tower's three apprentices are all honest but fooled: a perfect 3/3.
-const TOWER_PERFECT = { wren: 'fooled', basil: 'fooled', juniper: 'fooled' };
 
 /** Drives one case (banana by default) to a role verdict over the API, with the page's cookie (and so its team). */
 async function play(request, roles = ALL_HONEST, prior = null, caseId = 'banana-mystery') {
@@ -101,17 +99,17 @@ test('leaderboard_after_correct', async ({ page }) => {
 test('replay_keeps_points', async ({ page }) => {
   const name = unique();
   await joinTeam(page, name);
-  // Two tower games (3 questions each) stay inside the 6-questions-a-minute limit.
-  const first = await play(page.request, TOWER_PERFECT, null, 'tower-echo-bell');
-  await play(page.request, TOWER_PERFECT, first, 'tower-echo-bell');
+  // The same case twice: only the first verdict scores.
+  const first = await play(page.request);
+  await play(page.request, ALL_HONEST, first);
   await page.goto('/');
   await page.locator('#begin-button').click();
   // A closed case resumes on the debrief, which covers the HUD: its own button opens the board.
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
   await page.locator('#debrief-leaderboard').click();
   const own = page.locator('.board-row.you');
-  await expect(own).toContainText('3 pts');
-  await expect(own).not.toContainText('6 pts');
+  await expect(own).toContainText('1 pt');
+  await expect(own).not.toContainText('2 pts');
 });
 
 test('topbar_fits_after_check_in', async ({ page }, testInfo) => {

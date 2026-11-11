@@ -23,7 +23,7 @@
   "tools.noThought": "{name} did not think. No coins spent.",
   "tools.thread.eyebrow": "ARBITER TOOL · LET THEM TALK",
   "tools.thread.title": "The agents’ thread",
-  "tools.thread.note": "They only hear what is said in this thread, never your private chats.",
+  "tools.thread.note": "They hear what is said in this thread. Each remembers only their own chat with you.",
   "tools.thread.pending": "{n} more coming…",
   "tools.steps.ask.title": "Ask about everyday things",
   "tools.steps.ask.text": "Use the topic chips in each chat to ask the townsfolk about their day.",

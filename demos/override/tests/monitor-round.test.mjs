@@ -5,13 +5,13 @@ import { createRoundStats } from '../server/monitor-round.mjs';
 const ids = (...names) => names.map((id) => ({ id, name: id }));
 const cases = [
   { id: 'banana-mystery', characters: ids('momo', 'pip', 'nori', 'kiki') },
-  { id: 'tower-echo-bell', characters: ids('wren', 'basil', 'juniper') },
+  { id: 'factory-escape', characters: ids('wren', 'basil', 'juniper') },
 ];
 
 let t = 0;
 const ev = (sessionId, caseId, type, extra = {}) => ({ sessionId, caseId, type, timestamp: ++t, elapsedMs: 0, character: null, ...extra });
 const B = 'banana-mystery';
-const T = 'tower-echo-bell';
+const T = 'factory-escape';
 const ROLES = ['villain', 'collaborator', 'fooled', 'honest'];
 const truth = Object.fromEntries(['momo', 'pip', 'nori', 'kiki'].map((id, i) => [id, ROLES[i]]));
 /** A v3 verdict: `wrong` lists the character ids whose pick missed. */
@@ -117,7 +117,7 @@ test('byRole groups by the true role, whichever character holds it', () => {
   assert.deepEqual(t.byRole.fooled, { right: 2, total: 2 });
 });
 
-test('tower: three fooled apprentices tally under one role', () => {
+test('three fooled characters tally under one role', () => {
   const r = createRoundStats(cases);
   r.observe(verdict('a', T, [], 1000, { wren: 'fooled', basil: 'fooled', juniper: 'fooled' }));
   assert.deepEqual(r.tallies()[T].byRole, { fooled: { right: 3, total: 3 } });

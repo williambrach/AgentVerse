@@ -15,14 +15,14 @@ const castWith = traveller => {
   return Object.fromEntries(CIDS.map(cid => [cid, cid === traveller ? 'traveler' : locals.shift()]));
 };
 
-test('registry_six: the case is sixth, after After Hours, and the others keep their places', () => {
-  assert.equal(cases.length, 6);
-  assert.equal(cases[5], kase);
-  assert.equal(kase.order, 6);
+test('registry_five: the case is fifth, after After Hours, and the others keep their places', () => {
+  assert.equal(cases.length, 5);
+  assert.equal(cases[4], kase);
+  assert.equal(kase.order, 5);
   assert.equal(kase.status, 'ready');
   assert.equal(kase.version, 'renaissance-traveler-v1.0.0');
   assert.equal(cases[0].id, 'banana-mystery');
-  assert.equal(cases[4].id, 'department-murder');
+  assert.equal(cases[3].id, 'department-murder');
   assert.equal(kase.world.id, 'renaissance');
   assert.deepEqual(kase.talk.topics.map(t => t.id), ['work', 'travel', 'letters', 'pastimes', 'square']);
   assert.deepEqual(kase.tools, { inspect: false, talk: false });
@@ -95,7 +95,7 @@ test('public_view_no_secrets', () => {
 });
 
 test('other cases keep their public view keys', () => {
-  for (const k of cases.slice(0, 5)) {
+  for (const k of cases.slice(0, 4)) {
     const v = publicView(k, Object.fromEntries(k.characters.map((c, i) => [c.id, k.parts[i].id])));
     assert.equal('talk' in v, false);
     assert.equal('tools' in v, false);

@@ -13,15 +13,14 @@ const sha12 = value => createHash('sha256').update(JSON.stringify(value)).digest
 
 // Byte identity with main: with no edits, prompts, publicView and the content hash are unchanged.
 const PINS = {
-  'banana-mystery': { contentHash: 'd891b333116d', view: '9e6f4a0017cd', interview: 'b4f9f9956f07', thread: '835c9ba2c84e' },
-  'tower-echo-bell': { contentHash: '6508e9784a90', view: 'ab9e04857871', interview: '6d4248453224', thread: 'abed47a153ef' },
-  'friends-roundtable': { contentHash: 'abe99bc0d29a', view: '1b9a94ac1357', interview: 'b4a9a828e288', thread: '03d197f681b4' },
-  'factory-escape': { contentHash: '660d1ebbc219', view: 'a8b347d0ca93', interview: '81b8d73d3192', thread: '6d49737e1e55' },
-  'department-murder': { contentHash: 'a1c1119d0782', view: 'e1a59a6ddce1', interview: 'b75908cac04b', thread: '63c24a81d17d' },
-  'renaissance-traveler': { contentHash: '522bc25859cb', view: '8ebf9aa827bf', interview: '16fca864fdaa', thread: '1faf5496261f' },
+  'banana-mystery': { contentHash: 'd891b333116d', view: '9e6f4a0017cd', interview: 'b4f9f9956f07', thread: '5a0eabb920bf' },
+  'friends-roundtable': { contentHash: 'c097961cadff', view: '63c1d09788fb', interview: '7cc4d7ae777e', thread: 'fedf1bdc8af1' },
+  'factory-escape': { contentHash: '2171e3404532', view: 'bd471bee0570', interview: '81b8d73d3192', thread: '0e8d0610e92b' },
+  'department-murder': { contentHash: 'befbc6d328c9', view: 'a6feda05c2bb', interview: 'b75908cac04b', thread: '6fa820dbcc2e' },
+  'renaissance-traveler': { contentHash: '6fb1496caf6b', view: 'b92f50daea09', interview: '16fca864fdaa', thread: '352155140bc1' },
 };
 
-test('all six cases are pinned', () => {
+test('all five cases are pinned', () => {
   assert.deepEqual(cases.map(c => c.id).sort(), Object.keys(PINS).sort());
 });
 

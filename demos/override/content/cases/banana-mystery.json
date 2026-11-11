@@ -1,0 +1,10 @@
+{
+  "id": "banana-mystery",
+  "version": "banana-authored-v3.0.0",
+  "edits": {
+    "characters.kiki.name": "Po",
+    "characters.momo.name": "Tinky Winky",
+    "characters.nori.name": "Laa-Laa",
+    "characters.pip.name": "Dispy"
+  }
+}

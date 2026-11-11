@@ -224,3 +224,31 @@ test('late_failure_after_reset_touches_no_field_and_keeps_input_empty', async ()
     assert.equal(s.calls.length, 2, how + ' not stuck busy');
   }
 });
+
+test('show_prompt_button_toggles', async () => {
+  const s = setup({ reply: () => ({ messages: [{ role: 'system', content: 'SYS' }] }) });
+  await s.$('preview').fire('click');
+  assert.equal(s.$('prompt-box').hidden, false);
+  assert.equal(s.$('preview').textContent, 'Hide prompt');
+  const calls = s.calls.length;
+  await s.$('preview').fire('click');
+  assert.equal(s.$('prompt-box').hidden, true);
+  assert.equal(s.$('preview').textContent, 'Show prompt');
+  assert.equal(s.calls.length, calls);
+  await s.$('preview').fire('click');
+  assert.equal(s.$('prompt-box').hidden, false);
+  assert.equal(s.calls.length, calls + 1);
+});
+
+test('option_names_follow_published_and_typed_names', () => {
+  const d = detail();
+  d.current['characters.momo.name'] = 'Tinky Winky';
+  const s = setup({ d });
+  assert.equal(s.$('character').children[0].textContent, 'Tinky Winky · The planner (villain)');
+  s.edits['characters.pip.name'] = 'Dipsy';
+  s.edits['parts.boss.label'] = 'The chief';
+  s.$('character').value = 'pip';
+  s.chat.refresh();
+  assert.deepEqual(s.$('character').children.map(o => o.textContent), ['Tinky Winky · The chief (villain)', 'Dipsy · aide (helper)']);
+  assert.equal(s.$('character').value, 'pip');
+});

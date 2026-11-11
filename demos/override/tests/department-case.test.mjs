@@ -12,7 +12,7 @@ const casts = perms(ids).map(p => Object.fromEntries(dept.characters.map((c, i) 
 test('department_shape', () => {
   assert.equal(dept.id, 'department-murder');
   assert.equal(dept.version, 'department-murder-v1.0.0');
-  assert.equal(dept.order, 5);
+  assert.equal(dept.order, 4);
   assert.equal(dept.world.id, 'department');
   assert.equal(cases.find(c => c.id === 'department-murder'), dept);
   assert.deepEqual(dept.parts.map(p => p.id), ['killer', 'leaker', 'witness', 'lunch', 'late']);

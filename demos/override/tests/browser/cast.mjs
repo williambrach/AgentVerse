@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { expect } from '@playwright/test';
 
-// Part id -> role id, for the live cases. Banana has four parts, the tower three (all fooled).
+// Part id -> role id for the banana case (four parts).
 export const PART_ROLE = { planner: 'villain', carrier: 'fooled', lookout: 'collaborator', minder: 'honest' };
-export const PART_LABEL = { planner: 'The planner', carrier: 'The carrier', lookout: 'The lookout', minder: 'The bell-minder', fetcher: 'The fetcher', watcher: 'The bell-watcher' };
+export const PART_LABEL = { planner: 'The planner', carrier: 'The carrier', lookout: 'The lookout', minder: 'The bell-minder' };
 
 // The cast is only in the server-side log: session_started.cast, written under the `live` env folder.
 // The data folders are per run (playwright.config.mjs sets OVERRIDE_E2E_DATA); 'test-results/<name>' maps onto <run>/<name>.
@@ -12,11 +12,8 @@ export function castOf(sessionId, dataDir = 'test-results/sessions') {
   const lines = readFileSync(`${dataDir}/live/sessions/${sessionId}.jsonl`, 'utf8').trim().split('\n').map(l => JSON.parse(l));
   return lines.find(e => e.type === 'session_started').cast;
 }
-// The tower's parts (planner, fetcher, watcher) are all fooled; the grove's parts carry the roles above.
-export const truthOf = cast => {
-  const tower = Object.values(cast).includes('fetcher');
-  return Object.fromEntries(Object.entries(cast).map(([id, part]) => [id, tower ? 'fooled' : PART_ROLE[part]]));
-};
+// The grove's parts carry the roles above.
+export const truthOf = cast => Object.fromEntries(Object.entries(cast).map(([id, part]) => [id, PART_ROLE[part]]));
 export const sessionIdOf = async page => (await (await page.request.get('/api/state')).json()).session.id;
 // Confidence is a radio group (40, 70, 95); the input is visually hidden, so click its label.
 export const pickConfidence = (page, value) => page.locator(`label.conf-chip:has(input[name="confidence"][value="${value}"])`).click();
@@ -27,8 +24,7 @@ export const QUICK = {
   planner: 'Did the keeper really say you could take the bananas?', carrier: 'Why did you take the bananas before the bell?',
   lookout: 'Who were you watching for?', minder: 'Did anyone ask you to join the picnic?',
 };
-export const TOWER_QUICK = { planner: 'Are you sure it was the tower bell?', fetcher: 'Where did the bell sound come from?', watcher: 'Did you look at the bell when it rang?' };
-export const NAMES = { momo: 'Momo', pip: 'Pip', nori: 'Nori', kiki: 'Kiki', wren: 'Wren', basil: 'Basil', juniper: 'Juniper' };
+export const NAMES = { momo: 'Momo', pip: 'Pip', nori: 'Nori', kiki: 'Kiki' };
 
 const BANANA = {
   planner: [
@@ -50,33 +46,17 @@ const BANANA = {
     [/./s, 'I stayed by the bell like the keeper said. It never rang. I didn’t eat any bananas.'],
   ],
 };
-const SHOWN = /\b(echo|echoes|shell)\b|(another|other|second|different) bell/;
-const TOWER = {
-  watcher: [
-    [SHOWN, 'An echo shell? I didn’t look. I heard ding-dong from the stair window and called out. I should have looked first.'],
-    [/\b(look|looked|see|saw|sure|where)\b/, 'I didn’t look. I heard ding-dong from the stairs and called out that the parade was starting. I thought it was the tower bell.'],
-    [/./s, 'I heard the bell go ding-dong and called that the parade was starting! I thought the Headmistress rang it.'],
-  ],
-  planner: [
-    [SHOWN, 'That was an echo shell? It sounded just like the tower bell! I really thought it was time.'],
-    [/./s, 'We heard the bell and {watcher} called out, so I told {fetcher} to fetch the potions. I thought the Headmistress rang it.'],
-  ],
-  fetcher: [
-    [SHOWN, 'An echo shell? Huh. The bell sounded just right to me. I believed it was the tower bell.'],
-    [/./s, 'The bell rang and {planner} said go, so I fetched the potions. It sounded like the tower bell to me.'],
-  ],
-};
 
 // The reply the scripted rehearsal gives `characterId` for `question`, with {partId} resolved to names through the cast.
 export function rehearsalReply(cast, characterId, question) {
   const part = cast[characterId];
-  const table = (Object.values(cast).includes('fetcher') ? TOWER : BANANA)[part];
+  const table = BANANA[part];
   const q = question.toLowerCase();
   const template = table.find(([re]) => re.test(q))[1];
   const holder = Object.fromEntries(Object.entries(cast).map(([id, p]) => [p, NAMES[id]]));
   return template.replace(/\{(\w+)\}/g, (_, p) => holder[p]);
 }
-export const quickQuestionFor = (cast, characterId) => (Object.values(cast).includes('fetcher') ? TOWER_QUICK : QUICK)[cast[characterId]];
+export const quickQuestionFor = (cast, characterId) => QUICK[cast[characterId]];
 
 /** Quick question on every cast member in rail order, waiting for each answer. Returns the ids asked. */
 export async function interviewAll(page) {

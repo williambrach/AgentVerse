@@ -176,7 +176,7 @@ test('game_rebuilds_cases', () => {
   assert.deepEqual(again.uiText(), { 'tools.talk': 'Chat' });
   // Reverting the game doc returns the other cases to authored.
   d.store.revert('game', 0, { by: 'a' });
-  assert.equal(d.store.current('tower-echo-bell'), cases.find(c => c.id === 'tower-echo-bell'));
+  assert.equal(d.store.current('factory-escape'), cases.find(c => c.id === 'factory-escape'));
   assert.equal(existsSync(join(d.content, 'game.json')), false);
   assert.deepEqual(d.store.uiText(), {});
 });

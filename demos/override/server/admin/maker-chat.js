@@ -14,13 +14,17 @@ export function createChat(doc, { api, getEdits, getCaseId, onFieldError } = {})
 
   const cast = () => detail?.structure?.characters || [];
   const parts = () => detail?.structure?.parts || [];
-  const nameOf = (c) => (typeof c === 'string' ? c : c.name || c.id);
   const idOf = (c) => (typeof c === 'string' ? c : c.id);
+  // The text as it is typed right now, then as published, then as authored.
+  const liveText = (path) => {
+    const v = getEdits?.()?.[path] ?? detail?.current?.[path] ?? detail?.authored?.[path];
+    return typeof v === 'string' && v.trim() ? v : null;
+  };
+  const nameOf = (c) => liveText(`characters.${idOf(c)}.name`) || (typeof c === 'string' ? c : c.name || c.id);
   const capital = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
   function partLabel(p) {
-    const k = `parts.${p.id}.label`;
-    return detail.current?.[k] || detail.authored?.[k] || p.id;
+    return liveText(`parts.${p.id}.label`) || p.id;
   }
 
   function optionText(c, i) {
@@ -135,28 +139,42 @@ export function createChat(doc, { api, getEdits, getCaseId, onFieldError } = {})
     }
   }
 
+  function setPromptOpen(open) {
+    const box = $('prompt-box');
+    const btn = $('preview');
+    if (box) box.hidden = !open;
+    if (btn) btn.textContent = open ? 'Hide prompt' : 'Show prompt';
+  }
+
+  /** The button: closes an open prompt, otherwise fetches and shows it. */
+  function togglePrompt() {
+    const box = $('prompt-box');
+    if (box && !box.hidden) { setPromptOpen(false); return undefined; }
+    return showPrompt();
+  }
+
   async function showPrompt() {
     const pre = $('prompt');
-    const box = $('prompt-box');
     const q = String($('question')?.value ?? '').trim();
     try {
       const r = await api(`/admin/content/${getCaseId()}/preview`, body(q), 'POST');
       if (pre) pre.textContent = (r?.messages || []).find((m) => m.role === 'system')?.content ?? '';
-      if (box) box.hidden = false;
+      setPromptOpen(true);
     } catch (err) {
       if (err?.path && onFieldError) onFieldError(err.path, err.message);
       else if (pre) {
         pre.textContent = err?.message ?? String(err);
-        if (box) box.hidden = false;
+        setPromptOpen(true);
       }
     }
   }
 
+  setPromptOpen(false);
   const on = (id, type, fn) => $(id)?.addEventListener(type, fn);
   on('ask', 'submit', (e) => { e?.preventDefault?.(); return send(); });
-  on('preview', 'click', () => showPrompt());
+  on('preview', 'click', () => togglePrompt());
   on('new-chat', 'click', () => reset());
   on('character', 'change', () => reset());
 
-  return { setDetail, send, showPrompt, reset, turns: () => turns.map((t) => ({ ...t })) };
+  return { setDetail, refresh: renderOptions, send, showPrompt, hidePrompt: () => setPromptOpen(false), reset, turns: () => turns.map((t) => ({ ...t })) };
 }

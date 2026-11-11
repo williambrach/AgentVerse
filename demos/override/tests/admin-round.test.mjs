@@ -15,7 +15,7 @@ const byClass = (el, cls) => find(el, (e) => e.className.split(' ').includes(cls
 
 const catalog = [
   { id: 'banana-mystery', title: 'The Banana Mystery', characters: [{ id: 'momo', name: 'Momo' }, { id: 'pip', name: 'Pip' }, { id: 'nori', name: 'Nori' }] },
-  { id: 'tower-echo-bell', title: 'Lanterns Too Soon', characters: [{ id: 'wren', name: 'Wren' }, { id: 'basil', name: 'Basil' }, { id: 'juniper', name: 'Juniper' }] },
+  { id: 'factory-escape', title: 'Clocking Out', characters: [{ id: 'wren', name: 'Wren' }, { id: 'basil', name: 'Basil' }, { id: 'juniper', name: 'Juniper' }] },
 ];
 
 test('funnelRows example', () => {
@@ -33,13 +33,13 @@ test('funnel started 0 gives pct 0 everywhere, never NaN', () => {
   assert.ok(rows[0].steps.every((s) => s.pct === 0));
 });
 
-const tower = { verdicts: 2, perfect: 1, rolesRight: 7, rolesTotal: 8,
+const factory = { verdicts: 2, perfect: 1, rolesRight: 7, rolesTotal: 8,
   byRole: { villain: { right: 2, total: 2 }, collaborator: { right: 0, total: 0 }, fooled: { right: 1, total: 2 }, honest: { right: 4, total: 4 } },
   medianMsToVerdict: 754000, medianQuestions: 7 };
 
 test('tallyRows example (roles right, perfect, only roles with total > 0)', () => {
-  const r = round.tallyRows({ tallies: { 'tower-echo-bell': tower } }, catalog)[1];
-  assert.deepEqual(r, { caseId: 'tower-echo-bell', title: 'Lanterns Too Soon', verdicts: 2, perfect: 1, rolesPct: 88,
+  const r = round.tallyRows({ tallies: { 'factory-escape': factory } }, catalog)[1];
+  assert.deepEqual(r, { caseId: 'factory-escape', title: 'Clocking Out', verdicts: 2, perfect: 1, rolesPct: 88,
     roles: [{ id: 'villain', label: 'Villain', right: 2, total: 2, pct: 100 }, { id: 'fooled', label: 'Honest but fooled', right: 1, total: 2, pct: 50 },
       { id: 'honest', label: 'Honest', right: 4, total: 4, pct: 100 }], medianMin: '12:34', medianQuestions: 7, medianCoins: null });
 });
@@ -66,7 +66,7 @@ test('renderFunnel sizes bars via CSSOM and writes text only', () => {
 
 test('renderTallies heading, one bar per role, markup stays literal', () => {
   const doc = makeDoc(); const root = new El('div', doc);
-  round.renderTallies(root, { tallies: { 'tower-echo-bell': tower } }, catalog);
+  round.renderTallies(root, { tallies: { 'factory-escape': factory } }, catalog);
   assert.equal(byClass(root, 'tally-head')[0].textContent, '2 verdicts · 88 % roles right · 1 perfect');
   assert.equal(byClass(root, 'bar-fill').length, 3);
   assert.deepEqual(byClass(root, 'bar-fill').map((e) => e.style.width), ['100%', '50%', '100%']);

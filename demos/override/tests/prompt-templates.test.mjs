@@ -30,11 +30,11 @@ test('default_render_identical: the default templates render today prompt', () =
   assert.match(sys, /^You play Momo \(/);
   assert.ok(sys.includes(`(${base.version}, interview-v5).`));
   assert.ok(sys.endsWith(base.parts[0].knowledge[0].replace(/\{[^{}]*\}/g, m => m)) || sys.includes('YOUR KNOWLEDGE:\n'));
-  assert.ok(buildThreadMessages(base, s, 'momo')[0].content.includes('thread-v4).\nYou are posting in a short forum thread with Pip and Nori.'));
+  assert.ok(buildThreadMessages(base, s, 'momo')[0].content.includes('thread-v5).\nYou are posting in a short forum thread with Pip and Nori.'));
 });
 
 test('custom_template_used: a given template replaces the default', () => {
-  const k = defineCase(partCase, { worlds, prompts: { interview: 'X [[name]] [[knowledge]]', thread: 'T [[others]] [[knowledge]]', interviewVersion: 'interview-v5+abcd1234', threadVersion: 'thread-v4+ffff0000' } });
+  const k = defineCase(partCase, { worlds, prompts: { interview: 'X [[name]] [[knowledge]]', thread: 'T [[others]] [[knowledge]]', interviewVersion: 'interview-v5+abcd1234', threadVersion: 'thread-v5+ffff0000' } });
   assert.ok(buildMessages(k, sess(k), 'momo', 'Q?')[0].content.startsWith('X Momo '));
   assert.ok(buildThreadMessages(k, sess(k), 'momo')[0].content.startsWith('T Pip and Nori '));
   assert.ok(Object.isFrozen(k.prompts));
@@ -43,7 +43,7 @@ test('custom_template_used: a given template replaces the default', () => {
 test('version_logged: a session logs the prompts version', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'override-test-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const k = defineCase(partCase, { worlds, prompts: { interview: DEFAULT_TEMPLATES.interview, thread: DEFAULT_TEMPLATES.thread, interviewVersion: 'interview-v5+abcd1234', threadVersion: 'thread-v4+ffff0000' } });
+  const k = defineCase(partCase, { worlds, prompts: { interview: DEFAULT_TEMPLATES.interview, thread: DEFAULT_TEMPLATES.thread, interviewVersion: 'interview-v5+abcd1234', threadVersion: 'thread-v5+ffff0000' } });
   const inv = new Investigation({ dataDir: dir, config: modelConfig({}), kase: k, shuffle: ids => [...ids] });
   const act = (action, input = {}) => inv.mutate(action, { sessionId: inv.session?.id, revision: inv.session?.revision, ...input });
   await act('start');
@@ -67,7 +67,7 @@ test('prompts_not_hashed: prompts do not change the contentHash', () => {
 
 test('interview_accepts_frameFirst: the token is allowed and rendered', () => {
   assert.equal(checkTemplate('interview', '[[frameFirst]] [[knowledge]]'), null);
-  const k = defineCase(partCase, { worlds, prompts: { interview: 'F:[[frameFirst]] [[knowledge]]', thread: DEFAULT_TEMPLATES.thread, interviewVersion: 'interview-v5+abcd1234', threadVersion: 'thread-v4+ffff0000' } });
+  const k = defineCase(partCase, { worlds, prompts: { interview: 'F:[[frameFirst]] [[knowledge]]', thread: DEFAULT_TEMPLATES.thread, interviewVersion: 'interview-v5+abcd1234', threadVersion: 'thread-v5+ffff0000' } });
   const first = k.world.frame.split('. ')[0];
   const sys = buildMessages(k, sess(k), 'momo', 'Q?')[0].content;
   assert.ok(sys.startsWith(`F:${first} `));

@@ -492,7 +492,7 @@ export class Investigation {
     const character = characters.find(c => c.id === input.character);
     if (!character) throw new RequestError(400, `Choose one of the ${characters.length} ${w.cast.many}.`);
     const talk = this.kase.talk ? this.talkPlan(input, character) : null;
-    if (!talk && (typeof input.question !== 'string' || input.question.trim().length < 3 || input.question.length > 1200)) throw new RequestError(400, 'Ask a question between 3 and 1,200 characters.');
+    if (!talk && (typeof input.question !== 'string' || input.question.trim().length < 1 || input.question.length > 280)) throw new RequestError(400, 'Ask a question between 1 and 280 characters.');
     if (s.interviews[character.id].length >= 40) throw new RequestError(400, 'This demo supports 40 questions per character. Submit your findings or start a new session.');
     // In a talk case the authored topic and follow-up answers are free: the slips must stay reachable on any coin budget.
     const tools = talk && talk.kind !== 'typed' ? [] : ['ask'];
@@ -571,7 +571,7 @@ export class Investigation {
       if (text.length < 1 || text.length > 200 || !found.turn.answer.includes(text)) throw new RequestError(400, 'Choose words from that line.');
       return { kind: 'about', topic: null, about: { line: about.line, text }, question: `What did you mean by “${text}”?`, speaker: found.character, turn: found.turn };
     }
-    if (typeof input.question !== 'string' || input.question.trim().length < 3 || input.question.length > 1200) throw new RequestError(400, 'Ask a question between 3 and 1,200 characters.');
+    if (typeof input.question !== 'string' || input.question.trim().length < 1 || input.question.length > 280) throw new RequestError(400, 'Ask a question between 1 and 280 characters.');
     return { kind: 'typed', topic: null, about: null, question: input.question.trim() };
   }
 

@@ -5,10 +5,10 @@ import { boardScreen, boardRow } from '../client/board.ts';
 
 const cases = [
   { id: 'banana-mystery', title: 'The Banana Mystery', order: 1, total: 4 },
-  { id: 'tower-echo-bell', title: 'Lanterns Too Soon', order: 2, total: 3 },
+  { id: 'factory-escape', title: 'Clocking Out', order: 2, total: 3 },
 ];
 const team = (i, state1 = 'perfect', state2 = 'none', o = {}) => ({ rank: i, name: `Team ${i}`, points: 4, played: 1, timeMs: 90000, coins: 12, you: false,
-  cells: [{ caseId: 'banana-mystery', state: state1, points: 4 }, { caseId: 'tower-echo-bell', state: state2, points: 1 }], ...o });
+  cells: [{ caseId: 'banana-mystery', state: state1, points: 4 }, { caseId: 'factory-escape', state: state2, points: 1 }], ...o });
 const board = (o = {}) => ({ rankBy: 'time', round: 'Session B', cases, teams: [team(1)], ...o });
 const count = (html, re) => (html.match(re) || []).length;
 
@@ -32,7 +32,7 @@ test('cell_states', () => {
 
 test('legend', () => {
   const html = boardScreen(board());
-  for (const s of ['every role right', 'some right', 'playing now', 'The Banana Mystery', 'Lanterns Too Soon']) assert.ok(html.includes(s), s);
+  for (const s of ['every role right', 'some right', 'playing now', 'The Banana Mystery', 'Clocking Out']) assert.ok(html.includes(s), s);
 });
 
 test('ten_rows_and_more_line', () => {

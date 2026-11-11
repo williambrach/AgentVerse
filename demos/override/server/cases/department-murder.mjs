@@ -73,7 +73,7 @@ const part = (id, role, introduction, quickQuestion, knowledge, classification, 
 export default defineCase({
   id: 'department-murder',
   version: 'department-murder-v1.0.0',
-  order: 5,
+  order: 4,
   world: 'department',
   status: 'ready',
   title: 'After Hours',

@@ -675,7 +675,7 @@ const local = id => part(id, 'local', 'Of their time', 'A townsperson of 1489, n
 export default defineCase({
   id: 'renaissance-traveler',
   version: 'renaissance-traveler-v1.0.0',
-  order: 6,
+  order: 5,
   world: 'renaissance',
   status: 'ready',
   title: "A Word Out of Time",

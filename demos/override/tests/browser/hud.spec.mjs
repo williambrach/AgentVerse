@@ -139,20 +139,6 @@ test('lineup_back_returns_to_the_map', async ({ page }) => {
   await expect(page.locator('.topbar')).toBeVisible();
 });
 
-test('tower_lineup_fits_and_theme', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await begin(page, '/?case=tower-echo-bell');
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'tower');
-  // The tower stage has no bare ground band: the overscan is filled with bookcases, so the canvas still fills the window.
-  const canvas = await rect(page, '#station canvas');
-  expect(Math.abs(canvas.width - 1280)).toBeLessThanOrEqual(2);
-  await interviewAll(page);
-  await page.locator('.hud-rail [data-go="report"]').click();
-  await expect(page.locator('fieldset.role-row')).toHaveCount(3);
-  expect(await page.evaluate(() => document.scrollingElement.scrollWidth <= innerWidth)).toBe(true);
-  expect(await page.locator('.lineup-board').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-});
-
 // Findings from the first review round.
 
 test('new_team_checks_in_and_the_case_board_takes_real_clicks', async ({ browser, baseURL }) => {

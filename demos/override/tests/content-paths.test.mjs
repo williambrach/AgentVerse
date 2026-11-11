@@ -23,7 +23,7 @@ const leaves = (v, key = null, schema = '') => {
 const fieldLeaves = fields => fields.reduce((n, f) => n + (f.kind === 'list' ? f.value.length : 1), 0);
 
 test('walks_every_case', () => {
-  assert.equal(cases.length, 6);
+  assert.equal(cases.length, 5);
   for (const k of cases) {
     const raw = rawOf(k);
     const fields = fieldsOf(raw);

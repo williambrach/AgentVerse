@@ -83,7 +83,7 @@ test('world_edit_builds_prompts_without_mutating', () => {
   assert.equal(out.prompts.interview, DEFAULT_TEMPLATES.interview);
   assert.equal(out.prompts.thread, DEFAULT_TEMPLATES.thread);
   assert.match(out.prompts.interviewVersion, /^interview-v5\+[0-9a-f]{8}$/);
-  assert.match(out.prompts.threadVersion, /^thread-v4\+[0-9a-f]{8}$/);
+  assert.match(out.prompts.threadVersion, /^thread-v5\+[0-9a-f]{8}$/);
   const same = applyGame({ 'worlds.grove.cast.one': 'an ape', 'worlds.grove.persona': 'ape' }, worlds);
   assert.equal(same.prompts.interviewVersion, out.prompts.interviewVersion);
   assert.notEqual(applyGame({ 'worlds.grove.persona': 'gibbon' }, worlds).prompts.interviewVersion, out.prompts.interviewVersion);

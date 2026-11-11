@@ -721,6 +721,6 @@ export function createRoundtable(onArrival: (id: string) => void, onHint: (hint:
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }, audio: { noAudio: true }, scene: [scene], input: { keyboard: false }, autoFocus: false,
   });
   game.canvas.setAttribute('role', 'img');
-  game.canvas.setAttribute('aria-label', plain('roundtable.canvas.default', { place: plain('worlds.friends.place'), names: 'Maya, Ken, Alex, Nora, Sam' }));
+  game.canvas.setAttribute('aria-label', plain('roundtable.canvas.default', { place: plain('worlds.friends.place'), names: 'Ector, Perceval, Pellinore, Galahad, Constantine' }));
   return scene;
 }

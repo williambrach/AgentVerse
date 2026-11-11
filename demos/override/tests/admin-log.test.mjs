@@ -4,7 +4,7 @@ import * as log from '../server/admin/log.js';
 
 const catalog = [
   { id: 'banana-mystery', title: 'Banana', world: 'w', characters: [{ id: 'pip', name: 'Pip' }, { id: 'momo', name: 'Momo' }] },
-  { id: 'tower-echo-bell', title: 'Tower', world: 'w', characters: [{ id: 'bell', name: 'Bell' }] },
+  { id: 'factory-escape', title: 'Factory', world: 'w', characters: [{ id: 'bell', name: 'Bell' }] },
 ];
 const q = { id: 1, at: 1, sessionId: 's1', player: 's1', caseId: 'banana-mystery', kind: 'question', character: 'pip', text: 'Where were you?', ms: null, endpoint: null, failedOver: false, reason: null, verdict: null, elapsedMs: 65000 };
 
@@ -13,7 +13,7 @@ test('matches', () => {
   assert.equal(log.matches(q, { text: 'WHERE' }), true);
   assert.equal(log.matches(q, { character: 'momo' }), false);
   assert.equal(log.matches(q, { sessionId: 's2' }), false);
-  assert.equal(log.matches(q, { caseId: 'tower-echo-bell' }), false);
+  assert.equal(log.matches(q, { caseId: 'factory-escape' }), false);
   assert.equal(log.matches(q, {}), true);
   assert.equal(log.matches({ ...q, kind: 'visit' }, { kinds: ['question'] }), false);
 });

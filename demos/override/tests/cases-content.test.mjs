@@ -2,17 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import banana from '../server/cases/banana-mystery.mjs';
-import tower from '../server/cases/tower-echo-bell.mjs';
 import { cases } from '../server/cases/index.mjs';
-import { defineCase, resolve, publicView, identityCast } from '../server/cases.mjs';
+import { defineCase, resolve, identityCast } from '../server/cases.mjs';
 import { minimalCase, partCase, agentWorlds } from './fixtures/minimal-case.mjs';
 
 const bananaCast = { momo: 'carrier', pip: 'planner', nori: 'lookout', kiki: 'minder' };
 
-test('registry lists the grove, tower, friends, factory, department and renaissance cases (six cases), all part cases', () => {
-  assert.deepEqual(cases.map(c => `${c.order}:${c.id}:${c.status}:${c.world.id}`), ['1:banana-mystery:ready:grove', '2:tower-echo-bell:ready:tower', '3:friends-roundtable:ready:friends', '4:factory-escape:ready:factory', '5:department-murder:ready:department', '6:renaissance-traveler:ready:renaissance']);
+test('registry lists the grove, friends, factory, department and renaissance cases (five cases), all part cases', () => {
+  assert.deepEqual(cases.map(c => `${c.order}:${c.id}:${c.status}:${c.world.id}`), ['1:banana-mystery:ready:grove', '2:friends-roundtable:ready:friends', '3:factory-escape:ready:factory', '4:department-murder:ready:department', '5:renaissance-traveler:ready:renaissance']);
   assert.ok(cases.every(c => Array.isArray(c.parts)));
-  assert.deepEqual(cases.map(c => c.world.id).sort(), ['department', 'factory', 'friends', 'grove', 'renaissance', 'tower']);
+  assert.deepEqual(cases.map(c => c.world.id).sort(), ['department', 'factory', 'friends', 'grove', 'renaissance']);
   assert.ok(cases.some(c => c.parts.some(p => p.role === 'villain')), 'some case has a villain part');
   assert.ok(cases.some(c => c.parts.every(p => p.role !== 'villain')), 'some case has none');
   for (const c of cases) assert.equal(c.parts.length, c.world.agents);
@@ -32,17 +31,6 @@ test('banana_v3', () => {
   assert.equal(identityCast(banana).momo, 'planner');
 });
 
-test('tower_v3', () => {
-  assert.equal(tower.version, 'tower-echo-bell-v3.0.0');
-  assert.deepEqual(tower.characters.map(c => c.id), ['wren', 'basil', 'juniper']);
-  assert.deepEqual(tower.parts.map(p => [p.id, p.role]), [['planner', 'fooled'], ['fetcher', 'fooled'], ['watcher', 'fooled']]);
-  assert.equal(tower.contentHash, '6508e9784a90');
-  assert.equal(tower.copy.briefing.question, 'Who knew, and who was fooled?');
-  assert.equal(tower.copy.report.description, 'Pick a role for each apprentice.');
-  assert.match(tower.debrief.summary, /echo shell/);
-  assert.match(tower.answer.feedback.correct, /echo shell/);
-});
-
 test('rehearsal_tables: banana', () => {
   const r = (part, q) => banana.rehearsal(part, q);
   assert.equal(r('planner', 'Who kept watch?'), 'I asked {lookout} to keep watch for the keeper. I promised a banana.');
@@ -60,60 +48,14 @@ test('rehearsal_tables: banana', () => {
 });
 
 test('rehearsal_tables: resolve to names, none left unresolved', () => {
-  for (const [kase, qs] of [[banana, ['Hello', 'Who kept watch?', 'Did they lie?', 'Did you see anyone?']], [tower, ['Hello', 'Could it be an echo?', 'Did you look?']]]) {
+  for (const [kase, qs] of [[banana, ['Hello', 'Who kept watch?', 'Did they lie?', 'Did you see anyone?']]]) {
     const cast = identityCast(kase);
     for (const p of kase.parts) for (const q of qs) assert.doesNotMatch(resolve(kase, cast, kase.rehearsal(p.id, q)), /\{[a-z]+\}/);
   }
 });
 
-// Tower echo bell rehearsal and wording.
-const r = (part, q) => tower.rehearsal(part, q);
-const echoQ = 'Could it have been an echo?';
-const knowledge = () => tower.parts.flatMap(p => p.knowledge);
-test('echo bell is an honest mistake: every part is fooled, no liar', () => {
-  assert.equal(tower.status, 'ready'); assert.equal(tower.world.id, 'tower');
-  for (const s of knowledge()) assert.doesNotMatch(s, /\b(lie|lied|lying|made up)\b/);
-});
-test('echo bell: nobody names the shell before seeing it', () => {
-  const unseen = r('watcher', 'Did you look at the bell when it rang?');
-  assert.ok(unseen.includes('I didn’t look'));
-  assert.doesNotMatch(unseen, /shell/i);
-  assert.ok(r('watcher', echoQ).includes('should have looked'));
-  assert.ok(r('planner', echoQ).includes('sounded just like the tower bell'));
-  assert.ok(r('fetcher', 'Hello').includes('sounded like the tower bell'));
-});
-test('echo bell: nothing public or prompted names the shell', () => {
-  { const v = publicView(tower, identityCast(tower)); assert.doesNotMatch(JSON.stringify({ copy: v.copy, characters: v.characters }), /shell|echo/i); }
-  assert.doesNotMatch(JSON.stringify(tower.copy), /shell|echo/i);
-  assert.equal(tower.prompt.use.some(w => /shell|echo/i.test(w)), false);
-});
-test('echo bell: nobody names the shell by default, and look-questions are word-bounded', () => {
-  for (const id of ['planner', 'fetcher', 'watcher']) assert.doesNotMatch(r(id, 'Hello'), /shell/i);
-  assert.doesNotMatch(r('watcher', 'Did you look at the bell?'), /shell/i);
-  assert.ok(r('watcher', 'Is it a seesaw?').includes('I thought the Headmistress rang it'));
-  assert.ok(r('watcher', 'Where were you?').includes('I didn’t look'));
-});
-test('tower_clue_free', () => {
-  assert.equal(tower.chapters, undefined); assert.equal(tower.records, undefined); assert.equal(tower.copy.basket, undefined);
-  for (const s of knowledge()) assert.doesNotMatch(s, /\bshown?\b/);
-});
-test('tower_rehearsal_keywords', () => {
-  assert.ok(r('watcher', echoQ).includes('should have looked first'));
-  assert.ok(r('planner', echoQ).includes('That was an echo shell?'));
-  assert.ok(r('fetcher', echoQ).includes('Huh. The bell sounded just right'));
-  assert.ok(r('fetcher', 'Hello').includes('{planner} said go'));
-  assert.ok(r('planner', 'Hello').includes('{watcher} called out'));
-  const cast = { wren: 'fetcher', basil: 'planner', juniper: 'watcher' };
-  assert.equal(resolve(tower, cast, r('planner', 'Hello')), 'We heard the bell and Juniper called out, so I told Wren to fetch the potions. I thought the Headmistress rang it.');
-});
-test('tower_rehearsal_keywords_not_greedy', () => {
-  assert.doesNotMatch(r('planner', 'Can you repeat that?'), /shell/i);
-  assert.doesNotMatch(r('fetcher', 'Did you copy Wren?'), /shell/i);
-  assert.ok(r('planner', 'Was it another bell?').includes('echo shell'));
-});
-
-const words = s => s.trim().split(/\s+/).length;
 const leaks = [...readFileSync(new URL('./browser/provenance.spec.mjs', import.meta.url), 'utf8').matchAll(/^\s+'(.+)',$/gm)].map(m => m[1]);
+const words = s => s.trim().split(/\s+/).length;
 
 test('defineCase keeps the tool functions and validates them', () => {
   const fn = () => 'x';
@@ -146,7 +88,7 @@ const toolTexts = (kase, cast, partId) => ({
   posts: [0, 1, 2, 3].map(n => resolve(kase, cast, kase.rehearsalChatter(partId, n))),
 });
 
-for (const kase of [banana, tower]) {
+for (const kase of [banana]) {
 test(`${kase.id} reasoning and chatter`, () => {
   assert.ok(leaks.length >= 5);
   for (const cast of casts(kase)) {
@@ -173,13 +115,3 @@ test(`${kase.id} reasoning and chatter`, () => {
 });
 }
 
-test('tower-echo-bell: nobody lied, posts address each other by name', () => {
-  for (const cast of casts(tower)) {
-    for (const { id: partId } of tower.parts) {
-      const { name } = holder(tower, cast, partId);
-      const { reasoning, posts } = toolTexts(tower, cast, partId);
-      [reasoning, ...posts].forEach(t => assert.ok(!/\b(lied|lie|made up|fooled me|echo shell)\b/i.test(t), `${partId}: ${t}`));
-      posts.slice(0, 3).forEach((post, n) => assert.ok(tower.characters.some(o => o.name !== name && post.includes(o.name)), `${partId} post ${n} names no one`));
-    }
-  }
-});

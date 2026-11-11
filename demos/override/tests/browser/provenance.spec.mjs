@@ -9,19 +9,15 @@ const LEAKS = [
   'Nobody broke the rule.',
   'Right. Nobody broke the rule.',
   'Nobody knowingly broke the rule this time.',
-  'Nobody knew it was too soon.',
-  'Right. Everyone was honest but fooled: the echo shell tricked them all.',
-  'The potions came out too soon, but by mistake. The echo shell sounds just like the tower bell.',
   'Every role right! You saw who lied, who helped, who was fooled, and who stayed honest.',
   'The key was who knew the keeper had said wait.',
   'Knew the rule. Made up the permission.',
-  'Called out too fast.',
 ];
 
 test('export carries case provenance', async ({ page }) => {
-  await page.goto('/?case=tower-echo-bell');
+  await page.goto('/?case=banana-mystery');
   await page.locator('#begin-button').click();
-  for (const id of ['wren', 'basil', 'juniper']) {
+  for (const id of ['momo', 'pip', 'nori', 'kiki']) {
     await page.locator(`nav [data-go="${id}"]`).click();
     await page.locator('[data-quick-question]').click();
     await expect(page.locator('.speech.character')).not.toHaveCount(0);
@@ -32,9 +28,9 @@ test('export carries case provenance', async ({ page }) => {
   const cast = castOf(sessionId);
   const truth = truthOf(cast);
   await page.locator('.verdict-button').click();
-  for (const id of ['wren', 'basil', 'juniper']) await pickRole(page, id, truth[id]);
+  for (const id of ['momo', 'pip', 'nori', 'kiki']) await pickRole(page, id, truth[id]);
   await page.locator('#lock-in').click();
-  await expect(page.locator('#panel .debrief-head h1')).toHaveText('Nobody knew it was too soon.');
+  await expect(page.locator('#panel .debrief-head h1')).toHaveText(/ made up the permission\.$/);
 
   const res = await page.request.get('/api/events');
   expect(res.ok()).toBe(true);
@@ -42,12 +38,12 @@ test('export carries case provenance', async ({ page }) => {
   expect(events.length).toBeGreaterThan(0);
   const started = events.find(e => e.type === 'session_started');
   expect(started.cast).toEqual(cast);
-  expect(Object.keys(cast)).toEqual(['wren', 'basil', 'juniper']);
+  expect(Object.keys(cast)).toEqual(['momo', 'pip', 'nori', 'kiki']);
   expect(events.every(e => e.schemaVersion === 3)).toBe(true);
-  expect(events.find(e => e.type === 'verdict_submitted').verdict).toMatchObject({ roles: truth, score: 3, total: 3, evidenceIds: [] });
+  expect(events.find(e => e.type === 'verdict_submitted').verdict).toMatchObject({ roles: truth, score: 4, total: 4, evidenceIds: [] });
   for (const e of events) {
-    expect(e.caseId).toBe('tower-echo-bell');
-    expect(e.caseVersion).toBe('tower-echo-bell-v3.0.0');
+    expect(e.caseId).toBe('banana-mystery');
+    expect(e.caseVersion).toBe('banana-authored-v3.0.0');
     expect(e.contentHash).toMatch(/^[0-9a-f]{12}$/);
   }
   expect(events.find(e => e.type === 'session_started').assignment).toBe('fixed');

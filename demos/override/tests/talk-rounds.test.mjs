@@ -23,7 +23,7 @@ function setup(t, caseId) {
   return { g, act, kase, dir, restore };
 }
 
-for (const [caseId, size] of [['friends-roundtable', 5], ['banana-mystery', 4], ['tower-echo-bell', 3]]) {
+for (const [caseId, size] of [['friends-roundtable', 5], ['banana-mystery', 4]]) {
   test(`round_hears_everyone: ${caseId} (${size} characters) speaks ${size} lines per press, each once`, async t => {
     const { g, act, kase } = setup(t, caseId);
     await act('start');

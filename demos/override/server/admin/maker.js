@@ -46,6 +46,7 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
   }
 
   function renderNav() {
+    if (detail && detail.id !== GAME) chat.refresh();
     if (navTimer !== null) { clearTimeout(navTimer); navTimer = null; }
     const nav = $('sections');
     if (!nav || !form) return;
@@ -92,7 +93,7 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
     }
     clear(caseSel);
     for (const c of [...cases.filter((x) => x.id !== GAME), ...cases.filter((x) => x.id === GAME)]) {
-      const o = el(doc, 'option', null, { text: `${c.title} · ${c.rev ? 'rev ' + c.rev : 'authored'}${c.stale ? ' · stale' : ''}`, parent: caseSel });
+      const o = el(doc, 'option', null, { text: `${c.title}${c.rev ? ' · rev ' + c.rev : ''}${c.stale ? ' · stale' : ''}`, parent: caseSel });
       o.value = c.id;
     }
     if (id) caseSel.value = id;
@@ -150,7 +151,7 @@ export function mountMaker(root, { api, caseId = null, location = null, confirm 
     id = next;
     currentKey = null;
     $('prompt').textContent = '';
-    $('prompt-box').hidden = true;
+    chat.hidePrompt();
     $('publish-note').textContent = '';
     renderTabs();
     await fetchDetail();

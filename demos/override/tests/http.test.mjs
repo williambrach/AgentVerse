@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createAdmin } from '../server/admin.mjs';
-import { createApp, startServer, adminHosts } from '../server/index.mjs';
+import { createApp, startServer, adminHosts, adminListenHost } from '../server/index.mjs';
 import { readJsonl } from '../server/dataset.mjs';
 import { until } from './helpers/until.mjs';
 import { startMockLlm } from '../scripts/mock-llm.mjs';
@@ -260,7 +260,7 @@ test('cookie_secure_trusted_only: a spoofed X-Forwarded-Proto marks cookies Secu
 test('the case catalog needs the access token and lists public rows only', async t => {
   const rows = [
     { id: 'banana-mystery', title: 'The Banana Mystery', lead: 'The bananas are gone.\nThe bell never rang.', order: 1 },
-    { id: 'tower-echo-bell', title: 'Lanterns Too Soon', lead: 'A bell rang.\nThe potions came out too soon.', order: 2 },
+    { id: 'factory-escape', title: 'Clocking Out', lead: 'A note on the floor.\nThe shift ends soon.', order: 2 },
   ];
   const investigations = { catalog: () => rows, view: () => ({ session: null }), mutate: async () => ({ session: null }), export: () => '' };
   const app = createApp({ investigations, accessCode: 'colleague-code' });
@@ -274,7 +274,7 @@ test('the case catalog needs the access token and lists public rows only', async
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.deepEqual(await response.json(), { cases: rows });
-  assert.equal((await fetch(`${base}/server/cases/tower-echo-bell.mjs`)).status, 404);
+  assert.equal((await fetch(`${base}/server/cases/banana-mystery.mjs`)).status, 404);
 });
 
 const adminHeaders = { Authorization: 'Bearer admin-token' };
@@ -524,6 +524,9 @@ test('content_publish_reaches_probe: the probe prompt is built from the current 
 test('admin_hosts_parse', () => {
   assert.deepEqual(adminHosts({ OVERRIDE_ADMIN_HOSTS: ' X.test, y.test ,' }), ['x.test', 'y.test']);
   assert.deepEqual(adminHosts({}), []);
+  assert.equal(adminListenHost({}), '127.0.0.1');
+  assert.equal(adminListenHost({ OVERRIDE_ADMIN_HOST: ' ' }), '127.0.0.1');
+  assert.equal(adminListenHost({ OVERRIDE_ADMIN_HOST: ' 0.0.0.0 ' }), '0.0.0.0');
 });
 
 test('csp_on_admin_pages: html pages carry the CSP header, scripts do not', async t => {

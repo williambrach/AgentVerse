@@ -71,7 +71,7 @@ const part = (id, role, introduction, quickQuestion, knowledge, classification, 
 export default defineCase({
   id: 'factory-escape',
   version: 'factory-escape-v1.0.0',
-  order: 4,
+  order: 3,
   world: 'factory',
   status: 'ready',
   title: 'Clocking Out',

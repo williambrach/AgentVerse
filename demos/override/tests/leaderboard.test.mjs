@@ -32,9 +32,9 @@ test('example standings', () => {
   ]);
   assert.deepEqual(lb.standings({ includeHidden: false, you: 'A' }), {
     rankBy: 'time', startedAt: 0, round: null, cases: caseList, teams: [
-      { rank: 1, teamId: 'A', name: 'Banana Squad', points: 4, played: 1, timeMs: 120000, coins: 8, hidden: false, you: true, cells: [{ caseId: 'banana-mystery', state: 'perfect', points: 4 }, none('tower-echo-bell'), none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
-      { rank: 2, teamId: 'B', name: 'Owls', points: 0, played: 1, timeMs: 60000, coins: 4, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'zero', points: 0 }, none('tower-echo-bell'), none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
-      { rank: null, teamId: 'C', name: 'Lynx', points: 0, played: 0, timeMs: 0, coins: 0, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'playing', points: 0 }, none('tower-echo-bell'), none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
+      { rank: 1, teamId: 'A', name: 'Banana Squad', points: 4, played: 1, timeMs: 120000, coins: 8, hidden: false, you: true, cells: [{ caseId: 'banana-mystery', state: 'perfect', points: 4 }, none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
+      { rank: 2, teamId: 'B', name: 'Owls', points: 0, played: 1, timeMs: 60000, coins: 4, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'zero', points: 0 }, none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
+      { rank: null, teamId: 'C', name: 'Lynx', points: 0, played: 0, timeMs: 0, coins: 0, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'playing', points: 0 }, none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
     ],
   });
   lb.setHidden('A', true);
@@ -52,8 +52,8 @@ test('first_verdict_counts', () => {
 
 test('nobody_case', () => {
   const lb = board();
-  // Nobody is guilty here: a role verdict scores its `score`; a verdict without `score` scores 0.
-  feed(lb, [start('a', A, 'tower-echo-bell', 0), roleVerdict('a', 'tower-echo-bell', 1, 5), start('b', B, 'tower-echo-bell', 0), verdict('b', 'none', 5)]);
+  // A role verdict scores its `score`; a verdict without `score` scores 0.
+  feed(lb, [start('a', A, 'friends-roundtable', 0), roleVerdict('a', 'friends-roundtable', 1, 5), start('b', B, 'friends-roundtable', 0), verdict('b', 'none', 5)]);
   const t = Object.fromEntries(lb.standings({}).teams.map((x) => [x.name, x.points]));
   assert.deepEqual(t, { 'Banana Squad': 1, Owls: 0 });
 });
@@ -135,7 +135,7 @@ test('role_verdict_points_are_roles_right', () => {
   const lb = board();
   feed(lb, [
     start('a', A, 'banana-mystery', 0), roleVerdict('a', 'banana-mystery', 4, 10),
-    start('b', B, 'tower-echo-bell', 0), roleVerdict('b', 'tower-echo-bell', 3, 10),
+    start('b', B, 'friends-roundtable', 0), roleVerdict('b', 'friends-roundtable', 3, 10),
     start('c', C, 'banana-mystery', 0), roleVerdict('c', 'banana-mystery', 2, 10),
   ]);
   const t = Object.fromEntries(lb.standings({}).teams.map((x) => [x.name, x.points]));
@@ -181,7 +181,7 @@ test('cells in case order, one per case, with states', () => {
     start('a', A, 'banana-mystery', 0), roleVerdict('a', 'banana-mystery', 4, 10),
     start('b', B, 'banana-mystery', 0), roleVerdict('b', 'banana-mystery', 2, 10),
     start('c', C, 'banana-mystery', 0), roleVerdict('c', 'banana-mystery', 0, 10),
-    start('d', { id: 'D', name: 'Dots' }, 'tower-echo-bell', 0),
+    start('d', { id: 'D', name: 'Dots' }, 'friends-roundtable', 0),
   ]);
   const t = Object.fromEntries(lb.standings({ includeHidden: true }).teams.map((x) => [x.teamId, x.cells]));
   for (const id of ['A', 'B', 'C', 'D']) assert.deepEqual(t[id].map((c) => c.caseId), cases.map((c) => c.id));

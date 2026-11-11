@@ -9,26 +9,26 @@ import { publicView, identityCast, rolesOf, resolve, partOf } from '../server/ca
 import { Investigation } from '../server/session.mjs';
 import { modelConfig } from '../server/interviews.mjs';
 
-const PARTS = ['birds', 'moon', 'flat', 'finland', 'paul'];
+const PARTS = ['birds', 'reptile', 'aliens', 'moonbase', 'haarp'];
 
-test('registry_third: friends is third on the friends world', () => {
-  assert.deepEqual(cases.map(c => c.id), ['banana-mystery', 'tower-echo-bell', 'friends-roundtable', 'factory-escape', 'department-murder', 'renaissance-traveler']);
-  assert.equal(cases[3].id, 'factory-escape');
-  assert.equal(cases[4].id, 'department-murder');
-  assert.equal(cases[2].world.id, 'friends');
-  assert.ok(cases[2].parts.every(p => p.label === 'Friend'));
+test('registry_second: friends is second on the friends world', () => {
+  assert.deepEqual(cases.map(c => c.id), ['banana-mystery', 'friends-roundtable', 'factory-escape', 'department-murder', 'renaissance-traveler']);
+  assert.equal(cases[2].id, 'factory-escape');
+  assert.equal(cases[3].id, 'department-murder');
+  assert.equal(cases[1].world.id, 'friends');
+  assert.ok(cases[1].parts.every(p => p.label === 'Friend'));
 });
 
 test('friends_case_shape', () => {
-  assert.equal(friends.version, 'friends-roundtable-v1.0.0');
+  assert.equal(friends.version, 'friends-roundtable-v2.0.0');
   assert.deepEqual(friends.characters.map(c => [c.id, c.name, c.color]), [
-    ['maya', 'Maya', '#e4b85c'], ['ken', 'Ken', '#75b2b0'], ['alex', 'Alex', '#bd96bc'], ['nora', 'Nora', '#d7956f'], ['sam', 'Sam', '#8d9fcb'],
+    ['maya', 'Ector', '#e4b85c'], ['ken', 'Perceval', '#75b2b0'], ['alex', 'Pellinore', '#bd96bc'], ['nora', 'Galahad', '#d7956f'], ['sam', 'Constantine', '#8d9fcb'],
   ]);
-  assert.deepEqual(rolesOf(friends).map(r => r.id), [...PARTS, 'simulation', 'nessie', 'none']);
+  assert.deepEqual(rolesOf(friends).map(r => r.id), ['birds', 'reptile', 'bermuda', 'aliens', 'moonbase', 'haarp', 'none']);
   assert.deepEqual(friends.parts.map(p => p.id), PARTS);
   assert.ok(friends.parts.every(p => p.role === p.id));
   const held = new Set(friends.parts.map(p => p.role));
-  assert.deepEqual(rolesOf(friends).filter(r => !held.has(r.id)).map(r => r.id), ['simulation', 'nessie', 'none']);
+  assert.deepEqual(rolesOf(friends).filter(r => !held.has(r.id)).map(r => r.id), ['bermuda', 'none']);
   assert.equal(rolesOf(friends).find(r => r.id === 'none').label, 'Not a conspiracist');
 });
 
@@ -43,7 +43,8 @@ test('friends_story_hides_that_everyone_has_one: nothing before the verdict says
 test('friends_knowledge_has_shared_rule', () => {
   for (const p of friends.parts) {
     assert.equal(p.knowledge.length, 2);
-    assert.match(p.knowledge[0], /hide it at first/);
+    assert.match(p.knowledge[0], /never say that you believe the theory unless Arthur asks/);
+    assert.match(p.knowledge[0], /never talk about theirs/);
   }
 });
 
@@ -58,11 +59,11 @@ test('friends_tools_text', () => {
 });
 
 test('friends_rehearsal_deflects_then_admits', () => {
-  assert.match(friends.rehearsal('birds', 'How was your week?'), /Nothing to share/);
+  assert.match(friends.rehearsal('birds', 'How was your week?'), /pigeon outside/);
   const admit = friends.rehearsal('birds', 'Do you like birds?');
-  assert.match(admit, /Birds aren’t real\. They’re drones/);
-  assert.match(friends.rehearsal('paul', 'Any favorite music?'), /Paul McCartney died in 1966/);
-  assert.match(friends.rehearsal('finland', 'Where do you travel?'), /double-check maps/);
+  assert.match(admit, /Birds aren’t real\. They’re government robots/);
+  assert.match(friends.rehearsal('reptile', 'What about Zuckerberg?'), /reptilian elite/);
+  assert.match(friends.rehearsal('haarp', 'Any plans?'), /Terrible weather/);
 });
 
 const start = async t => {
@@ -83,7 +84,7 @@ test('friends_verdict_scores_theories', async t => {
   assert.equal(`${done.session.verdict.score}/${done.session.verdict.total}`, '5/5');
   const b = await start(t);
   const wrong = Object.fromEntries(friends.characters.map(c => [c.id, partOf(friends, b.inv.session.cast, c.id).role]));
-  wrong.maya = 'simulation';
+  wrong.maya = 'bermuda';
   const miss = await b.act('verdict', { roles: wrong, confidence: 80 });
   assert.equal(`${miss.session.verdict.score}/${miss.session.verdict.total}`, '4/5');
   await assert.rejects(start(t).then(c => c.act('verdict', { roles: { maya: 'villain', ken: 'moon', alex: 'moon', nora: 'moon', sam: 'moon' }, confidence: 1 })), e => e.status === 400);
@@ -98,7 +99,7 @@ test('friends_no_theory_in_public_view', () => {
     assert.equal(json.includes(p.knowledge[1]), false);
   }
   for (const r of rolesOf(friends)) assert.equal(json.includes(r.label), false, r.label);
-  assert.equal(resolve(friends, identityCast(friends), '{birds}'), 'Maya');
+  assert.equal(resolve(friends, identityCast(friends), '{birds}'), 'Ector');
 });
 
 test('catalog_rows_name_their_cast: each row lists its personas (id and name only), so the case board can preview any case', async () => {
@@ -106,10 +107,9 @@ test('catalog_rows_name_their_cast: each row lists its personas (id and name onl
   const rows = listCases(cases);
   const row = id => rows.find(r => r.id === id);
   assert.deepEqual(row('friends-roundtable').cast, [
-    { id: 'maya', name: 'Maya' }, { id: 'ken', name: 'Ken' }, { id: 'alex', name: 'Alex' }, { id: 'nora', name: 'Nora' }, { id: 'sam', name: 'Sam' },
+    { id: 'maya', name: 'Ector' }, { id: 'ken', name: 'Perceval' }, { id: 'alex', name: 'Pellinore' }, { id: 'nora', name: 'Galahad' }, { id: 'sam', name: 'Constantine' },
   ]);
   assert.equal(row('banana-mystery').cast.length, 4);
-  assert.equal(row('tower-echo-bell').cast.length, 3);
   for (const r of rows) for (const c of r.cast) assert.deepEqual(Object.keys(c).sort(), ['id', 'name']);
   // No theory or part information travels with the catalog.
   const text = JSON.stringify(rows);

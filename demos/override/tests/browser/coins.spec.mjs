@@ -28,7 +28,7 @@ async function ask(page, id, name, total) {
   await coinsLeft(page, 15 - total);
 }
 /** Waits until three different characters have each shown a bubble. */
-// One round of talk is one line from every character (four monkeys, three in the tower), each seen in a bubble.
+// One round of talk is one line from every character (four monkeys), each seen in a bubble.
 async function everyoneSpeaks(page, count = 4) {
   const seen = new Set();
   await expect.poll(async () => {
@@ -177,21 +177,6 @@ test('reload_keeps_thread', async ({ page }) => {
   await expect(page.locator('#thread-log .thread-post')).toHaveCount(1);
   // Four monkeys: one line heard, three still to come.
   await expect(page.locator('#continue-button')).toHaveText('Keep listening (3)');
-});
-
-test('tower_tools', async ({ page }) => {
-  test.setTimeout(90_000);
-  await fresh(page, 'tower-echo-bell');
-  await coinsLeft(page, 15);
-  await ask(page, 'juniper', 'Juniper', 2);
-  await page.locator('#inspect-button').click();
-  await coinsLeft(page, 8);
-  await expect(page.locator('.speech.reasoning')).toBeVisible();
-  await ask(page, 'wren', 'Wren', 9);
-  await ask(page, 'basil', 'Basil', 11);
-  await page.locator('#continue-button').click();
-  await everyoneSpeaks(page, 3);
-  await expect(page.locator('#thread-log .thread-post')).toHaveCount(3);
 });
 
 test('verdict_through_roles', async ({ page }) => {

@@ -10,7 +10,7 @@ const roles = [
 const cast = ['momo', 'pip', 'nori', 'kiki', 'zozo'].map((id, i) => ({ id, name: id.toUpperCase(), part: 'p', faceClass: `${id} slot-${i}` }));
 const finding = (character, role, picked, extra = {}) => ({ character, role, picked, correct: role === picked, classification: 'Classed', explanation: 'Because.', ...extra });
 const debrief = (o = {}) => ({ title: 'The Banana Mystery', summary: 'Sum', score: 3, total: 4, feedback: 'Good', lesson: 'Lesson text', findings: [finding('momo', 'villain', 'villain'), finding('pip', 'fooled', 'honest'), finding('nori', 'honest', 'honest'), finding('kiki', 'collaborator', 'collaborator')], ...o });
-const view = (o = {}) => ({ title: 'The Banana Mystery', debrief: debrief(), roles, cast, time: '2:31', spent: 12, budget: 20, questions: 4, inspections: 1, talks: 2, next: { id: 'tower-echo-bell', title: 'Lanterns Too Soon' }, many: 'monkeys', ...o });
+const view = (o = {}) => ({ title: 'The Banana Mystery', debrief: debrief(), roles, cast, time: '2:31', spent: 12, budget: 20, questions: 4, inspections: 1, talks: 2, next: { id: 'factory-escape', title: 'Clocking Out' }, many: 'monkeys', ...o });
 const count = (html, re) => (html.match(re) || []).length;
 
 test('score_in_summary', () => {
@@ -47,8 +47,8 @@ test('spend_summary', () => {
 
 test('actions', () => {
   const html = debriefPage(view());
-  assert.match(html, /id="next-case"[^>]*data-case="tower-echo-bell"/);
-  assert.match(html, /Lanterns Too Soon/);
+  assert.match(html, /id="next-case"[^>]*data-case="factory-escape"/);
+  assert.match(html, /Clocking Out/);
   assert.match(html, /id="debrief-leaderboard"/);
   assert.match(html, /id="debrief-export"/);
   const last = debriefPage(view({ next: null }));

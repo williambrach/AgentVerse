@@ -9,7 +9,7 @@ const runDir = process.env.OVERRIDE_E2E_DATA ??= mkdtempSync(join(tmpdir(), 'ove
 const dataDir = name => join(runDir, name);
 // Every context, including browser.newContext() in a spec, starts as a returning player who has seen the sponsor intro.
 // splash.spec.mjs clears this to play it.
-const seenSplash = { cookies: [], origins: [4317, 4318, 4319, 4320, 4321, 4322, 4323, 4324, 4325, 4326].map(port => ({ origin: `http://127.0.0.1:${port}`, localStorage: [{ name: 'override.splash', value: 'seen' }] })) };
+const seenSplash = { cookies: [], origins: [4317, 4319, 4320, 4321, 4322, 4323, 4324, 4325, 4326].map(port => ({ origin: `http://127.0.0.1:${port}`, localStorage: [{ name: 'override.splash', value: 'seen' }] })) };
 
 export default defineConfig({
   testDir: './tests/browser',
@@ -19,8 +19,7 @@ export default defineConfig({
   // A missing baseline fails instead of being written, so a test can never pass against its own fresh screenshot.
   updateSnapshots: 'none',
   projects: [
-    { name: 'default', testIgnore: ['tower.spec.mjs', 'admin.spec.mjs', 'maker.spec.mjs', 'admin-upgrade.spec.mjs', 'admin-text.spec.mjs', 'coins.spec.mjs', 'factory.spec.mjs', 'department.spec.mjs', 'renaissance.spec.mjs'] },
-    { name: 'tower', testMatch: 'tower.spec.mjs', use: { baseURL: 'http://127.0.0.1:4318' } },
+    { name: 'default', testIgnore: ['admin.spec.mjs', 'maker.spec.mjs', 'admin-upgrade.spec.mjs', 'admin-text.spec.mjs', 'coins.spec.mjs', 'factory.spec.mjs', 'department.spec.mjs', 'renaissance.spec.mjs'] },
     { name: 'admin', testMatch: ['admin.spec.mjs', 'maker.spec.mjs', 'admin-upgrade.spec.mjs', 'admin-text.spec.mjs'], grepInvert: /@live/, use: { baseURL: 'http://127.0.0.1:4320' } },
     // Live mode over a mock LLM. Only the live tests in admin-upgrade.spec.mjs run here.
     { name: 'admin-live', testMatch: 'admin-upgrade.spec.mjs', grep: /@live/, use: { baseURL: 'http://127.0.0.1:4323' } },
@@ -46,13 +45,6 @@ export default defineConfig({
       url: 'http://127.0.0.1:4317/api/access',
       reuseExistingServer: false,
       env: { PORT: '4317', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: dataDir('sessions'), OVERRIDE_CONTENT_DIR: dataDir('content-main') },
-    },
-    {
-      // Dev tools on, as in local development. Only the tower project talks to this server.
-      command: 'node server/index.mjs',
-      url: 'http://127.0.0.1:4318/api/access',
-      reuseExistingServer: false,
-      env: { PORT: '4318', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DEV_TOOLS: '1', OVERRIDE_DATA_DIR: dataDir('sessions-tower'), OVERRIDE_CONTENT_DIR: dataDir('content-tower') },
     },
     {
       // The real server with the admin listener on. Only the admin project talks to it; players are driven over the game port.

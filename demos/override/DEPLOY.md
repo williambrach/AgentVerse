@@ -1,9 +1,10 @@
 # Deploy The Banana Mystery
 
-There are two ways to deploy the Override demo. The AgentVerse Python simulation is not required for either.
+There are three ways to deploy the Override demo. The AgentVerse Python simulation is not required for either.
 
 - **[One Mac for a 200-player event](#hosting-200-players-on-a-mac).** The game server, admin page and metrics run on one Mac, reached over a Cloudflare Tunnel or a closed LAN. Use this for a study.
 - **One Docker web service for a small colleague demo.** The [Dockerfile](Dockerfile) builds the browser game and serves it with the Node.js interview API from the same origin. Sections 1–5 use Render; a [local Docker smoke test](#local-docker-smoke-test) checks the container before deployment or on another Docker host.
+- **[Docker on your own machine, with text edits saved to the checkout](#docker-with-text-edits-saved-to-the-checkout).** `docker compose` runs the game and the admin page from a git clone. Use this when other people edit prompts and text on the admin page and you commit their edits.
 
 ## Current deployment limits
 
@@ -163,6 +164,81 @@ These commands preserve the named `override-data` volume. Reuse it for subsequen
 
 For a VPS deployment, place an HTTPS reverse proxy in front of the loopback-bound port. Forward the original HTTPS scheme so the application marks its login cookie secure. Allow enough response time for the configured model deadline; a 90-second proxy response timeout accommodates the default 60-second model timeout.
 
+## Docker with text edits saved to the checkout
+
+Use this when people edit prompts and text on the admin page and the edits must end up in the git repository. [docker-compose.yml](docker-compose.yml) runs one container from a clone and mounts `content/` from that clone, so every Publish writes a file you can commit.
+
+### Before the first deploy
+
+The compose file and the admin text editor must be on GitHub, or a fresh clone will not have them. Check on the machine you develop on:
+
+```sh
+git status -sb                                   # main must not be "ahead" of origin
+git ls-files demos/override/docker-compose.yml   # must print the path
+git grep -n OVERRIDE_ADMIN_HOST -- demos/override/server/index.mjs   # must print a match
+```
+
+If any check fails, commit and push first.
+
+### On the deploy machine
+
+```sh
+git clone <repository url> AgentVerse
+cd AgentVerse/demos/override
+git checkout <branch>        # the branch the text edits belong on
+cp .env.example .env
+```
+
+Edit `.env`. It is not in git, and `docker compose` refuses to start without it.
+
+- `OVERRIDE_ADMIN_PASSWORD` is required. Without it there is no admin page and nobody can edit text.
+- `OVERRIDE_SECRET` keeps sign-ins across restarts (`openssl rand -hex 32`).
+- `OVERRIDE_ACCESS_CODE` and the model endpoint settings are needed for a real event. With only the password set, the game answers from the rehearsal scripts.
+- Leave `HOST`, `PORT`, `OVERRIDE_ADMIN_HOST`, `OVERRIDE_ADMIN_PORT`, `OVERRIDE_DATA_DIR` and `OVERRIDE_CONTENT_DIR` alone: the compose file sets them.
+
+Start it:
+
+```sh
+docker compose up --build -d
+docker compose logs --tail 20
+curl --fail --silent --show-error http://127.0.0.1:3001/api/health
+```
+
+The log must name both listeners and warn that the admin listener binds `0.0.0.0`. That warning is expected here: the compose file publishes the port on the host's loopback only.
+
+- Game: `http://127.0.0.1:3001`. Put an HTTPS reverse proxy or a tunnel in front of it for players.
+- Admin: `http://127.0.0.1:3002/admin`. From another machine, forward it first with `ssh -L 3002:127.0.0.1:3002 user@host`. Never put the admin port on the public tunnel, and never remove the `127.0.0.1:` prefix from the port mappings.
+
+### Check that edits reach the checkout
+
+Do this once after each deploy. Open the admin page, open the editor, change one text and press Publish. Then on the deploy machine:
+
+```sh
+git status --short content
+```
+
+It must list `content/game.json` or a file under `content/cases/`. Restore the authored text from History if the edit was only a test; the file then disappears. If nothing is listed, the `content` mount is missing: start the container with `docker compose`, from `demos/override/`. On a Linux host the container writes as uid 1000, so `content/` must be writable by that user.
+
+### Save the edits to git
+
+The server never runs git. When the editors are done, on the deploy machine:
+
+```sh
+git diff demos/override/content
+git add demos/override/content
+git commit -m "Content edits"
+git push
+```
+
+Edits apply to new games only; a running game keeps the text it started with. A `git pull` that changes `content/` needs `docker compose restart` before the server reads it.
+
+### Update and stop
+
+```sh
+git pull && docker compose up --build -d   # update; commit or stash content edits first
+docker compose down                        # stop; the logs in the override-data volume and the content files stay
+```
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -253,7 +329,7 @@ The admin page is `http://127.0.0.1:3002/admin`; sign in with the admin password
 
 Everyone who edits text uses the same admin page and the same password. Open `http://127.0.0.1:3002/admin`, sign in once, then open the editor from the page. The admin port is never on the public (player) tunnel. Reach it either over the same SSH forward as the operator (`ssh -L 3002:127.0.0.1:3002 user@mac`), or over Tailscale, or over a separate hostname that an identity policy protects (for example Cloudflare Access requiring a login) and that points at `http://127.0.0.1:3002`. In the last case set `OVERRIDE_ADMIN_HOSTS=<that hostname>` so the listener accepts the `Host` header. There are no maker tokens any more. See [README](README.md#editing-text-from-the-admin-page).
 
-Edits are saved as JSON files in `content/`. With Docker, the `docker run` above mounts the folder from the checkout, so edits survive the container. After the event, commit them from the event machine: `git diff demos/override/content`, then `git add`, `git commit` and `git push`. The server never runs git.
+Edits are saved as JSON files in `content/`. With Docker, run `docker compose up --build -d` from `demos/override/`: [docker-compose.yml](docker-compose.yml) mounts `content/` from the checkout, so every published edit shows up in `git status` on the host, and it opens the admin page on `http://127.0.0.1:3002/admin`. A plain `docker run` needs the `content` bind mount for the edits and `OVERRIDE_ADMIN_HOST=0.0.0.0` plus a loopback port mapping for the admin page. After the event, commit them from the event machine: `git diff demos/override/content`, then `git add`, `git commit` and `git push`. The server never runs git.
 
 One hour before:
 - Start the server and confirm `/admin/health` is green.

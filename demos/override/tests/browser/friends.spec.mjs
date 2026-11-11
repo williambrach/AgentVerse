@@ -24,7 +24,7 @@ async function start(page, caseId = 'friends-roundtable') {
 
 const IDS = ['maya', 'ken', 'alex', 'nora', 'player', 'sam'];
 const FRIENDS = ['maya', 'ken', 'alex', 'nora', 'sam'];
-const NAMES = { maya: 'Maya', ken: 'Ken', alex: 'Alex', nora: 'Nora', sam: 'Sam' };
+const NAMES = { maya: 'Ector', ken: 'Perceval', alex: 'Pellinore', nora: 'Galahad', sam: 'Constantine' };
 
 const ready = page => page.waitForFunction(() => window.testGames.some(g => g.scene.getScene('roundtable')?.actors?.size === 6));
 const info = page => page.evaluate(() => {
@@ -219,7 +219,7 @@ test('friends_click_and_rail_open_chat', async ({ page }, testInfo) => {
   // By the rail.
   await page.locator('#room-nav [data-go="ken"]').click();
   await expect(page.locator('[data-quick-question]')).toBeVisible();
-  await expect(page.locator('#panel')).toContainText('Ken');
+  await expect(page.locator('#panel')).toContainText('Perceval');
   // By clicking the friend at the table.
   await expect.poll(() => state(page, 'ken'), { timeout: 9000 }).toBe('idle');
   // The table in front of Nora covers her waist: clicking there is not clicking her. The inner corner (toward the
@@ -234,12 +234,12 @@ test('friends_click_and_rail_open_chat', async ({ page }, testInfo) => {
   const t = await screenPoint(page, below);
   await page.mouse.move(t.x, t.y);
   await page.mouse.click(t.x, t.y);
-  await expect(page.locator('#panel')).toContainText('Ken');
+  await expect(page.locator('#panel')).toContainText('Perceval');
   const p = await bodyPoint(page, 'nora');
   await page.mouse.move(p.x, p.y);
   await page.mouse.click(p.x, p.y);
-  await expect(page.locator('#panel')).toContainText('Nora');
-  await expect(page.locator('#panel')).not.toContainText('Ken’s');
+  await expect(page.locator('#panel')).toContainText('Galahad');
+  await expect(page.locator('#panel')).not.toContainText('Perceval’s');
   await expect(page.locator('[data-quick-question]')).toBeVisible();
   await shot(page, testInfo, 'chat');
 });
@@ -273,7 +273,7 @@ test('friends_choice_lineup_and_debrief', async ({ page }, testInfo) => {
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
   await expect(page.locator('#panel h1')).toHaveText('Unmask the conspiracists', { timeout: 12_000 });
   await expect(page.locator('fieldset.role-row')).toHaveCount(5);
-  await expect(page.locator('fieldset.role-row').first().locator('.role-chip input')).toHaveCount(8);
+  await expect(page.locator('fieldset.role-row').first().locator('.role-chip input')).toHaveCount(7);
   await expect(page.locator('.scale-ends')).toHaveCount(0);
   await expect(page.locator('.role-choice .choice-label').first()).toBeVisible();
   await shot(page, testInfo, 'lineup');
@@ -338,7 +338,7 @@ test('case_board_preview_shows_the_picked_cast', async ({ page }) => {
   await expect(faces).toHaveCount(5);
   for (const [i, id] of ['maya', 'ken', 'alex', 'nora', 'sam'].entries()) await expect(faces.nth(i)).toHaveClass(new RegExp(`\\b${id}\\b`));
   await expect(page.locator('#case-preview .intro-flow')).toContainText('Ask 5 friends');
-  await page.locator('.case-option input[name="case"][value="tower-echo-bell"]').check();
-  await expect(faces).toHaveCount(3);
-  await expect(page.locator('#case-preview .intro-flow')).toContainText('Ask 3 apprentices');
+  await page.locator('.case-option input[name="case"][value="banana-mystery"]').check();
+  await expect(faces).toHaveCount(4);
+  await expect(page.locator('#case-preview .intro-flow')).toContainText('Ask 4 monkeys');
 });

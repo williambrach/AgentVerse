@@ -159,15 +159,15 @@ test('Enter sends the question and Shift+Enter adds a new line', async ({ page }
 test('copy, counts and nav come from the active case', async ({ page }) => {
   await fresh(page);
   const before = await (await page.request.get('/api/state')).json();
-  const reset = await page.request.post('/api/reset', { data: { sessionId: before.session.id, revision: before.session.revision, caseId: 'tower-echo-bell' } });
+  const reset = await page.request.post('/api/reset', { data: { sessionId: before.session.id, revision: before.session.revision, caseId: 'friends-roundtable' } });
   expect(reset.ok()).toBe(true);
   await page.reload();
-  await expect(page.locator('h1')).toHaveText('Was it time?');
+  await expect(page.locator('h1')).toHaveText('Find the conspiracists');
   await expect(page.locator('.wordmark')).toHaveAttribute('aria-label', 'The Override home');
-  await expect(page.locator('#intro-title')).toContainText('Lanterns');
+  await expect(page.locator('#intro-title')).toContainText('Friends');
   await page.locator('#begin-button').click();
-  await expect(page.locator('#panel h2')).toHaveText('Lanterns, too soon.');
+  await expect(page.locator('#panel h2')).toHaveText('Find the conspiracists.');
   await expect(page.locator('#case-eyebrow')).toContainText('CASE 002');
-  await expect(page.locator('#case-eyebrow')).toContainText('TOWER');
-  await expect(page.locator('#case-headline')).toHaveText('Was it time?');
+  await expect(page.locator('#case-eyebrow')).toContainText('FRIENDS');
+  await expect(page.locator('#case-headline')).toHaveText('Find the conspiracists');
 });
