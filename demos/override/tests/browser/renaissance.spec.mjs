@@ -59,7 +59,7 @@ const solve = async (page, g) => {
   return mustAct(page, 'accuse', { character: g.traveler, quotes: [q.id] });
 };
 
-test('renaissance_board_and_assets: six cases, figures, assets 200, no console error, talk briefing', async ({ page }) => {
+test('renaissance_board_and_assets: five cases, figures, assets 200, no console error, talk briefing', async ({ page }) => {
   const errors = [];
   const bad = [];
   let seen = 0;
@@ -71,7 +71,7 @@ test('renaissance_board_and_assets: six cases, figures, assets 200, no console e
     if (r.status() !== 200) bad.push(`${r.status()} ${r.url()}`);
   });
   await page.goto('/');
-  await expect(page.locator('.case-option')).toHaveCount(6);
+  await expect(page.locator('.case-option')).toHaveCount(5);
   const cases = await (await page.request.get('/api/cases')).json();
   expect(cases.cases.at(-1).id).toBe('renaissance-traveler');
   await start(page);

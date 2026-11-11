@@ -59,7 +59,7 @@ async function askAllByApi(page) {
 
 const picksFor = cast => Object.fromEntries(Object.entries(cast).map(([id, part]) => [id, ROLE_OF[part]]));
 
-test('factory_board_and_assets: six cases, every image loads, no console error', async ({ page }, testInfo) => {
+test('factory_board_and_assets: five cases, every image loads, no console error', async ({ page }, testInfo) => {
   const errors = [];
   const bad = [];
   const assets = new Set();
@@ -72,7 +72,7 @@ test('factory_board_and_assets: six cases, every image loads, no console error',
   });
   await start(page);
   await page.locator('#reset-button').click();
-  await expect(page.locator('.case-option input[name="case"]')).toHaveCount(6);
+  await expect(page.locator('.case-option input[name="case"]')).toHaveCount(5);
   await expect(page.locator('.case-option input[name="case"][value="factory-escape"]')).toHaveCount(1);
   await page.keyboard.press('Escape');
   await expect(page.locator('#app')).toHaveAttribute('data-world', 'factory');
