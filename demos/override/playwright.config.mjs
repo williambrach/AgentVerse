@@ -61,11 +61,11 @@ export default defineConfig({
       env: { OVERRIDE_ADMIN_PASSWORD: 'admin-e2e', OVERRIDE_CONTENT_DIR: dataDir('content-admin-live') },
     },
     {
-      // Rehearsal with a 15-coin budget. Only the coins project talks to this server.
+      // Rehearsal for the coin counter and tools. Only the coins project talks to this server.
       command: 'node server/index.mjs',
       url: 'http://127.0.0.1:4321/api/access',
       reuseExistingServer: false,
-      env: { PORT: '4321', HOST: '127.0.0.1', OVERRIDE_COIN_BUDGET: '15', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: dataDir('sessions-coins'), OVERRIDE_CONTENT_DIR: dataDir('content-coins') },
+      env: { PORT: '4321', HOST: '127.0.0.1', OVERRIDE_LLM_API_KEY: '', OVERRIDE_LLM_MODEL: '', OVERRIDE_ACCESS_CODE: '', OVERRIDE_DATA_DIR: dataDir('sessions-coins'), OVERRIDE_CONTENT_DIR: dataDir('content-coins') },
     },
     {
       // Deadline case: dev tools on and a 45 s clock. Only the factory project talks to this server.

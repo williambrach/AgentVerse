@@ -4,22 +4,11 @@ import { worlds } from '../server/worlds.mjs';
 import { economyRules, createWallet, quote, spend, minimumBudget } from '../server/economy.mjs';
 
 const COSTS = { ask: 2, inspect: 5, continue: 1 };
-const fresh = (env = { OVERRIDE_COIN_BUDGET: '15' }) => createWallet(economyRules(env));
+const fresh = (opts = { budget: 15 }) => createWallet(economyRules(opts));
 
-test('rules_defaults_and_env', () => {
-  assert.deepEqual(economyRules({}), { budget: null, costs: COSTS, charges: { inspect: 1, continue: 3 } });
-  assert.deepEqual(economyRules({ OVERRIDE_COIN_BUDGET: '15', OVERRIDE_REASONING_CHARGES: '2' }),
-    { budget: 15, costs: COSTS, charges: { inspect: 2, continue: 3 } });
-  assert.equal(economyRules({ OVERRIDE_COIN_BUDGET: '' }).budget, null);
-});
-
-test('rules_validation', () => {
-  for (const v of ['9', '1000', '9.5', 'abc']) {
-    assert.throws(() => economyRules({ OVERRIDE_COIN_BUDGET: v }), { message: 'OVERRIDE_COIN_BUDGET must be an integer between 10 and 999.' });
-  }
-  assert.equal(economyRules({ OVERRIDE_COIN_BUDGET: '10' }).budget, 10);
-  assert.equal(economyRules({ OVERRIDE_COIN_BUDGET: '999' }).budget, 999);
-  assert.throws(() => economyRules({ OVERRIDE_REASONING_CHARGES: '3' }), { message: 'OVERRIDE_REASONING_CHARGES must be 1 or 2.' });
+test('rules_defaults', () => {
+  assert.deepEqual(economyRules(), { budget: null, costs: COSTS, charges: { inspect: 1, continue: 3 } });
+  assert.deepEqual(economyRules({ budget: 15, inspect: 2 }), { budget: 15, costs: COSTS, charges: { inspect: 2, continue: 3 } });
 });
 
 test('wallet_shape', () => {
@@ -33,7 +22,7 @@ test('quote_examples', () => {
   assert.deepEqual(quote(w, ['ask', 'continue'], 0), { cost: 3, ok: false, reason: 'No conversations left.' });
   const w2 = fresh(); w2.spent = 12;
   assert.deepEqual(quote(w2, ['inspect'], 0), { cost: 5, ok: false, reason: 'Not enough coins: this costs 5 and you have 3 left.' });
-  const w3 = fresh({ OVERRIDE_COIN_BUDGET: '10' }); w3.spent = 6;
+  const w3 = fresh({ budget: 10 }); w3.spent = 6;
   assert.deepEqual(quote(w3, ['continue'], 4), { cost: 1, ok: false, reason: 'Save coins: you need 4 to ask everyone once.' });
 });
 
@@ -74,9 +63,7 @@ test('unknown_tool_clue_throws', () => {
 test('budget_floor_fits_cast', () => {
   const most = Math.max(...Object.values(worlds).map(w => w.agents));
   assert.equal(minimumBudget(), COSTS.ask * most);
-  assert.equal(economyRules({ OVERRIDE_COIN_BUDGET: String(minimumBudget()) }).budget, minimumBudget());
-  assert.throws(() => economyRules({ OVERRIDE_COIN_BUDGET: String(minimumBudget() - 1) }), { message: `OVERRIDE_COIN_BUDGET must be an integer between ${minimumBudget()} and 999.` });
-  // The smallest allowed budget still asks every agent once.
-  const w = createWallet(economyRules({ OVERRIDE_COIN_BUDGET: String(minimumBudget()) }));
+  // The floor budget still asks every agent once.
+  const w = createWallet(economyRules({ budget: minimumBudget() }));
   for (let i = 0; i < most; i++) { assert.equal(quote(w, ['ask'], (most - i - 1) * COSTS.ask).ok, true); spend(w, ['ask']); }
 });

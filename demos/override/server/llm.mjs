@@ -38,11 +38,11 @@ function pickReasoning(message) {
 
 export class LlmRouter {
   constructor({
-    endpoints, maxInFlight = 200, deadlineMs = 60_000, maxCompletionTokens = 2048, failover = { failures: 5, windowMs: 30_000 },
+    endpoints, maxInFlight = 300, deadlineMs = 60_000, maxCompletionTokens = 2048, failover = { failures: 5, windowMs: 30_000 },
     fetcher = fetch, now = Date.now, sleep = defaultSleep, restore = null, onSystem = () => {}, onTrace = () => {}, onEvent = () => {},
   }) {
     this.eps = endpoints.map(e => ({
-      ...e, baseUrl: e.baseUrl.replace(/\/$/, ''), host: new URL(e.baseUrl).host, maxInFlight: e.maxInFlight ?? 50,
+      ...e, baseUrl: e.baseUrl.replace(/\/$/, ''), host: new URL(e.baseUrl).host, maxInFlight: e.maxInFlight ?? 200,
       tokenParam: e.tokenParam || 'max_completion_tokens', timeoutMs: e.timeoutMs ?? 25_000, temperature: e.temperature ?? null, reasoningEffort: e.reasoningEffort ?? null,
       inFlight: 0, failureTimes: [], recent: [], lastSuccessAt: null, lastFailureAt: null, lastFailureReason: null, lastAlertAt: -Infinity,
     }));

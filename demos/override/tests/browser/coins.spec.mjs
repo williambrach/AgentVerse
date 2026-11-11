@@ -12,10 +12,10 @@ async function fresh(page, caseId = 'banana-mystery') {
   await page.locator('#confirm-reset').click();
   await expect(page.locator('#case-switch')).toHaveCount(0);
 }
-// The counter shows the coins left: "13 / 15" over the label COINS LEFT.
-async function coinsLeft(page, left) {
-  await expect(page.locator(`${COUNTER} .coin-num`)).toHaveText(`${left} / 15`);
-  await expect(page.locator(`${COUNTER} .hud-label`)).toHaveText('COINS LEFT');
+// Games have no budget: the counter shows the coins spent, "2" over the label COINS SPENT.
+async function coinsSpent(page, spent) {
+  await expect(page.locator(`${COUNTER} .coin-num`)).toHaveText(String(spent));
+  await expect(page.locator(`${COUNTER} .hud-label`)).toHaveText('COINS SPENT');
 }
 // A character page names its speaker in the dialogue box.
 async function go(page, location, name) {
@@ -25,7 +25,7 @@ async function go(page, location, name) {
 async function ask(page, id, name, total) {
   await go(page, id, name);
   await page.locator('[data-quick-question]').click();
-  await coinsLeft(page, 15 - total);
+  await coinsSpent(page, total);
 }
 /** Waits until three different characters have each shown a bubble. */
 // One round of talk is one line from every character (four monkeys), each seen in a bubble.
@@ -45,9 +45,9 @@ async function api(page, name, body = {}) {
 
 test('counter_starts_zero', async ({ page }) => {
   await fresh(page);
-  await coinsLeft(page, 15);
+  await coinsSpent(page, 0);
   await go(page, 'momo', 'Momo');
-  await coinsLeft(page, 15);
+  await coinsSpent(page, 0);
 });
 
 test('question_costs', async ({ page }) => {
@@ -62,7 +62,7 @@ test('inspect_once', async ({ page }) => {
   await ask(page, 'pip', 'Pip', 4);
   await go(page, 'momo', 'Momo');
   await page.locator('#inspect-button').click();
-  await coinsLeft(page, 6);
+  await coinsSpent(page, 9);
   await expect(page.locator('.speech.reasoning')).toBeVisible();
   await expect(page.locator('#inspect-button')).toBeDisabled();
   await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('0 left');
@@ -85,17 +85,17 @@ test('inspect_stays_open_and_says_the_character_did_not_think', async ({ page })
   await expect(page.locator('[data-card="inspect"]')).not.toHaveClass(/off/);
   await page.locator('#inspect-button').click();
   await expect(page.locator('.speech.no-thought p')).toHaveText('Momo did not think. No coins spent.');
-  await coinsLeft(page, 13);
+  await coinsSpent(page, 2);
   await expect(page.locator('#inspect-button')).toBeEnabled();
   await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('5 coins · 1 left');
   await expect(page.locator('#toast')).toBeHidden();
   // A new line replaces the note, and the charge was not used up.
   await page.locator('#question').fill('Are you sure?');
   await page.keyboard.press('Enter');
-  await coinsLeft(page, 11);
+  await coinsSpent(page, 4);
   await expect(page.locator('.speech.no-thought')).toHaveCount(0);
   await page.locator('#inspect-button').click();
-  await coinsLeft(page, 6);
+  await coinsSpent(page, 9);
   await expect(page.locator('.speech.reasoning').first()).toBeVisible();
   await expect(page.locator('#toolbelt [data-tool="inspect"]')).toHaveText('0 left');
 });
@@ -137,7 +137,7 @@ test('talk_round', async ({ page }) => {
   await page.locator('#continue-button').click();
   await everyoneSpeaks(page);
   await expect(page.locator('#thread-log .thread-post')).toHaveCount(4);
-  await coinsLeft(page, 6);
+  await coinsSpent(page, 9);
 });
 
 test('talk_from_start', async ({ page }) => {
@@ -147,24 +147,7 @@ test('talk_from_start', async ({ page }) => {
   await page.locator('#continue-button').click();
   await everyoneSpeaks(page);
   await expect(page.locator('#thread-log .thread-post')).toHaveCount(4);
-  await coinsLeft(page, 14);
-});
-
-test('budget_409', async ({ page }) => {
-  await fresh(page);
-  const ok = async (name, body) => expect((await api(page, name, body)).status()).toBe(200);
-  await ok('interview', { character: 'momo', question: 'What happened with the bananas?' });
-  await ok('interview', { character: 'pip', question: 'What did you see?' });
-  await ok('interview', { character: 'nori', question: 'Where were you?' });
-  await ok('interview', { character: 'kiki', question: 'Who did you talk to?' });
-  await ok('inspect', { character: 'momo' });
-  // A full round (four lines, one coin), then the first line of the next round (one more coin).
-  for (let i = 0; i < 5; i++) await ok('continue');
-  const state = await (await page.request.get('/api/state')).json();
-  expect(state.session.economy.spent).toBe(15);
-  const res = await api(page, 'interview', { character: 'pip', question: 'One more thing?' });
-  expect(res.status()).toBe(409);
-  expect((await res.json()).error).toContain('Not enough coins');
+  await coinsSpent(page, 1);
 });
 
 test('reload_keeps_thread', async ({ page }) => {
@@ -192,6 +175,6 @@ test('verdict_through_roles', async ({ page }) => {
   for (const id of ['momo', 'pip', 'nori', 'kiki']) await pickRole(page, id, truth[id]);
   await page.locator('#lock-in').click();
   await expect(page.locator('.verdict-summary')).toContainText('4 / 4');
-  await expect(page.locator('.spend-summary')).toContainText('You spent 8 of 15 coins');
+  await expect(page.locator('.spend-summary')).toContainText('You spent 8 coins');
   await expect(page.locator('.spend-summary')).toContainText('4 questions');
 });

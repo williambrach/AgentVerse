@@ -42,7 +42,7 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
     res.setHeader('Set-Cookie', `${name}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${secure ? '; Secure' : ''}`);
   };
   // Creating teams is the costly act; joining one is free. Only creations count.
-  const newTeams = new WindowCounter({ limit: 120, windowMs: 60_000 });
+  const newTeams = new WindowCounter({ limit: 200, windowMs: 60_000 });
   const validToken = req => !accessCode || verifyToken(secret, cookie(req, 'override_access'), Date.now());
   const json = sendJson;
 
@@ -169,6 +169,7 @@ export function adminSecret(env) {
   if (pw && old && pw !== old) throw new Error('OVERRIDE_ADMIN_PASSWORD and OVERRIDE_ADMIN_TOKEN differ; set only OVERRIDE_ADMIN_PASSWORD.');
   if (!pw && old) warnings.push('OVERRIDE_ADMIN_TOKEN is deprecated; use OVERRIDE_ADMIN_PASSWORD.');
   if (String(env.OVERRIDE_MAKER_TOKENS ?? '').trim()) warnings.push('OVERRIDE_MAKER_TOKENS is ignored: one admin password opens the admin panel.');
+  for (const name of ['OVERRIDE_COIN_BUDGET', 'OVERRIDE_REASONING_CHARGES']) if (String(env[name] ?? '').trim()) warnings.push(`${name} is ignored: games have no coin budget and fixed tool charges.`);
   return { password: pw || old || null, warnings };
 }
 
@@ -197,7 +198,7 @@ export function boardUrlOf(base, port) {
 
 export async function startServer(env = process.env, { publicDir = resolve(root, 'dist') } = {}) {
   const config = modelConfig(env);
-  config.economy = economyRules(env);
+  config.economy = economyRules();
   const envName = env.OVERRIDE_ENV || 'live';
   const dataDir = resolve(env.OVERRIDE_DATA_DIR || resolve(root, 'data'), envName);
   const paths = dataPaths(dataDir);

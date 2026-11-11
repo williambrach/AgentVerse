@@ -1,5 +1,4 @@
 import { worlds } from './worlds.mjs';
-import { integerEnv } from './http-util.mjs';
 
 // Coin and charge rules. Pure: no I/O. quote() never mutates; spend() changes only spent and charges.
 
@@ -9,25 +8,8 @@ const LABELS = { inspect: 'reasoning inspections', continue: 'conversations' };
 // A game must be able to ask every agent once, in the largest registered world.
 export const minimumBudget = () => COSTS.ask * Math.max(...Object.values(worlds).map(w => w.agents));
 
-export function economyRules(env = {}) {
-  const rawBudget = String(env.OVERRIDE_COIN_BUDGET ?? '').trim();
-  let budget = null;
-  if (rawBudget !== '') {
-    const min = minimumBudget();
-    const range = `OVERRIDE_COIN_BUDGET must be an integer between ${min} and 999.`;
-    let n;
-    try { n = integerEnv(rawBudget, null, 'OVERRIDE_COIN_BUDGET'); } catch { throw new Error(range); }
-    if (!/^\d+$/.test(rawBudget) || n < min || n > 999) throw new Error(range);
-    budget = n;
-  }
-  const rawCharges = String(env.OVERRIDE_REASONING_CHARGES ?? '').trim();
-  let inspect = 1;
-  if (rawCharges !== '') {
-    if (rawCharges !== '1' && rawCharges !== '2') {
-      throw new Error('OVERRIDE_REASONING_CHARGES must be 1 or 2.');
-    }
-    inspect = Number(rawCharges);
-  }
+// Production games have no coin budget, 1 reasoning inspection and 3 talk rounds. Tests pass a budget to exercise the coin rules.
+export function economyRules({ budget = null, inspect = 1 } = {}) {
   return { budget, costs: { ...COSTS }, charges: { inspect, continue: 3 } };
 }
 

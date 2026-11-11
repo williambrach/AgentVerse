@@ -16,7 +16,7 @@ function setup(t, caseId) {
   const dir = mkdtempSync(join(tmpdir(), 'override-talk-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const kase = findCase(cases, caseId);
-  const config = { ...modelConfig({}), economy: economyRules({ OVERRIDE_COIN_BUDGET: '30' }) };
+  const config = { ...modelConfig({}), economy: economyRules({ budget: 30 }) };
   const g = new Investigation({ dataDir: dir, config, kase, answer: async () => 'fine', shuffle: identity });
   const act = (action, input = {}) => g.mutate(action, { sessionId: g.session?.id, revision: g.session?.revision, ...input });
   const restore = () => new Investigations({ dataDir: dir, config, answer: async () => 'fine', cases: [kase] }).find(g.session.id).session;
@@ -77,7 +77,7 @@ test('old_round_in_progress_finishes_at_three: a restored 3-line round gets line
     return rest;
   });
   writeFileSync(file, old.map(e => JSON.stringify(e)).join('\n') + '\n');
-  const config = { ...modelConfig({}), economy: economyRules({ OVERRIDE_COIN_BUDGET: '30' }) };
+  const config = { ...modelConfig({}), economy: economyRules({ budget: 30 }) };
   const game = new Investigations({ dataDir: dir, config, answer: async () => 'fine', cases: [kase] }).find(g.session.id);
   const step = () => game.mutate('continue', { sessionId: game.session.id, revision: game.session.revision });
   await step();

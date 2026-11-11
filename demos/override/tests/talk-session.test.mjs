@@ -325,7 +325,7 @@ test('topic and follow-up questions are free; a typed question costs one ask', a
 
 test('no ask-everyone reserve in a talk case: typed questions to one person run until the coins do', async t => {
   const budget = minimumBudget();
-  const { act } = setup(t, { config: { ...rehearsal, economy: economyRules({ OVERRIDE_COIN_BUDGET: String(budget) }) } });
+  const { act } = setup(t, { config: { ...rehearsal, economy: economyRules({ budget }) } });
   let v = await act('start');
   const ask = v.session.economy.costs.ask;
   for (let n = 0; n < budget / ask; n++) v = await act('interview', { character: 'xa', question: `How is the bread today, number ${n}?` });
@@ -342,7 +342,7 @@ test('client reserve is zero in a talk case, like the server', () => {
 
 test('the smallest coin budget still lets every topic be asked, so the case stays solvable', async t => {
   const budget = String(minimumBudget());
-  const { act, investigation } = setup(t, { config: { ...rehearsal, economy: economyRules({ OVERRIDE_COIN_BUDGET: budget }) } });
+  const { act, investigation } = setup(t, { config: { ...rehearsal, economy: economyRules({ budget: Number(budget) }) } });
   let v = await act('start');
   assert.equal(v.session.economy.budget, Number(budget));
   for (const topic of kase.talk.topics.map(x => x.id)) for (const c of IDS) v = await ask(act, c, topic);

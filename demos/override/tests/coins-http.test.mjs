@@ -56,11 +56,12 @@ test('live_continue_seam: a live thread line carries provenance and prompt versi
   assert.equal(line.threadPromptVersion, 'thread-v5');
 });
 
-test('budget_env_seam: OVERRIDE_COIN_BUDGET reaches the wallet', async t => {
-  // The default case has four monkeys: a budget of 10 (the floor, for five friends) leaves 10 coins: after two questions to Momo (4), the other three monkeys need 6, so a continue (1) is blocked.
-  const g = await liveGame(t, { OVERRIDE_COIN_BUDGET: '10' });
+test('coin_budget_env_is_ignored', async t => {
+  // An old OVERRIDE_COIN_BUDGET no longer reaches the wallet: games have no budget.
+  const g = await liveGame(t, { OVERRIDE_COIN_BUDGET: '10', OVERRIDE_REASONING_CHARGES: '2' });
   for (let i = 0; i < 2; i++) assert.equal((await g.post('interview', { character: 'momo', question: 'Did the keeper say yes?' })).status, 200);
   const r = await g.post('continue');
-  assert.equal(r.status, 409);
-  assert.equal(r.body.error ?? r.body.message, 'Save coins: you need 6 to ask everyone once.');
+  assert.equal(r.status, 200);
+  assert.equal(r.body.session.economy.budget, null);
+  assert.equal(r.body.session.economy.charges.inspect.max, 1);
 });

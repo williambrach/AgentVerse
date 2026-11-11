@@ -353,7 +353,7 @@ test('onAttempt receives per-attempt facts', async () => {
 
 test('snapshot shape and counters', async () => {
   const { r } = router(['a', 'b'], { a: http(500) });
-  assert.deepEqual(r.snapshot(), { active: 'a', pinned: false, inFlight: 0, queued: 0, maxInFlight: 200, endpoints: [
+  assert.deepEqual(r.snapshot(), { active: 'a', pinned: false, inFlight: 0, queued: 0, maxInFlight: 300, endpoints: [
     { name: 'a', model: 'model-a', apiBaseHost: 'a.test', inFlight: 0, maxInFlight: 50, queued: 0, lastSuccessAt: null, lastFailureAt: null, lastFailureReason: null, failures5m: 0 },
     { name: 'b', model: 'model-b', apiBaseHost: 'b.test', inFlight: 0, maxInFlight: 50, queued: 0, lastSuccessAt: null, lastFailureAt: null, lastFailureReason: null, failures5m: 0 },
   ] });

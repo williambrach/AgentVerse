@@ -33,7 +33,7 @@ const okJson = (body, status = 200) => ({ ok: true, status, json: async () => bo
 test('modelConfig defaults to rehearsal', () => {
   assert.deepEqual(modelConfig({}), {
     mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'interview-v5', maxCompletionTokens: 2048, timeoutMs: 60000,
-    maxInFlight: 200, failover: { failures: 5, windowMs: 30000 },
+    maxInFlight: 300, failover: { failures: 5, windowMs: 30000 },
   });
 });
 
@@ -49,7 +49,7 @@ test('legacy variables form endpoint a', () => {
 test('loadEndpoints reads a file, applies defaults and resolves keys from the environment', () => {
   const read = path => { assert.equal(path, '/e.json'); return ENDPOINTS; };
   const { endpoints, hash } = loadEndpoints({ OVERRIDE_ENDPOINTS: '/e.json', OVERRIDE_ENDPOINT_A_KEY: 'ka' }, read);
-  assert.deepEqual(endpoints, [{ name: 'a', baseUrl: 'https://a.test/v1', model: 'ma', key: 'ka', keyEnv: 'OVERRIDE_ENDPOINT_A_KEY', maxInFlight: 50, tokenParam: 'max_completion_tokens', timeoutMs: 25000, temperature: null, reasoningEffort: null }]);
+  assert.deepEqual(endpoints, [{ name: 'a', baseUrl: 'https://a.test/v1', model: 'ma', key: 'ka', keyEnv: 'OVERRIDE_ENDPOINT_A_KEY', maxInFlight: 200, tokenParam: 'max_completion_tokens', timeoutMs: 25000, temperature: null, reasoningEffort: null }]);
   assert.match(hash, /^[0-9a-f]{16}$/);
 });
 

@@ -118,7 +118,7 @@ test('teamless_still_works', async t => {
 test('new_team_rate_limit', async t => {
   const s = await boot(t, {}, null);
   const b = browser(s.url);
-  for (let i = 0; i < 120; i++) assert.equal((await b.team(`Team ${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`)).status, 200);
+  for (let i = 0; i < 200; i++) assert.equal((await b.team(`Team ${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`)).status, 200);
   const over = await b.team('Late Team');
   assert.equal(over.status, 429);
   assert.equal(over.body.error, 'Too many new teams. Try again in a minute.');

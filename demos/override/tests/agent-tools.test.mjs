@@ -15,10 +15,10 @@ const withFns = { ...banana, rehearsalReasoning: p => `R:{${p}}`, rehearsalChatt
 const identity = ids => [...ids];
 const ok = async () => 'fine';
 
-function setup(t, { env = { OVERRIDE_COIN_BUDGET: '15' }, kase = withFns, answer = ok, shuffle = identity } = {}) {
+function setup(t, { rules = { budget: 15 }, kase = withFns, answer = ok, shuffle = identity } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'override-tools-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const config = { ...modelConfig({}), economy: economyRules(env) };
+  const config = { ...modelConfig({}), economy: economyRules(rules) };
   const g = new Investigation({ dataDir: dir, config, kase, answer, shuffle });
   const act = (action, input = {}) => g.mutate(action, { sessionId: g.session?.id, revision: g.session?.revision, ...input });
   const ask = (character = 'momo') => act('interview', { character, question: 'What happened?' });
@@ -43,7 +43,7 @@ test('failed_answer_costs_nothing', async t => {
 test('reserve_blocks_continue', async t => {
   // Four monkeys, budget 10 (the floor, for five friends): after asking momo twice (4 of 10),
   // the other three need 6, so a continue (1) would cut into them.
-  const { ask, act } = await begun(t, { env: { OVERRIDE_COIN_BUDGET: '10' } });
+  const { ask, act } = await begun(t, { rules: { budget: 10 } });
   await ask();
   await ask();
   await assert.rejects(act('continue'), { status: 409, message: 'Save coins: you need 6 to ask everyone once.' });
@@ -68,7 +68,7 @@ test('inspect_once', async t => {
 });
 
 test('inspect_twice_with_two_charges', async t => {
-  const { act, ask, g } = await begun(t, { env: { OVERRIDE_REASONING_CHARGES: '2' } });
+  const { act, ask, g } = await begun(t, { rules: { inspect: 2 } });
   await ask();
   await act('inspect', { character: 'momo' });
   await act('inspect', { character: 'momo' });
@@ -110,7 +110,7 @@ test('continue_from_start', async t => {
 });
 
 test('seven_questions_then_continue', async t => {
-  const { act, ask } = await begun(t, { env: {} });
+  const { act, ask } = await begun(t, { rules: {} });
   for (let i = 0; i < 7; i++) await ask();
   await act('continue');
 });
@@ -172,7 +172,7 @@ test('verdict_has_coins', async t => {
 test('inspect reserve counts the inspected character when not yet interviewed', async t => {
   // budget 12: ask momo (2) and continue (1) leave 9; inspect (5) would leave 4: enough for pip and kiki,
   // but not for nori too (6). Only counting the inspected character refuses it.
-  const { act, ask, events } = await begun(t, { env: { OVERRIDE_COIN_BUDGET: '12' } });
+  const { act, ask, events } = await begun(t, { rules: { budget: 12 } });
   await ask();
   await act('continue');
   await assert.rejects(act('inspect', { character: 'nori' }), { status: 409 });
@@ -258,7 +258,7 @@ const liveProv = { attempts: [{ endpoint: 'a' }] };
 function liveSetup(t, { answer, thread, kase = banana, mode = 'live' } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'override-live-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const config = { mode, model: 'm', economy: economyRules({ OVERRIDE_COIN_BUDGET: '30' }) };
+  const config = { mode, model: 'm', economy: economyRules({ budget: 30 }) };
   const make = () => new Investigations({ dataDir: dir, config, cases: [kase], answer, thread });
   const state = { inv: make(), id: null, rev: null };
   const act = async (action, input = {}) => {

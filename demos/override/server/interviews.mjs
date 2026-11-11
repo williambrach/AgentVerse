@@ -96,7 +96,7 @@ export function loadEndpoints(env = process.env, readFile = path => readFileSync
     if (reasoningEffort !== null && !EFFORTS.includes(reasoningEffort)) throw new Error(`${label}: reasoningEffort must be low, medium or high.`);
     return {
       name, baseUrl: checkBaseUrl(raw.baseUrl ?? '', label), model: model.trim(), key, keyEnv,
-      maxInFlight: integerSetting(raw.maxInFlight, 50, `${label}: maxInFlight`, 1, 1000), tokenParam,
+      maxInFlight: integerSetting(raw.maxInFlight, 200, `${label}: maxInFlight`, 1, 1000), tokenParam,
       timeoutMs: integerSetting(raw.timeoutMs, 25_000, `${label}: timeoutMs`, 1000, 120_000), temperature, reasoningEffort,
     };
   });
@@ -108,7 +108,7 @@ export function modelConfig(env = process.env) {
   const model = env.OVERRIDE_LLM_MODEL?.trim();
   const maxCompletionTokens = integerSetting(env.OVERRIDE_LLM_MAX_COMPLETION_TOKENS, 2048, 'OVERRIDE_LLM_MAX_COMPLETION_TOKENS', 256, 8192);
   const timeoutMs = integerSetting(env.OVERRIDE_LLM_TIMEOUT_MS, 60_000, 'OVERRIDE_LLM_TIMEOUT_MS', 1000, 120_000);
-  const maxInFlight = integerSetting(env.OVERRIDE_LLM_MAX_IN_FLIGHT, 200, 'OVERRIDE_LLM_MAX_IN_FLIGHT', 1, 10_000);
+  const maxInFlight = integerSetting(env.OVERRIDE_LLM_MAX_IN_FLIGHT, 300, 'OVERRIDE_LLM_MAX_IN_FLIGHT', 1, 10_000);
   const failover = {
     failures: integerSetting(env.OVERRIDE_LLM_FAILOVER_FAILURES, 5, 'OVERRIDE_LLM_FAILOVER_FAILURES', 1, 1000),
     windowMs: integerSetting(env.OVERRIDE_LLM_FAILOVER_WINDOW_MS, 30_000, 'OVERRIDE_LLM_FAILOVER_WINDOW_MS', 1000, 600_000),
@@ -123,7 +123,7 @@ export function modelConfig(env = process.env) {
   if (Boolean(key) !== Boolean(model)) throw new Error('Set both OVERRIDE_LLM_API_KEY and OVERRIDE_LLM_MODEL, or leave both empty for rehearsal mode.');
   const baseUrl = checkBaseUrl(env.OVERRIDE_LLM_BASE_URL || 'https://api.openai.com/v1');
   if (!key) return { mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, ...shared };
-  const endpoints = [{ name: 'a', baseUrl, model, key, keyEnv: 'OVERRIDE_LLM_API_KEY', maxInFlight, tokenParam: 'max_completion_tokens', timeoutMs, temperature: null, reasoningEffort: effortRaw }];
+  const endpoints = [{ name: 'a', baseUrl, model, key, keyEnv: 'OVERRIDE_LLM_API_KEY', maxInFlight: Math.min(maxInFlight, 200), tokenParam: 'max_completion_tokens', timeoutMs, temperature: null, reasoningEffort: effortRaw }];
   return { mode: 'live', endpoints, endpointsHash: hashEndpoints(endpoints), model, ...shared };
 }
 

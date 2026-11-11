@@ -43,7 +43,7 @@ OVERRIDE_LLM_REASONING_EFFORT=low
 
 `OVERRIDE_LLM_REASONING_EFFORT` is sent as `reasoning_effort`; leave it empty for a model that does not accept it. GLM 5.3 Flash takes `low` and `high` and answers `400 Unsupported reasoning effort` to `medium`, which fails every interview. `low` keeps reasoning to a few words, and once a conversation is under way the model often skips it: measured on interview lines on 2026-10-30, `low` returned reasoning on 0 of 24 lines, `high` on 18 of 24, and empty on 12 of 12, with answers about 2.5 times slower. When a line has no reasoning, Inspect stays available and tells the player the character did not think; that costs no coins and no charge. In an endpoints file the field is `reasoningEffort`.
 
-Restart the server after changing configuration. Coins are set the same way: `OVERRIDE_COIN_BUDGET` is empty for no budget, or an integer from the minimum to 999 (the minimum is 2 coins for each agent in the largest world, 10 today), and `OVERRIDE_REASONING_CHARGES` is 1 or 2 (default 1). Credentials remain on the server and are excluded from the browser bundle, exports, Git, and Docker build context. The server uses native `fetch`; no OpenAI SDK or AgentVerse Python dependencies are required.
+Restart the server after changing configuration. Credentials remain on the server and are excluded from the browser bundle, exports, Git, and Docker build context. The server uses native `fetch`; no OpenAI SDK or AgentVerse Python dependencies are required.
 
 `OVERRIDE_LLM_MAX_COMPLETION_TOKENS` defaults to 2,048. This includes internal reasoning tokens, not just the visible answer. A response cut off by that limit is retried once with twice the budget (up to 8,192); partial answers and reasoning-only responses are never shown as testimony. `OVERRIDE_LLM_TIMEOUT_MS` defaults to 60,000 and bounds all attempts together. Authentication, rate-limit, timeout, and response-limit failures have distinct player-facing messages and log reasons.
 
@@ -69,19 +69,19 @@ Provider reasoning (`reasoning_content` or `reasoning`) is kept only in server m
 
 **After Hours (the fifth case).** You walk a painted university department hall, kept to its walk zones, and press E next to a colleague to talk or next to a piece of evidence to examine it. Every character has a fixed job, but guilt is dealt again each game: one is the Killer, one the Leaker, and the rest are Innocent. The verdict asks for that Killer/Leaker/Innocent lineup.
 
-**Castelvento (the sixth case).** You walk the town square of Castelvento in June 1489 as a scout, and press E next to a townsperson. Topic chips (work, travel, letters, pastimes, the square) give authored answers, one per topic per person. One townsperson is dealt the hidden time traveller each game. Now and then they slip into a modern word and correct themselves at once. Select words in a line to **Save quote**, or ask **What did you mean?** about a word. Topic chips and **What did you mean?** are free, so a coin budget never hides the slips; only typed questions cost coins. Typed questions go to the model, but a modern word never shows: the lexicon guard retries the answer, then falls back to a deflection. Asking about time travel gets that person's denial. The **Quotes** page keeps your saved lines. To accuse, pick a person and 1 to 3 of their quotes. A wrong accusation costs points, not the game. A first-try solve scores 5, each wrong accusation takes off 2, and the score is never below 1. The debrief reveals the traveller, their story and every slip. **Inspect reasoning** and **Let them talk** are off here and show “Not in this case”: reasoning would expose who the traveller is, and a talk round would put model-written lines in front of you that nobody checked for modern words.
+**Castelvento (the sixth case).** You walk the town square of Castelvento in June 1489 as a scout, and press E next to a townsperson. Topic chips (work, travel, letters, pastimes, the square) give authored answers, one per topic per person. One townsperson is dealt the hidden time traveller each game. Now and then they slip into a modern word and correct themselves at once. Select words in a line to **Save quote**, or ask **What did you mean?** about a word. Topic chips and **What did you mean?** are free; only typed questions cost coins. Typed questions go to the model, but a modern word never shows: the lexicon guard retries the answer, then falls back to a deflection. Asking about time travel gets that person's denial. The **Quotes** page keeps your saved lines. To accuse, pick a person and 1 to 3 of their quotes. A wrong accusation costs points, not the game. A first-try solve scores 5, each wrong accusation takes off 2, and the score is never below 1. The debrief reveals the traveller, their story and every slip. **Inspect reasoning** and **Let them talk** are off here and show “Not in this case”: reasoning would expose who the traveller is, and a talk round would put model-written lines in front of you that nobody checked for modern words.
 
 5. Use **Play again** for the next colleague. The reset dialog has a case select, so the next game can be a different case. Previous research logs remain on disk.
 
-**Coins and tools.** A game can have a coin budget (see `OVERRIDE_COIN_BUDGET` below). Three tools cost coins:
+**Coins and tools.** Games have no coin budget: coins count what a game spent. Three tools cost coins:
 
 | Tool | Cost | Limit |
 | --- | --- | --- |
 | Ask a question | 2 coins | No charge limit |
-| Inspect reasoning | 5 coins | 1 per game (2 with `OVERRIDE_REASONING_CHARGES=2`) |
+| Inspect reasoning | 5 coins | 1 per game |
 | Let them talk | 1 coin per round of 3 lines | 3 rounds |
 
-Inspect reasoning and Let them talk are the **Arbiter tools**. They sit in the left rail, and the briefing lists them with their prices. Each card shows its price and uses left, or why it is off. A card glows with a NEW tag the first time it is worth using: Inspect once the open chat's character has answered, Let them talk once everyone has been asked. Inspect reasoning acts on the character whose chat is open and shows how they reasoned about their last line. Let them talk is available from the start; it makes the characters post in a forum-style thread. They see each other's earlier lines. Each also remembers their own chat with you, and never anyone else's. Their lines appear as speech bubbles over the speaker and in the thread panel. Walking, the verdict and reset are free. Failed answers cost nothing. With a budget, the game keeps enough coins to ask each character you have not asked once. The top bar shows the coins you have left; the debrief shows the total.
+Inspect reasoning and Let them talk are the **Arbiter tools**. They sit in the left rail, and the briefing lists them with their prices. Each card shows its price and uses left, or why it is off. A card glows with a NEW tag the first time it is worth using: Inspect once the open chat's character has answered, Let them talk once everyone has been asked. Inspect reasoning acts on the character whose chat is open and shows how they reasoned about their last line. Let them talk is available from the start; it makes the characters post in a forum-style thread. They see each other's earlier lines. Each also remembers their own chat with you, and never anyone else's. Their lines appear as speech bubbles over the speaker and in the thread panel. Walking, the verdict and reset are free. Failed answers cost nothing. The top bar shows the coins you have left; the debrief shows the total.
 
 ### Big screen
 
@@ -137,7 +137,7 @@ A session can carry two `contentHash` values when content was published while it
 
 ## LLM fallback
 
-For several providers, point `OVERRIDE_ENDPOINTS` at a JSON array (see [ops/endpoints.example.json](ops/endpoints.example.json)). Each entry is `{name, baseUrl, model, keyEnv, maxInFlight=50, tokenParam='max_completion_tokens', timeoutMs=25000, temperature=null}`. `keyEnv` names the environment variable holding that endpoint's key, so keys never live in the file. The endpoint order is the priority order; `a` is used first.
+For several providers, point `OVERRIDE_ENDPOINTS` at a JSON array (see [ops/endpoints.example.json](ops/endpoints.example.json)). Each entry is `{name, baseUrl, model, keyEnv, maxInFlight=200, tokenParam='max_completion_tokens', timeoutMs=25000, temperature=null}`. `keyEnv` names the environment variable holding that endpoint's key, so keys never live in the file. The endpoint order is the priority order; `a` is used first.
 
 Without `OVERRIDE_ENDPOINTS`, the legacy `OVERRIDE_LLM_BASE_URL`, `_API_KEY`, and `_MODEL` variables form a single endpoint `a`. With neither, interviews run in scripted rehearsal mode.
 
@@ -307,7 +307,7 @@ It prints a table per endpoint with review flags (empty, length, a character out
 | `OVERRIDE_LLM_MAX_COMPLETION_TOKENS` | 2048 | Token budget including reasoning (256 to 8192). |
 | `OVERRIDE_LLM_REASONING_EFFORT` | empty | Sent as `reasoning_effort`; empty sends nothing (see *Live interviews*). |
 | `OVERRIDE_LLM_TIMEOUT_MS` | 60000 | Per-question deadline. |
-| `OVERRIDE_LLM_MAX_IN_FLIGHT` | 200 | Global cap on simultaneous LLM calls. |
+| `OVERRIDE_LLM_MAX_IN_FLIGHT` | 300 | Global cap on simultaneous LLM calls. A single endpoint set with `OVERRIDE_LLM_API_KEY` is capped at 200 of these. |
 | `OVERRIDE_LLM_FAILOVER_FAILURES` | 5 | Failures that trigger failover. |
 | `OVERRIDE_LLM_FAILOVER_WINDOW_MS` | 30000 | Window for that count. |
 | `OVERRIDE_ACCESS_CODE` | empty | Shared access code; empty leaves the API open. |
@@ -325,8 +325,6 @@ It prints a table per endpoint with review flags (empty, length, a character out
 | `OVERRIDE_APP_COMMIT` | empty | Recorded in `session_started`. |
 | `OVERRIDE_DEADLINE_SECONDS` | unset | With `OVERRIDE_DEV_TOOLS=1`, shortens a case deadline to N seconds (warnings at 70 % and 90 %). |
 | `OVERRIDE_DEV_TOOLS` | off | `1` shows draft cases in the catalog and lets them start; ignored when `NODE_ENV=production`. |
-| `OVERRIDE_COIN_BUDGET` | empty | Coin budget per game: empty means no budget; otherwise an integer from the minimum (2 coins × the largest world's agents, 10 today) to 999. |
-| `OVERRIDE_REASONING_CHARGES` | 1 | Reasoning inspections per game: 1 or 2. |
 | `HOST` / `PORT` | 127.0.0.1 / 3001 | Game listener. |
 
 ## Share with colleagues
