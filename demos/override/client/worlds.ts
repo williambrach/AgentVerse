@@ -1,4 +1,4 @@
-import type { FigureArt } from './factory-figures.ts';
+import type { FigureArt, WalkSheet } from './factory-figures.ts';
 import type { Walk } from './hall-layout.ts';
 import { plain } from './text.ts';
 
@@ -17,7 +17,7 @@ export interface WorldPack {
   slots: SlotPoint[];
   /** Measured art only: on-screen height of the sheet's tallest cast frame and of the investigator, in px. */
   heights?: { cast: number; investigator: number };
-  /** Static-pose figures (factory): one image per pose, drawn at figures.scale. */
+  /** Pose-image figures (factory, department, renaissance): one image per pose, drawn at figures.scale and moved by figure-motion.ts. */
   figures?: FigureArt;
   /** Factory floor: props by bottom-centre point, and the exit door's foot. */
   floor?: { props: FloorProp[]; exit: { x: number; y: number } };
@@ -59,6 +59,22 @@ const friends: WorldPack = {
   slots: [],
 };
 
+// The detective's walk (art request F1): the supplied 4 x 2 sheet, drawn as delivered. Measured on the art
+// (alpha >= 128): head column x 189..191, shoes end at y 470..474 except frame 4 (464), head tops 63..73.
+// The still poses have the head 4.5 px left of the foot point and the shoes 2 px above it, so the pivot is
+// (195, 475). Frame 4 is drawn 8 px lower and frame 8 2 px lower, which puts their shoes on the floor line.
+// Scale: the still poses are 353 px tall and the walk 400..410, so 353/407 of the pose scale.
+const factoryWalk: WalkSheet = {
+  url: '/assets/factory/characters/detective-walk.png',
+  cell: { w: 384, h: 512 },
+  columns: 4,
+  frames: 8,
+  pivot: { x: 195, y: 475 },
+  scale: (1 / 6) * (353 / 407),
+  frameMs: 100,
+  offsets: [0, 0, 0, 8, 0, 0, 0, 2],
+};
+
 const factory: WorldPack = {
   id: 'factory',
   text: { get place() { return plain('worlds.factory.place'); }, get eyebrow() { return plain('worlds.factory.eyebrow'); }, day: "LAST SHIFT", get one() { return plain('worlds.factory.one'); }, get many() { return plain('worlds.factory.many'); }, castLabel: "WORKER", get hint() { return plain('worlds.factory.hint'); }, get oneWithArticle() { return plain('worlds.factory.oneWithArticle'); }, get investigator() { return plain('worlds.factory.investigator'); }, icon: '<path d="M3 20V9l6 4V9l6 4V5h3v15zm4-3h2m3 0h2"/>' },
@@ -75,6 +91,7 @@ const factory: WorldPack = {
     scale: 1 / 6,
     density: 3,
     labelLift: 68,
+    walkSheet: factoryWalk,
   },
   // Clear of every worker and prop box: the spawn stands just above the parts bin, the guess point on open floor between Ama, Vera and Bruno.
   stops: { report: { x: 290, y: 245 }, briefing: { x: 240, y: 266 } },
@@ -97,6 +114,21 @@ const factory: WorldPack = {
   },
 };
 
+// The detective's walk (art request D1): the supplied 4 x 2 sheet, drawn as delivered. Measured on the art
+// (alpha >= 128): her head column is x 202 in every cell and her shoes end at y 470..476, so the pivot is
+// (207, 477), which puts head and feet where the still poses have them (head 4 px left of the foot point,
+// shoes 2 px above it). Scale: the still poses are 352 px tall and the walk 413..429 (head width 120 vs
+// 146..148), so 352/429 of the pose scale. Known art faults: see art/requests/department.md, D1.
+const departmentWalk: WalkSheet = {
+  url: '/assets/department/characters/player-walk.png',
+  cell: { w: 384, h: 512 },
+  columns: 4,
+  frames: 8,
+  pivot: { x: 207, y: 477 },
+  scale: (1 / 6) * (352 / 429),
+  frameMs: 100,
+};
+
 const department: WorldPack = {
   id: 'department',
   text: { get place() { return plain('worlds.department.place'); }, get eyebrow() { return plain('worlds.department.eyebrow'); }, day: "FRIDAY MORNING", get one() { return plain('worlds.department.one'); }, get many() { return plain('worlds.department.many'); }, castLabel: "COLLEAGUE", get hint() { return plain('worlds.department.hint'); }, get oneWithArticle() { return plain('worlds.department.oneWithArticle'); }, get investigator() { return plain('worlds.department.investigator'); }, icon: '<path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm4.5 10.5L20 20"/>' },
@@ -113,6 +145,7 @@ const department: WorldPack = {
     scale: 1 / 6,
     density: 3,
     labelLift: 68,
+    walkSheet: departmentWalk,
   },
   backdrop: { url: '/assets/department/department-hall.png', width: 1536, height: 1024, scale: 1 / 3, x: -16, y: 0, fill: '#1b1714' },
   walk: {
@@ -124,6 +157,24 @@ const department: WorldPack = {
     { id: 'coffee-mug', x: 62, y: 222 }, { id: 'usb-drive', x: 64, y: 262 }, { id: 'torn-document', x: 160, y: 206 }, { id: 'server-tower', x: 218, y: 200 },
     { id: 'access-card', x: 250, y: 214 }, { id: 'cracked-phone', x: 300, y: 192 }, { id: 'laptop', x: 408, y: 262 }, { id: 'keys', x: 372, y: 318 },
   ],
+};
+
+// The scout's walk (art request R1, the accepted sheet; the v2 candidate was not used, see
+// art/requests/renaissance.md). Measured on the art (alpha >= 128): head column x 205..207.5 and shoes at
+// y 470..473 in every frame; head tops 24 35 24 12 24 36 24 12, a 24 px bob. The still poses have the head
+// 1.5 px left of the foot point and the shoes 1 px above it, so the pivot is (210, 473). The offsets pull
+// every head top to within 4 px of 24 (the 2nd and 6th frames up 7 and 8, the 4th and 8th down 8), at the
+// cost of the shoes leaving the floor line by up to 8 px (about 1 world unit). Scale: the still poses are
+// 180 px tall and the walk's contact frames 448, so 180/448 of the pose scale.
+const scoutWalk: WalkSheet = {
+  url: '/assets/renaissance/characters/scout-walk.png',
+  cell: { w: 384, h: 512 },
+  columns: 4,
+  frames: 8,
+  pivot: { x: 210, y: 473 },
+  scale: (1 / 3) * (180 / 448),
+  frameMs: 100,
+  offsets: [0, -7, 0, 8, 0, -8, 0, 8],
 };
 
 const renaissance: WorldPack = {
@@ -138,12 +189,14 @@ const renaissance: WorldPack = {
     props: '/assets/renaissance/props',
     sprites: { ottavio: 'wizard', matteo: 'inventor', beatrice: 'noble', bruno: 'guard', agnese: 'apothecary' },
     detective: 'scout',
-    frame: { w: 125, h: 188 },
-    anchor: { x: 62, y: 182 },
+    // Frames are registered on the head column and the feet line (art/renaissance/cut.py), the head at the frame's centre.
+    frame: { w: 132, h: 188 },
+    anchor: { x: 66, y: 185 },
     scale: 1 / 3,
     density: 3,
     labelLift: 66,
-    walkFrames: 4,
+    walkSheet: scoutWalk,
+    loops: { idle: 4, talk: { wizard: 1, inventor: 1, noble: 2, guard: 1, apothecary: 2, scout: 1 } },
     stopProps: { briefing: 'scroll', report: 'seal' },
   },
   backdrop: { url: '/assets/renaissance/town-square.png', width: 1536, height: 1024, scale: 1 / 3, x: -16, y: 0, fill: '#2a2018' },

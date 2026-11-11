@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { worldFor } from '../client/worlds.ts';
 import { inWalk } from '../client/hall-layout.ts';
-import { stopPropsOf, walkFrameAt } from '../client/factory-figures.ts';
+import { stopPropsOf, drawnOf, loopUrl } from '../client/factory-figures.ts';
+import { walkLook } from '../client/figure-motion.ts';
 
 const w = worldFor('renaissance');
 
@@ -14,10 +15,13 @@ test('renaissance pack fields', () => {
   assert.equal(w.text.investigator, 'traveller');
   assert.deepEqual(w.figures.sprites, { ottavio: 'wizard', matteo: 'inventor', beatrice: 'noble', bruno: 'guard', agnese: 'apothecary' });
   assert.equal(w.figures.detective, 'scout');
-  assert.deepEqual(w.figures.frame, { w: 125, h: 188 });
-  assert.deepEqual(w.figures.anchor, { x: 62, y: 182 });
+  assert.deepEqual(w.figures.frame, { w: 132, h: 188 });
+  // The head column sits at the frame's centre, so a flipped figure turns on the spot.
+  assert.deepEqual(w.figures.anchor, { x: 66, y: 185 });
+  assert.equal(w.figures.anchor.x * 2, w.figures.frame.w);
   assert.equal(w.figures.scale, 1 / 3);
-  assert.equal(w.figures.walkFrames, 4);
+  assert.equal(w.figures.walkFrames, undefined);
+  assert.equal(w.figures.walkSheet.url, '/assets/renaissance/characters/scout-walk.png');
   assert.deepEqual(w.figures.stopProps, { briefing: 'scroll', report: 'seal' });
   assert.deepEqual(w.backdrop, { url: '/assets/renaissance/town-square.png', width: 1536, height: 1024, scale: 1 / 3, x: -16, y: 0, fill: '#2a2018' });
   assert.equal(w.evidence, undefined);
@@ -46,8 +50,15 @@ test('stop_props_default: department keeps case-folder and notebook and its layo
   assert.deepEqual(stopPropsOf(w.figures), { briefing: 'scroll', report: 'seal' });
 });
 
-test('walk_frames_cycle_while_moving: 120 ms per frame', () => {
-  assert.deepEqual([0, 119, 120, 239, 240, 360, 480].map(ms => walkFrameAt(4, ms)), [0, 0, 1, 1, 2, 3, 0]);
+test('walk_sheet_by_time: the scout walks the R1 sheet, 8 frames at 100 ms of walking time; only the scout walks', () => {
+  const scout = drawnOf(w.figures, 'scout');
+  assert.deepEqual(scout, { idle: 4, talk: 1, walk: 8 });
+  const clock = ms => ({ ms, frameMs: w.figures.walkSheet.frameMs });
+  assert.deepEqual([0, 99, 100, 350, 799, 800].map(ms => walkLook(0, 'listening', scout, clock(ms)).texture), [0, 0, 1, 3, 7, 0].map(frame => ({ kind: 'walk', frame })));
+  assert.deepEqual(drawnOf(w.figures, 'noble'), { idle: 4, talk: 2, walk: 0 });
+  assert.deepEqual(drawnOf(worldFor('factory').figures, 'detective'), { idle: 0, talk: 0, walk: 8 });
+  assert.deepEqual(drawnOf(worldFor('factory').figures, 'worker-01'), { idle: 0, talk: 0, walk: 0 });
+  assert.equal(loopUrl(w.figures, 'noble', 'talk', 1), '/assets/renaissance/characters/noble-talk-1.png');
 });
 
 test('name_tags_do_not_overlap: 7 world px per character plus 10, at labelLift', () => {

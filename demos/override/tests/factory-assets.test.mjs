@@ -14,7 +14,10 @@ const PROPS = [
   'conveyor', 'assembly-robot', 'control-terminal', 'packing-bench', 'shipping-crates', 'locker',
   'electrical-cabinet', 'emergency-stop', 'exit-door', 'safety-barrier', 'server-rack', 'parts-bin',
 ].map((id) => `props/${id}.png`);
-const LISTED = [...CHARACTERS, ...PROPS];
+// The detective's walk sheet (art request F1), shipped byte for byte as delivered.
+const WALK = 'characters/detective-walk.png';
+const MOTION = '/Users/williambrach/Developer/arbiter/assets/motion-v1/factory';
+const LISTED = [...CHARACTERS, WALK, ...PROPS];
 
 const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 
@@ -44,6 +47,17 @@ test('factory_assets_match_pack', (t) => {
     return;
   }
   for (const rel of LISTED) {
+    if (rel === WALK) continue;
     assert.equal(sha256(join(FACTORY, rel)), sha256(join(PACK_EXPORTS, rel)), `sha256 differs for ${rel}`);
   }
+});
+
+test('factory_walk_sheet_untouched', (t) => {
+  // The delivered F1 sheet's digest, pinned so the check runs without the motion pack.
+  assert.equal(sha256(join(FACTORY, WALK)), 'b786b446e5b5d0e7878077b6ebb40b51adcaa165e6166535f9d543a655de53ad');
+  if (!existsSync(join(MOTION, 'detective-walk.png'))) {
+    t.skip('motion pack not present');
+    return;
+  }
+  assert.equal(sha256(join(FACTORY, WALK)), sha256(join(MOTION, 'detective-walk.png')));
 });

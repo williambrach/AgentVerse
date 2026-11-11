@@ -2,50 +2,117 @@
 
 Run from demos/override:
   python3 -I art/renaissance/cut.py --src /Users/williambrach/Developer/arbiter/assets/renaissance-characters-v1
-Optional real art: --wizard SHEET --apothecary SHEET --backdrop PNG
+Optional real art: --wizard SHEET --apothecary SHEET --backdrop PNG; --characters-only re-cuts the cast alone
 """
 import argparse, math, os, random
 
 
 def _need_pillow():
-    """Import Pillow lazily so the module imports with the standard library only."""
-    global Image, ImageChops, ImageDraw, ImageFilter
+    """Import Pillow and numpy lazily so the module imports with the standard library only."""
+    global Image, ImageChops, ImageDraw, ImageFilter, np
     try:
         from PIL import Image, ImageChops, ImageDraw, ImageFilter
+        import numpy as np
     except ModuleNotFoundError:
-        raise SystemExit("cut.py needs Pillow: pip install Pillow")
+        raise SystemExit("cut.py needs Pillow and numpy: pip install Pillow numpy")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.normpath(os.path.join(HERE, "..", "..", "public", "assets", "renaissance"))
 
-# Frame map: (row, col), 0-indexed. Only rows 0 (idle) and 2 (interaction) are used for
-# poses; row 1 is the scout walk. Row index 3 (suspicious action) and glowing frames are never used.
-FRAMES = {
-    "inventor": {"listening": (0, 0), "thinking": (0, 2), "speaking": (2, 0)},
-    "noble": {"listening": (0, 0), "thinking": (0, 2), "speaking": (2, 2)},
-    "guard": {"listening": (0, 0), "thinking": (0, 2), "speaking": (2, 3)},
-    "scout": {"listening": (0, 0), "thinking": (0, 2), "speaking": (2, 1)},
+# Frame map: (row, col), 0-indexed. Row 0 is the idle breathing loop, row 1 the walk (the scout
+# only), row 2 the interaction. Row index 3 (suspicious action) and glowing frames are never used.
+IDLE = [(0, 0), (0, 1), (0, 2), (0, 3)]
+# Talk loops: the first frame is also the still speaking pose. Only pairs that differ by a gesture
+# loop; the scout's map opens wide and the guard's other paper frames walk, so they hold one frame.
+TALK = {
+    "inventor": [(2, 0)],
+    "noble": [(2, 2), (2, 1)],
+    "guard": [(2, 3)],
+    "scout": [(2, 1)],
 }
+THINKING = (0, 2)
 SCOUT_WALK = [(1, 0), (1, 1), (1, 2), (1, 3)]
 SHEET_FILES = {"inventor": "inventor.png", "noble": "court-noble.png",
                "guard": "city-guard.png", "scout": "hooded-scout.png"}
 # the wizard reuses the inventor frames, the apothecary the noble frames
-FRAMES["wizard"] = FRAMES["inventor"]
-FRAMES["apothecary"] = FRAMES["noble"]
+TALK["wizard"] = TALK["inventor"]
+TALK["apothecary"] = TALK["noble"]
 
-CROP_X0, CROP_X1, CROP_Y1 = 56, 264, 313
-SCALE = 0.6  # output 125x188
+# Registration: every frame is shifted so its head column and its feet line sit where they are in
+# the character's first idle frame, then cut at that anchor with these margins (sheet pixels).
+# Without it the figures jump between frames: the generator drew each cell a few pixels apart.
+# LEFT == RIGHT puts the head column at the frame's centre: Phaser mirrors a flipped image inside
+# its frame, so the figure turns on the spot.
+LEFT, RIGHT, TOP, BOTTOM = 110, 110, 308, 5
+OUT_W, OUT_H = 132, 188  # 0.6 of the window; the anchor lands at (66, 185)
+SEARCH = 60  # widest horizontal shift tried, sheet pixels
 
 
-def cell(sheet, row, col, fix=None):
-    n = sheet.width
-    xs = [round(i * n / 4) for i in range(5)]
+def cell_of(sheet, row, col):
+    """One grid cell as its own image: a crop window past its edge reads transparent, never a neighbour."""
+    xs = [round(i * sheet.width / 4) for i in range(5)]
     ys = [round(i * sheet.height / 4) for i in range(5)]
-    c = sheet.crop((xs[col], ys[row], xs[col + 1], ys[row + 1]))
-    c = c.crop((CROP_X0, 0, CROP_X1, CROP_Y1))
+    return sheet.crop((xs[col], ys[row], xs[col + 1], ys[row + 1]))
+
+
+def _alpha_box(a):
+    """(x0, y0, x1, y1) of alpha > 8 in an HxWx4 array."""
+    m = a[..., 3] > 8
+    ys, xs = np.where(m.any(1))[0], np.where(m.any(0))[0]
+    return xs[0], ys[0], xs[-1] + 1, ys[-1] + 1
+
+
+def head_column(a):
+    """Centre of the widest opaque run in each row of the top 22% of the figure, median over rows:
+    a staff or a halberd beside the head does not pull it."""
+    x0, y0, x1, y1 = _alpha_box(a)
+    centres = []
+    for row in a[y0:y0 + int((y1 - y0) * 0.22), :, 3] > 8:
+        xs = np.where(row)[0]
+        if len(xs):
+            run = max(np.split(xs, np.where(np.diff(xs) > 1)[0] + 1), key=len)
+            centres.append((run[0] + run[-1]) / 2)
+    return int(round(float(np.median(centres)))), int(y1)
+
+
+def _shifted(a, dx, dy):
+    out = np.zeros_like(a)
+    h, w = a.shape[:2]
+    out[max(0, dy):h + min(0, dy), max(0, dx):w + min(0, dx)] = a[max(0, -dy):h - max(0, dy), max(0, -dx):w - max(0, dx)]
+    return out
+
+
+def _match(ref, img, band):
+    """Head-band overlap of img against ref: shared opaque pixels of a similar colour, minus alpha mismatch."""
+    ra, ia = ref[band, :, 3] / 255, img[band, :, 3] / 255
+    colour = np.abs(ref[band, :, :3] - img[band, :, :3]).sum(-1) / 765
+    return float((ra * ia * (1 - colour)).sum() - 0.5 * np.abs(ra - ia).sum())
+
+
+def offsets(cells):
+    """(dx, dy) per cell that puts its feet on the reference's feet line and its head over the reference's head."""
+    h = max(v.height for v in cells.values())
+    w = max(v.width for v in cells.values())
+    # Cells differ by a pixel (1254 / 4); pad right and bottom so every array has one shape.
+    arr = {k: np.pad(np.asarray(v.convert("RGBA")).astype(np.float32), ((0, h - v.height), (0, w - v.width), (0, 0))) for k, v in cells.items()}
+    ref = arr[IDLE[0]]
+    rx0, ry0, rx1, ry1 = _alpha_box(ref)
+    band = slice(ry0, ry0 + int((ry1 - ry0) * 0.24))
+    out = {}
+    for k, a in arr.items():
+        dy = int(ry1 - _alpha_box(a)[3])
+        lifted = _shifted(a, 0, dy)
+        out[k] = (max(range(-SEARCH, SEARCH + 1), key=lambda dx: _match(ref, _shifted(lifted, dx, 0), band)), dy)
+    return out
+
+
+def registered(cell, anchor, shift, fix=None):
+    """The cell moved by shift and cut around anchor, recoloured by fix, at game size."""
+    (ax, ay), (dx, dy) = anchor, shift
+    c = cell.crop((ax - dx - LEFT, ay - dy - TOP, ax - dx + RIGHT, ay - dy + BOTTOM))
     if fix:
         c = fix(c)
-    return c.resize((125, 188), Image.LANCZOS)
+    return c.resize((OUT_W, OUT_H), Image.LANCZOS)
 
 
 def recolour(sheet, lo, hi, fn, vmin=0, head=0.0, skin=False):
@@ -108,11 +175,22 @@ def characters(src, wizard, apothecary):
     else:
         sheets["apothecary"] = sheets["noble"]
         fixes["apothecary"] = lambda c: recolour(c, 270, 350, sage)
-    for name, poses in FRAMES.items():
-        for pose, (r, c) in poses.items():
-            save(cell(sheets[name], r, c, fixes.get(name)), "characters", f"{name}-{pose}.png")
-    for i, (r, c) in enumerate(SCOUT_WALK):
-        save(cell(sheets["scout"], r, c), "characters", f"scout-walk-{i}.png")
+    for name, sheet in sheets.items():
+        used = IDLE + TALK[name] + [THINKING] + (SCOUT_WALK if name == "scout" else [])
+        cells = {rc: cell_of(sheet, *rc) for rc in used}
+        shift = offsets(cells)
+        anchor = head_column(np.asarray(cells[IDLE[0]]).astype(np.float32))
+        frame = lambda rc: registered(cells[rc], anchor, shift[rc], fixes.get(name))
+        for i, rc in enumerate(IDLE):
+            save(frame(rc), "characters", f"{name}-idle-{i}.png")
+        for i, rc in enumerate(TALK[name]):
+            save(frame(rc), "characters", f"{name}-talk-{i}.png")
+        save(frame(IDLE[0]), "characters", f"{name}-listening.png")
+        save(frame(TALK[name][0]), "characters", f"{name}-speaking.png")
+        save(frame(THINKING), "characters", f"{name}-thinking.png")
+        if name == "scout":
+            for i, rc in enumerate(SCOUT_WALK):
+                save(frame(rc), "characters", f"scout-walk-{i}.png")
 
 
 def icon_scroll():
@@ -304,9 +382,12 @@ def main():
     ap.add_argument("--wizard")
     ap.add_argument("--apothecary")
     ap.add_argument("--backdrop")
+    ap.add_argument("--characters-only", action="store_true", help="leave the square and the prop icons as they are")
     a = ap.parse_args()
     _need_pillow()
     characters(a.src, a.wizard, a.apothecary)
+    if a.characters_only:
+        return
     bd = Image.open(a.backdrop).convert("RGB").resize((1536, 1024), Image.LANCZOS) if a.backdrop else backdrop()
     save(bd, "town-square.png")
     save(icon_scroll(), "props", "scroll.png")

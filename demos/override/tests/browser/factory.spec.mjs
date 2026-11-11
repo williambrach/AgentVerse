@@ -1,4 +1,5 @@
 import { test, expect } from './team.mjs';
+import { walkSheetTests } from './walk-sheet.mjs';
 import { castOf, sessionIdOf, lockIn } from './cast.mjs';
 import kase from '../../server/cases/factory-escape.mjs';
 
@@ -278,4 +279,14 @@ test('factory_small_screen: every figure sits inside the station at 390x844', as
   }
   expect(seen).toBeGreaterThanOrEqual(5);
   await shot(page, testInfo, 'factory-small');
+});
+
+// The detective's drawn walk (art request F1).
+walkSheetTests({
+  test, expect, level: 'factory', start,
+  at: { x: 180, y: 250, top: 76 },
+  open: async page => {
+    await page.locator('#room-nav [data-go="ama"]').click();
+    await expect(page.locator('.dialogue .speaker-tag b')).toHaveText('AMA', { timeout: 15_000 });
+  },
 });

@@ -14,20 +14,27 @@ Replace with `--wizard SHEET`, `--apothecary SHEET`, `--backdrop PNG` once real 
 
 ## Frame map (row, col; 1-indexed; row 1 idle, row 2 right-walk, row 3 interaction)
 Row 4 (suspicious action) is never used, and no glowing frame is used.
-| sprite | listening | thinking | speaking |
+| sprite | idle loop | thinking | talk loop (speaking = its first frame) |
 |---|---|---|---|
-| inventor (and wizard) | r1c1 | r1c3 | r3c1 |
-| noble (and apothecary) | r1c1 | r1c3 | r3c3 |
-| guard | r1c1 | r1c3 | r3c4 |
-| scout | r1c1 | r1c3 | r3c2 |
-Scout walk: `scout-walk-0..3` = r2c1..r2c4.
-Cutting: cell edges round(i*1254/4); crop local x 56..264, y 0..313; scale 0.6 LANCZOS to 125x188; foot anchor (62, 182).
+| inventor (and wizard) | r1c1..r1c4 | r1c3 | r3c1 |
+| noble (and apothecary) | r1c1..r1c4 | r1c3 | r3c3, r3c2 |
+| guard | r1c1..r1c4 | r1c3 | r3c4 |
+| scout | r1c1..r1c4 | r1c3 | r3c2 |
+`listening` = the first idle frame. Scout walk: the game plays the R1 walk sheet (`scout-walk.png`, see art/requests/renaissance.md). `scout-walk-0..3` = r2c1..r2c4 are still cut but no longer loaded.
+The scout's r3c3 opens the map wide and the guard's r3c2 and r3c3 walk, so neither loops as talk.
+
+Cutting: cell edges round(i*1254/4). Registration: each frame is shifted so its feet line (alpha box bottom) and its head
+(best match of the top 24% against the first idle frame) sit where the first idle frame has them; the head column is the
+median centre of the widest opaque run per row in the top 22%. Cut at that anchor with margins 110 left and right, 308 up,
+5 down (sheet px), scaled to 132x188 with LANCZOS: foot anchor (66, 185), head at the frame's centre so a flipped figure
+turns on the spot. The game cycles the idle frames 0 1 2 3 2 1 at 520 ms each and alternates talk frames every 420 ms.
 
 ## Backdrop layout contract (1536x1024)
 Buildings only in y 0..330: apothecary (door x 120..240), clockmaker (door x 380..480), palazzo arches x 600..940 (sundial line on steps), guarded gateway x 1220..1360. Cobbles y 330..1024. Well only x 40..200, y 520..700. Bench and two crates only x 1300..1500, y 560..740.
 
 ## Re-run
 From `demos/override`: `python3 -I art/renaissance/cut.py --src /Users/williambrach/Developer/arbiter/assets/renaissance-characters-v1`
+(needs Pillow and numpy; `--characters-only` leaves the square and the prop icons alone).
 
 ## Prompts
 ### Wizard sheet

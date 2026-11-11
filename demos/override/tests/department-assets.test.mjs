@@ -16,13 +16,17 @@ const PROPS = [
   'keys', 'laptop', 'notebook', 'server-tower', 'torn-document', 'usb-drive',
 ].map((id) => `props/${id}.png`);
 const BACKDROP = 'department-hall.png';
-const LISTED = [...CHARACTERS, ...PROPS, BACKDROP];
+// The detective's walk sheet (art request D1), shipped byte for byte as delivered.
+const WALK = 'characters/player-walk.png';
+const MOTION = '/Users/williambrach/Developer/arbiter/assets/motion-v1/department';
+const LISTED = [...CHARACTERS, WALK, ...PROPS, BACKDROP];
 
 const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 
 /** Source file in the pack for each shipped file. */
 function packSource(rel) {
   if (rel === BACKDROP) return join(PACK, 'source', 'department-hall.png');
+  if (rel === WALK) return join(MOTION, 'player-walk.png');
   if (rel.startsWith('props/')) return join(PACK, 'exports', rel);
   const name = rel.slice('characters/'.length);
   if (name.startsWith('player-')) return join(PACK, 'main-character', 'exports', name);
