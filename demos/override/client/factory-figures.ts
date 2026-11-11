@@ -12,6 +12,8 @@ export interface FigureArt {
   frame: { w: number; h: number };
   anchor: { x: number; y: number };
   scale: number;
+  /** Per-sprite size factor on top of scale, so cast drawn at different heights in the frame stand equally tall. Absent: 1. */
+  sizes?: Record<string, number>;
   density: number;
   labelLift: number;
   /** Walk-cycle frames `<detective>-walk-<i>.png`; absent: the detective hops in its still pose. */
@@ -21,8 +23,33 @@ export interface FigureArt {
   /** Drawn loops `<sprite>-idle-<i>.png` (every sprite) and `<sprite>-talk-<i>.png` (count by sprite);
    * absent: the still poses breathe and bob in code. */
   loops?: { idle: number; talk: Record<string, number> };
+  /** One-shot object gestures by sprite (renaissance apothecary: the vial), drawn as `<sprite>-<name>-<i>.png`.
+   * Played once while that sprite answers one of `topics`; never an idle or talk loop. */
+  gestures?: Record<string, Gesture>;
+  /** Idle cast live on their own (figure-motion chillAt): ponder, glance away, shift weight; and turn to the
+   * detective when near or engaged (faceFor). Absent: they only breathe and keep their slot's facing. */
+  chill?: boolean;
   /** Names of the two desk props at the stops; absent: case-folder and notebook. */
   stopProps?: { briefing: string; report: string };
+}
+
+/** A one-shot gesture: frames 0..hold play in, `hold` stays while the line is read, the rest play out. */
+export interface Gesture {
+  name: string;
+  frames: number;
+  hold: number;
+  frameMs: number;
+  topics: string[];
+}
+
+/** The gesture `sprite` makes when it answers `topic`, if any. */
+export function gestureFor(art: FigureArt, sprite: string, topic: string | undefined): Gesture | undefined {
+  const g = art.gestures?.[sprite];
+  return g && topic !== undefined && g.topics.includes(topic) ? g : undefined;
+}
+
+export function gestureUrl(art: FigureArt, sprite: string, g: Gesture, i: number): string {
+  return `${art.base}/${sprite}-${g.name}-${i}.png`;
 }
 
 /** A walk-cycle sprite sheet used untouched: equal cells read left to right, row by row, and drawn with
@@ -90,6 +117,11 @@ export function poseUrl(art: FigureArt, sprite: string, pose: Pose): string {
 
 export function propUrl(art: FigureArt, id: string): string {
   return `${art.props}/${id}.png`;
+}
+
+/** World units per image px for one sprite's pose frames: the pack's scale times its size factor. */
+export function spriteScale(art: FigureArt, sprite: string): number {
+  return art.scale * (art.sizes?.[sprite] ?? 1);
 }
 
 /** The frame's rectangle in world units, placed so its foot anchor sits on `foot`. */

@@ -105,3 +105,39 @@ test('stride: release, a blocked 80 ms and a teleport all stop it', () => {
   assert.equal(s.walking, false, '80 ms still');
   assert.equal(s.distance, 0);
 });
+
+test('chillAt: repeatable, a mix of acts, never in step across the department cast', () => {
+  const seeds = ['freja', 'mikkel', 'birgit', 'jonas', 'signe'].map(m.seedOf);
+  const ts = Array.from({ length: 1200 }, (_, i) => i * 250);
+  for (const s of seeds) assert.deepEqual(ts.map(t => m.chillAt(t, s)), ts.map(t => m.chillAt(t, s)));
+  const acts = new Set(seeds.flatMap(s => ts.map(t => m.chillAt(t, s).act)));
+  assert.deepEqual([...acts].sort(), ['glance', 'ponder', 'rest', 'shift']);
+  const tracks = seeds.map(s => ts.map(t => m.chillAt(t, s).act).join());
+  assert.equal(new Set(tracks).size, seeds.length);
+  // Mostly at rest: acts are short breaks, not the whole time.
+  for (const s of seeds) assert.ok(ts.filter(t => m.chillAt(t, s).act === 'rest').length > ts.length * .5);
+});
+
+test('chillAt: acts last 2.4 to 4 s, shift leans one degree, bad time rests', () => {
+  const s = m.seedOf('jonas');
+  for (let t = 0; t < 300000; t += 100) {
+    const c = m.chillAt(t, s);
+    assert.ok(c.since >= 0 && c.since < 4000);
+    if (c.act === 'shift') assert.equal(Math.abs(c.lean), 1); else assert.equal(c.lean, 0);
+  }
+  assert.deepEqual(m.chillAt(NaN, s), m.CHILL_REST);
+  assert.deepEqual(m.chillAt(-5, s), m.CHILL_REST);
+});
+
+test('faceFor: home facing, glance turns away, the detective wins when near or engaged', () => {
+  const base = { home: false, current: false, x: 100, y: 200, engaged: false, glance: false };
+  assert.equal(m.faceFor(base), false);
+  assert.equal(m.faceFor({ ...base, home: true }), true);
+  assert.equal(m.faceFor({ ...base, glance: true }), true);
+  const far = { x: 20, y: 200 };
+  assert.equal(m.faceFor({ ...base, detective: far }), false);
+  assert.equal(m.faceFor({ ...base, detective: far, engaged: true }), true);
+  assert.equal(m.faceFor({ ...base, detective: { x: 60, y: 210 } }), true);
+  assert.equal(m.faceFor({ ...base, home: true, glance: true, detective: { x: 140, y: 200 } }), false);
+  assert.equal(m.faceFor({ ...base, current: true, detective: { x: 103, y: 230 } }), true);
+});

@@ -42,6 +42,27 @@ export function shuffleIds(ids) {
   return out;
 }
 
+// A seeded permutation (FNV-1a over seed and round, then mulberry32): the same seed and round
+// always deal the same speaking order, so a talk sequence can be replayed from its seed.
+export const DEFAULT_TALK_SEED = '42069';
+
+export function seededShuffle(ids, seed, round) {
+  let h = 2166136261;
+  for (const ch of `${seed}:${round}`) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619); }
+  const next = () => {
+    h = (h + 0x6D2B79F5) | 0;
+    let t = Math.imul(h ^ (h >>> 15), 1 | h);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const out = [...ids];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(next() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 // A cast is a bijection from the case's character ids to its part ids.
 const validCast = (kase, cast) => {
   if (!cast || typeof cast !== 'object' || Array.isArray(cast)) return false;
@@ -73,7 +94,7 @@ export function replay(events, cases, lastSaid = null) {
     if (e.type === 'session_started') {
       if (s || !validCast(kase, e.cast)) return null;
       s = { id: e.sessionId, revision: 0, startedAt: new Date(Date.parse(e.timestamp) - e.elapsedMs).toISOString(),
-        status: 'active', caseId: kase.id, cast: { ...e.cast },
+        status: 'active', caseId: kase.id, cast: { ...e.cast }, talkSeed: e.talkSeed ?? null,
         location: 'briefing', interviews: Object.fromEntries(kase.characters.map(c => [c.id, []])), verdict: null,
         economy: createWallet(e.economy ?? economyRules({})), thread: [], chatter: { round: 0, pending: 0 }, inspections: [],
         team: e.team && typeof e.team.id === 'string' && typeof e.team.name === 'string' ? { id: e.team.id, name: e.team.name } : null };
@@ -95,7 +116,7 @@ export function replay(events, cases, lastSaid = null) {
     if (e.type === 'chatter_line') {
       s.thread.push({ character: e.character, text: e.text, round: e.round, timestamp: e.timestamp });
       // Rounds were 3 lines before roundLines was logged; older logs keep that.
-      s.chatter = { round: e.round, pending: (e.roundLines ?? 3) - e.line };
+      s.chatter = { round: e.round, pending: (e.roundLines ?? 3) - e.line, order: e.order ?? null };
     }
     if (e.type === 'reasoning_inspected') s.inspections.push({ character: e.character, sourceEventId: e.sourceEventId, reasoning: e.reasoning, timestamp: e.timestamp });
     if (e.type === 'interview_answer') {
@@ -129,8 +150,9 @@ class Window {
 // leave memory and are rebuilt from their log on the next request, so progress
 // also survives a restart. Each game plays one registered case.
 export class Investigations {
-  constructor({ dataDir, config, router = null, answer = null, thread = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {}, cases = registry, content = null, dev = false, shuffle = shuffleIds }) {
+  constructor({ dataDir, config, router = null, answer = null, thread = null, idleMs = 30 * 60_000, meta = {}, onEvent = () => {}, cases = registry, content = null, dev = false, shuffle = shuffleIds, order = seededShuffle }) {
     this.shuffle = shuffle;
+    this.order = order;
     this.paths = dataPaths(dataDir);
     this.config = config;
     this.router = router;
@@ -152,7 +174,7 @@ export class Investigations {
   }
 
   create(session, kase, lastSaid = null) {
-    return new Investigation({ dev: this.dev, dataDir: this.paths.root, paths: this.paths, lastSaid, config: this.config, answer: this.answer, thread: this.thread, kase, session, shuffle: this.shuffle, meta: this.meta, onEvent: this.onEvent });
+    return new Investigation({ dev: this.dev, dataDir: this.paths.root, paths: this.paths, lastSaid, config: this.config, answer: this.answer, thread: this.thread, kase, session, shuffle: this.shuffle, order: this.order, meta: this.meta, onEvent: this.onEvent });
   }
 
   find(sessionId) {
@@ -230,8 +252,10 @@ export class Investigations {
 }
 
 export class Investigation {
-  constructor({ dataDir, dev = false, paths = null, lastSaid = null, config, kase, answer = null, thread = null, session = null, meta = {}, onEvent = () => {}, shuffle = shuffleIds }) {
+  constructor({ dataDir, dev = false, paths = null, lastSaid = null, config, kase, answer = null, thread = null, session = null, meta = {}, onEvent = () => {}, shuffle = shuffleIds, order = seededShuffle }) {
     this.shuffle = shuffle;
+    // (ids, seed, round) -> the round's speaking order in "Let them talk".
+    this.order = order;
     this.dev = dev;
     this.paths = paths ?? dataPaths(dataDir);
     // characterId -> eventId of their latest interview answer or chatter line; mirrors the log.
@@ -290,7 +314,7 @@ export class Investigation {
     const cast = s?.cast ?? identityCast(kase);
     let session = null;
     if (s) {
-      session = structuredClone(s); delete session.cast; session.inspectable = this.inspectable();
+      session = structuredClone(s); delete session.cast; delete session.talkSeed; session.inspectable = this.inspectable();
       if (kase.talk) {
         session.talk = {
           asked: structuredClone(s.talk.asked), quotes: structuredClone(s.talk.quotes),
@@ -303,7 +327,7 @@ export class Investigation {
       if (alarm) session.alarm = alarm;
     }
     return {
-      ...publicView(kase, cast), roles: rolesOf(kase), authored: true, mode: this.config.mode, model: this.config.model,
+      ...publicView(kase, cast, { hideParts: s?.status !== 'closed' }), roles: rolesOf(kase), authored: true, mode: this.config.mode, model: this.config.model,
       session, debrief: s?.status === 'closed' ? this.debrief(s) : null,
     };
   }
@@ -473,16 +497,18 @@ export class Investigation {
     const ids = this.kase.characters.map(c => c.id);
     const dealt = this.shuffle(this.kase.parts.map(p => p.id));
     const cast = Object.fromEntries(ids.map((id, i) => [id, dealt[i]]));
+    // Every game deals its speaking order from OVERRIDE_TALK_SEED, or the default seed.
+    const talkSeed = this.config.talkSeed ?? DEFAULT_TALK_SEED;
     this.session = {
       id: randomUUID(), revision: 0, startedAt: new Date().toISOString(),
-      status: 'active', caseId: this.kase.id, cast,
+      status: 'active', caseId: this.kase.id, cast, talkSeed,
       location: 'briefing', interviews: Object.fromEntries(this.kase.characters.map(c => [c.id, []])), verdict: null,
       economy: createWallet(rules), thread: [], chatter: { round: 0, pending: 0 }, inspections: [],
       team: team && typeof team.id === 'string' && typeof team.name === 'string' ? { id: team.id, name: team.name } : null,
     };
     if (this.kase.evidence) this.session.examined = [];
     if (this.kase.talk) this.session.talk = newTalkState(this.kase);
-    this.log('session_started', { assignment, economy: rules, cast, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, team: this.session.team, ...this.meta });
+    this.log('session_started', { assignment, economy: rules, cast, talkSeed, env: null, appCommit: null, appDirty: null, endpointsHash: this.config.endpointsHash ?? null, team: this.session.team, ...this.meta });
     this.log('briefing_viewed');
   }
 
@@ -724,15 +750,23 @@ export class Investigation {
       const check = quote(s.economy, ['continue'], this.reserve());
       if (!check.ok) throw new RequestError(409, check.reason);
     }
-    const last = s.thread.length ? characters.findIndex(c => c.id === s.thread[s.thread.length - 1].character) : -1;
-    const speaker = characters[(last + 1) % characters.length];
-    const n = s.thread.filter(l => l.character === speaker.id).length;
     const round = starting ? s.chatter.round + 1 : s.chatter.round;
     // A new round is one line from every character. A round in progress keeps its size,
     // so a round restored from an older log (3 lines) ends where it would have.
     const done = starting ? 0 : s.thread.filter(l => l.round === s.chatter.round).length;
     const roundLines = starting ? characters.length : done + s.chatter.pending;
     const line = done + 1;
+    const lastId = s.thread.at(-1)?.character;
+    // Each round deals a fresh speaking order from the game's seed; the last speaker never opens the next round.
+    // A game restored from a log without a seed draws its orders at random.
+    const ids = characters.map(c => c.id);
+    let order = starting ? (s.talkSeed != null ? this.order(ids, s.talkSeed, round) : shuffleIds(ids)) : s.chatter.order ?? null;
+    if (starting && order.length > 1 && order[0] === lastId) order = [...order.slice(1), order[0]];
+    // A round restored from a log without an order goes on in case order, as it did then.
+    const speaker = order?.[done]
+      ? characters.find(c => c.id === order[done])
+      : characters[(characters.findIndex(c => c.id === lastId) + 1) % characters.length];
+    const n = s.thread.filter(l => l.character === speaker.id).length;
     let text;
     let reasoning = null;
     let provenance = null;
@@ -758,10 +792,10 @@ export class Investigation {
       if (typeof text !== 'string' || !text) text = `${speaker.name} has nothing to add.`;
     }
     const paid = starting ? spend(s.economy, ['continue']) : null;
-    const event = this.log('chatter_line', { character: speaker.id, text, round, line, roundLines, provenance, threadPromptVersion: this.kase.prompts?.threadVersion ?? threadPromptVersion, spend: paid });
+    const event = this.log('chatter_line', { character: speaker.id, text, round, line, roundLines, order, provenance, threadPromptVersion: this.kase.prompts?.threadVersion ?? threadPromptVersion, spend: paid });
     this.remember(speaker.id, event.eventId, reasoning);
     s.thread.push({ character: speaker.id, text, round, timestamp: event.timestamp });
-    s.chatter = { round, pending: roundLines - line };
+    s.chatter = { round, pending: roundLines - line, order };
   }
 
   verdict(input) {
@@ -799,7 +833,7 @@ export class Investigation {
     // While the game is on, the cast stays secret: only the first line is rewritten.
     const lines = text.split('\n').map(stripHidden);
     const head = JSON.parse(lines[0]);
-    if (head.type === 'session_started') { head.cast = null; lines[0] = JSON.stringify(head); }
+    if (head.type === 'session_started') { head.cast = null; if ('talkSeed' in head) head.talkSeed = null; lines[0] = JSON.stringify(head); }
     return lines.join('\n');
   }
 }

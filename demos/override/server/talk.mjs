@@ -117,11 +117,6 @@ export function checkTalk(data) {
   scanTree('copy', data.copy);
   scanTree('debrief', data.debrief);
   scanTree('answer.feedback', data.answer?.feedback);
-  // The prompt goes to the model in every deal; list entries use `prompt.use[1]` like the other defineCase paths.
-  for (const [k, v] of Object.entries(data.prompt ?? {})) {
-    if (Array.isArray(v)) v.forEach((x, i) => walkStrings(x, `prompt.${k}[${i}]`, scan));
-    else walkStrings(v, `prompt.${k}`, scan);
-  }
 
   // Copy and the wrong-accusation feedback show while the game is open and are filled from the real deal,
   // so a placeholder there would name the traveller. Only the debrief and the correct feedback may use one.

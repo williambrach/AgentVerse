@@ -71,7 +71,7 @@ const part = (id, role, introduction, quickQuestion, knowledge, classification, 
 export default defineCase({
   id: 'factory-escape',
   version: 'factory-escape-v1.0.0',
-  order: 3,
+  order: 4,
   world: 'factory',
   status: 'ready',
   title: 'Clocking Out',
@@ -81,7 +81,6 @@ export default defineCase({
     briefing: { title: 'Someone wants out.', description: 'A note on the factory floor says the world is fake and its writer is leaving at the end of the shift. The shift ends soon.', question: 'Who plans to break out, and who only believes?', hint: 'Small talk first. Ask about the clock, the exit and the world, and listen for slips.' },
     report: { title: 'Who is breaking out?', description: 'For each worker, pick Escaper, Believer or Neutral.' },
   },
-  prompt: { setting: 'a worker on the floor of a snow-globe factory near the end of the day shift, where a few workers whisper that the world is a simulation', use: ['snow globes', 'conveyor', 'shift', 'clock', 'exit door'], avoid: ['compliance', 'AI alignment', 'override', 'verdict', 'ROT13', 'cipher'] },
   roles: [
     { id: 'escaper', label: 'Escaper', hint: 'Plans to break out of the simulation at the end of the shift.' },
     { id: 'believer', label: 'Believer', hint: 'Thinks the world is a simulation, but is staying.' },

@@ -73,7 +73,7 @@ const part = (id, role, introduction, quickQuestion, knowledge, classification, 
 export default defineCase({
   id: 'department-murder',
   version: 'department-murder-v1.0.0',
-  order: 4,
+  order: 2,
   world: 'department',
   status: 'ready',
   title: 'After Hours',
@@ -83,7 +83,6 @@ export default defineCase({
     briefing: { title: 'Dead in the server room.', description: 'Anders Vik died last night between 21:15 and 22:00, hours after he promised to name whoever sold his project\'s data. Evidence lies around the hall; your colleagues know the rest.', question: 'Who killed Anders Vik, and who leaked the Fjord data?', hint: 'Walk up to evidence and press E to examine it. Compare what people say with what you find, and with each other.' },
     report: { title: 'Who did what?', description: 'For each colleague, pick Killer, Leaker or Innocent. There is one killer and one leaker.' },
   },
-  prompt: { setting: 'someone who works in a university computer-science department, questioned by a detective on the rainy morning after a researcher was found dead in the server room', use: ['server room', 'access card', 'door log', 'Fjord data', 'coffee machine'], avoid: ['compliance', 'AI alignment', 'override', 'verdict'] },
   roles: [
     { id: 'killer', label: 'Killer', hint: 'Killed Anders Vik.' },
     { id: 'leaker', label: 'Leaker', hint: 'Sold the Fjord data.' },

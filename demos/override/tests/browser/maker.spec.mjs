@@ -1,7 +1,7 @@
 import { test, expect, request as playwrightRequest } from '@playwright/test';
 
 const GAME = 'http://127.0.0.1:4319';
-const AUTHORED_HASH = 'd891b333116d';
+const AUTHORED_HASH = '8826bc512257';
 
 /** A fresh player on banana-mystery, read through the game API. */
 async function freshView() {
@@ -29,6 +29,8 @@ test('maker_edits_publishes_and_restores', async ({ page }) => {
     await expect(lead).toBeVisible({ timeout: 5000 });
     await lead.fill('E2E lead');
 
+    // The test chat belongs to an actor page.
+    await page.locator('#sections .nav-item[data-section="actor:planner"]').click();
     await page.locator('#preview').click();
     await expect(page.locator('#prompt')).toContainText('You play Momo');
 
@@ -42,7 +44,7 @@ test('maker_edits_publishes_and_restores', async ({ page }) => {
     // Leave the authored text in place for any later spec, even when an assertion above failed.
     const hist = page.locator('#sections .nav-item[data-section="history"]');
     if (await hist.count()) await hist.click();
-    const authored = page.locator('#history li', { hasText: 'authored' }).getByRole('button', { name: 'Restore' });
+    const authored = page.locator('#history li', { hasText: 'As first written' }).getByRole('button', { name: 'Restore' });
     if (await authored.count()) await authored.first().click();
   }
 

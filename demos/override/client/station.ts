@@ -15,7 +15,7 @@ import { BUBBLE_WIDTH, placeBubble } from './bubble-layout';
 import { stageLayout, COMPACT_QUERY, RAIL, WORLD_WIDTH, WORLD_HEIGHT, type StageLayout } from './stage-layout';
 
 type Point = { x: number; y: number };
-type Stop = Point & { title: string; label: string; bare?: boolean };
+type Stop = Point & { title: string; label: string; bare?: boolean; flip?: boolean };
 type ArtKind = 'cast' | 'idle' | 'walk' | 'props';
 export type ArtSource = 'file' | 'placeholder';
 const artKinds: ArtKind[] = ['cast', 'idle', 'walk', 'props'];
@@ -42,6 +42,7 @@ function artKeys(world: WorldPack): Record<ArtKind, string> {
 const walkKey = (sprite: string, i: number) => `factory-${sprite}-walk-${i}`;
 const walkSheetKey = (sprite: string) => `factory-${sprite}-walk-sheet`;
 const loopKey = (sprite: string, kind: 'idle' | 'talk', i: number) => `factory-${sprite}-${kind}-${i}`;
+const gestureKey = (sprite: string, i: number) => `factory-${sprite}-gesture-${i}`;
 const poses: Pose[] = ['listening', 'speaking', 'thinking'];
 const figureKey = (sprite: string, pose: Pose) => `factory-${sprite}-${pose}`;
 const width = WORLD_WIDTH;
@@ -116,7 +117,7 @@ export class Station extends Phaser.Scene {
   private faceSheets = new Map<string, { key: string; url: string }>();
   // Pose-image worlds (world.figures): the pose follows think/speak/detective; figure-motion.ts moves it every frame.
   // walkFrom: set while the figure walks off to the exit; its tween moves it then.
-  private figs = new Map<string, { img: Phaser.GameObjects.Image; sprite: string; shadow: Phaser.GameObjects.Ellipse; label: HTMLSpanElement; foot: Point; seed: number; pose: Pose; poseSince: number; walkFrom?: Point }>();
+  private figs = new Map<string, { img: Phaser.GameObjects.Image; sprite: string; shadow: Phaser.GameObjects.Ellipse; label: HTMLSpanElement; foot: Point; seed: number; pose: Pose; poseSince: number; home: boolean; walkFrom?: Point; gesture?: { g: factoryFigures.Gesture; since: number; holdMs: number } }>();
   private detectiveImg?: Phaser.GameObjects.Image;
   private detectiveMarker?: HTMLSpanElement;
   private detectivePose: Pose = 'listening';
@@ -211,11 +212,14 @@ export class Station extends Phaser.Scene {
         const drawn = factoryFigures.drawnOf(art, sprite);
         for (let i = 0; i < drawn.idle; i++) this.load.image(loopKey(sprite, 'idle', i), factoryFigures.loopUrl(art, sprite, 'idle', i));
         for (let i = 0; i < drawn.talk; i++) this.load.image(loopKey(sprite, 'talk', i), factoryFigures.loopUrl(art, sprite, 'talk', i));
+        const g = art.gestures?.[sprite];
+        for (let i = 0; g && i < g.frames; i++) this.load.image(gestureKey(sprite, i), factoryFigures.gestureUrl(art, sprite, g, i));
       }
       const sheet = art.walkSheet;
       if (sheet) this.load.image(walkSheetKey(art.detective), sheet.url);
       else for (let i = 0; i < (art.walkFrames ?? 0); i++) this.load.image(walkKey(art.detective, i), factoryFigures.walkFrameUrl(art, i));
       this.world.floor?.props.forEach(p => this.load.image(`factory-prop-${p.id}`, factoryFigures.propUrl(art, p.id)));
+      if (this.world.floorArt) this.load.image(`${this.world.id}-floor-art`, this.world.floorArt.url);
       const back = this.world.backdrop;
       if (back) {
         this.load.image(`${this.world.id}-backdrop`, back.url);
@@ -460,10 +464,14 @@ export class Station extends Phaser.Scene {
   /** Factory floor: a flat floor plus the pack's props by bottom-centre, depth-sorted by their foot. */
   private drawFactory() {
     const art = this.world.figures!;
-    this.add.rectangle(-400, -300, 1280, 940, Phaser.Display.Color.HexStringToColor(this.world.palette.ground).color).setOrigin(0, 0).setDepth(-10);
+    // A painted floor goes lowest of all but its fill; a missing file leaves the flat floor and its tint.
+    const floorArt = this.world.floorArt, floorKey = `${this.world.id}-floor-art`;
+    const painted = floorArt !== undefined && this.textures.exists(floorKey);
+    this.add.rectangle(-400, -300, 1280, 940, Phaser.Display.Color.HexStringToColor(painted ? floorArt.fill : this.world.palette.ground).color).setOrigin(0, 0).setDepth(-10);
     const back = this.world.backdrop;
     if (back) { this.drawBackdrop(art, back); return; }
-    this.add.rectangle(0, 0, width, height, 0xffffff, .06).setOrigin(0, 0).setDepth(0);
+    if (painted) this.add.image(floorArt.x, floorArt.y, floorKey).setOrigin(0, 0).setScale(floorArt.scale).setDepth(-8);
+    else this.add.rectangle(0, 0, width, height, 0xffffff, .06).setOrigin(0, 0).setDepth(0);
     this.world.floor?.props.forEach(p => this.add.image(p.x, p.y, `factory-prop-${p.id}`).setOrigin(.5, 1).setScale(art.scale).setDepth(p.y));
     (['briefing', 'report'] as const).forEach(id => this.add.ellipse(this.stops[id].x, this.stops[id].y, 30, 9, 0xffffff, .14).setDepth(1));
   }
@@ -500,17 +508,18 @@ export class Station extends Phaser.Scene {
   }
 
   private figureImage(art: NonNullable<WorldPack['figures']>, sprite: string, pose: Pose, x: number, y: number) {
-    return this.add.image(x, y, figureKey(sprite, pose)).setOrigin(art.anchor.x / art.frame.w, art.anchor.y / art.frame.h).setScale(art.scale).setDepth(y);
+    return this.add.image(x, y, figureKey(sprite, pose)).setOrigin(art.anchor.x / art.frame.w, art.anchor.y / art.frame.h).setScale(factoryFigures.spriteScale(art, sprite)).setDepth(y);
   }
 
-  private addFigure(id: string, p: Point, art: NonNullable<WorldPack['figures']>, text: string) {
+  private addFigure(id: string, p: Point & { flip?: boolean }, art: NonNullable<WorldPack['figures']>, text: string) {
     const sprite = art.sprites[id];
     const shadow = this.add.ellipse(p.x, p.y - 1, 25, 7, 0x000000, .25).setDepth(p.y - 1);
-    const img = this.figureImage(art, sprite, 'listening', p.x, p.y);
+    // The slot says which way the figure faces (the art faces right).
+    const img = this.figureImage(art, sprite, 'listening', p.x, p.y).setFlipX(p.flip === true);
     const label = this.label(p.x, p.y - art.labelLift, text);
     label.dataset.figure = id;
     label.dataset.pose = 'listening';
-    this.figs.set(id, { img, sprite, shadow, label, foot: { x: p.x, y: p.y }, seed: motion.seedOf(id), pose: 'listening', poseSince: -motion.POP_MS });
+    this.figs.set(id, { img, sprite, shadow, label, foot: { x: p.x, y: p.y }, seed: motion.seedOf(id), pose: 'listening', poseSince: -motion.POP_MS, home: p.flip === true });
     this.labels.set(id, label);
   }
 
@@ -535,6 +544,7 @@ export class Station extends Phaser.Scene {
       return this.textures.exists(walkSheetKey(sprite)) ? { key: walkSheetKey(sprite), frame: t.frame } : { key: figureKey(sprite, this.detectivePose) };
     }
     if (t.kind === 'walk') return { key: walkKey(sprite, t.frame) };
+    if (t.kind === 'gesture') return this.textures.exists(gestureKey(sprite, t.frame)) ? { key: gestureKey(sprite, t.frame) } : { key: figureKey(sprite, 'speaking') };
     return { key: loopKey(sprite, t.kind, t.frame) };
   }
 
@@ -547,7 +557,7 @@ export class Station extends Phaser.Scene {
     else if (frame !== undefined && String(img.frame.name) !== String(frame)) img.setFrame(frame);
     const sheet = frame !== undefined ? art.walkSheet! : undefined;
     const origin = sheet ? factoryFigures.sheetOrigin(sheet, frame) : { x: art.anchor.x / art.frame.w, y: art.anchor.y / art.frame.h };
-    const scale = sheet ? sheet.scale : art.scale;
+    const scale = sheet ? sheet.scale : factoryFigures.spriteScale(art, sprite);
     if (img.originX !== origin.x || img.originY !== origin.y) img.setOrigin(origin.x, origin.y);
     const tall = (sheet ? sheet.cell.h : art.frame.h) * scale * art.density;
     img.setScale(scale, scale * (1 + look.stretch / tall));
@@ -561,7 +571,21 @@ export class Station extends Phaser.Scene {
     if (!art) return;
     this.figs.forEach(f => {
       if (f.walkFrom) return;
-      const look = reducedMotion.matches ? motion.stillLook(f.pose) : motion.standLook(f.pose, time, f.seed, time - f.poseSince, factoryFigures.drawnOf(art, f.sprite));
+      // A one-shot gesture (the apothecary's vial) replaces the pose until it has played out; reduced motion skips it.
+      const gestureFrame = f.gesture && !reducedMotion.matches ? motion.gestureFrameAt(f.gesture.g, time - f.gesture.since, f.gesture.holdMs) : null;
+      if (gestureFrame === null) f.gesture = undefined;
+      else { this.wear(f.img, f.sprite, { texture: { kind: 'gesture', frame: gestureFrame }, stretch: 0, lift: 0, lean: 0 }, f.foot.x, f.foot.y); return; }
+      if (reducedMotion.matches) { this.wear(f.img, f.sprite, motion.stillLook(f.pose), f.foot.x, f.foot.y); return; }
+      let look = motion.standLook(f.pose, time, f.seed, time - f.poseSince, factoryFigures.drawnOf(art, f.sprite));
+      if (art.chill) {
+        // Idle colleagues live on their own and turn to the detective when near or being talked to.
+        const detective = this.player ? { x: this.player.x, y: this.player.y } : undefined;
+        const near = detective !== undefined && Math.hypot(detective.x - f.foot.x, detective.y - f.foot.y) <= 64;
+        const idle = f.pose === 'listening' && !near ? motion.chillAt(time, f.seed) : motion.CHILL_REST;
+        if (idle.act === 'ponder') look = motion.standLook('thinking', time, f.seed, idle.since);
+        else if (idle.act === 'shift') look = { ...look, lean: idle.lean };
+        f.img.setFlipX(motion.faceFor({ home: f.home, current: f.img.flipX, x: f.foot.x, y: f.foot.y, detective, engaged: f.pose !== 'listening', glance: idle.act === 'glance' }));
+      }
       this.wear(f.img, f.sprite, look, f.foot.x, f.foot.y);
     });
   }
@@ -606,11 +630,15 @@ export class Station extends Phaser.Scene {
     this.applyPoses();
   }
 
-  /** `id` shows the speaking pose for as long as `text` takes to read, then goes back to listening. */
-  speak(id: string, text: string): void {
+  /** `id` shows the speaking pose for as long as `text` takes to read, then goes back to listening.
+   * An answer to a topic the sprite has a gesture for plays that gesture instead (the same in every deal). */
+  speak(id: string, text: string, topic?: string): void {
     if (!this.world.figures) return;
+    const art = this.world.figures;
     clearTimeout(this.speakTimer);
     this.speakingId = id;
+    const f = this.figs.get(id), g = f && factoryFigures.gestureFor(art, f.sprite, topic);
+    if (f && g) f.gesture = { g, since: this.time?.now ?? 0, holdMs: factoryFigures.speakMs(text) };
     this.applyPoses();
     this.speakTimer = setTimeout(() => { this.speakingId = null; this.applyPoses(); }, factoryFigures.speakMs(text));
   }

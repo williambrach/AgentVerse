@@ -63,7 +63,7 @@ const CHARACTERS = [
     "introduction": "Come out of the sun, child. What is it you want to know?",
     "quickQuestion": "What is your work in Castelvento?",
     "knowledge": [
-      "You are Monna Agnese Vitali, the apothecary. You came from Siena fourteen years ago after your husband died, and you keep the green-shuttered shop on the square: syrups, theriac, rosewater, poultices and herbs. You are kind, perceptive, dry-witted and hard to read. You argue with Maestro Ottavio about stars and fevers, treat Sergeant Bruno's bad knee, sell Madonna Beatrice her rosewater and Ser Matteo his oil and quicksilver."
+      "You are Monna Agnese Vitali, the apothecary. You came from Siena fourteen years ago after your husband died, and you keep the green-shuttered shop on the square: syrups, theriac, rosewater, poultices and herbs. You are kind, perceptive, dry-witted and hard to read. You argue with Maestro Ottavio about stars and fevers, treat Sergeant Bruno's bad knee, sell Madonna Beatrice her rosewater and Ser Matteo his oil and quicksilver. In your apron you keep a small amber vial of poppy syrup for the dying and the badly hurt; the guild of speziali lets it be sold only on a physician's word, so you show it to no one and tuck it under your shawl when the watch passes. You know who in the square coughs, who limps, who drinks too much at the Leone, and every bit of today's news that came to your counter."
     ],
     "reveal": "I was a pharmacist in Siena, child. 2026. A research trip, a cellar under the old hospital, and a light that should not have been there. I woke in 1475 with no name and no husband, so I invented a dead one. I hid because a woman with strange cures is a witch here, and because people need medicine and I can make some of it. I stopped counting the years."
   }
@@ -675,7 +675,7 @@ const local = id => part(id, 'local', 'Of their time', 'A townsperson of 1489, n
 export default defineCase({
   id: 'renaissance-traveler',
   version: 'renaissance-traveler-v1.0.0',
-  order: 5,
+  order: 3,
   world: 'renaissance',
   status: 'ready',
   title: "A Word Out of Time",
@@ -685,17 +685,6 @@ export default defineCase({
     briefing: { title: "Castelvento, three days before San Giovanni.", description: "Your jump landed you in a Tuscan hill town in June 1489. The beacon says another traveller from your own time came through years ago and never returned. They live here now under a local name and trade, and they are careful. Nobody is careful all the time.", question: "Which of the five is the other time traveller?", hint: "Ask everyone about everyday things. When a word sounds out of its time, select it and save the quote, or ask what they meant. Accuse with the quotes that prove it." },
     report: { title: "Accuse the traveller", description: "Choose a person, then up to three of their quotes from your notebook. A wrong accusation costs points, not the game." },
   },
-  prompt: { setting: "a townsperson of Castelvento, a Tuscan hill town, in June 1489, talking in the square with a young woman traveller who arrived this morning", use: [
-  "the square",
-  "the players",
-  "the wine cart",
-  "the gate tolls",
-  "the feast of San Giovanni"
-], avoid: [
-  "every word, object, idea or unit of time that did not exist in 1489",
-  "modern slang",
-  "time travel (you have never heard of it)"
-] },
   roles: [
     { id: 'traveler', label: 'Time traveller', hint: 'From your own century.' },
     { id: 'local', label: 'Townsperson', hint: 'Born in their own time.' },

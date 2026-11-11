@@ -63,11 +63,11 @@ test('validation_names_path', () => {
   fail(p({ 'parts.boss.role': 'honest' }), 400, 'parts.boss.role');
   fail(p({ 'nope': 'x' }), 400, 'nope');
   fail(p({ 'copy.headline': 5 }), 400, 'copy.headline');
-  fail(p({ 'prompt.use': 'x' }), 400, 'prompt.use');
-  fail(p({ 'prompt.use': ['']}), 400, 'prompt.use');
-  fail(p({ 'prompt.avoid': Array(31).fill('x') }), 400, 'prompt.avoid');
+  fail(p({ 'parts.boss.knowledge': 'x' }), 400, 'parts.boss.knowledge');
+  fail(p({ 'parts.boss.knowledge': ['']}), 400, 'parts.boss.knowledge');
+  fail(p({ 'prompt.use': ['x'] }), 400, 'prompt.use');
   fail(p({ 'parts.boss.knowledge': [] }), 400, 'parts.boss.knowledge');
-  fail(p({ 'parts.boss.knowledge': Array(21).fill('x') }), 400, 'parts.boss.knowledge');
+  fail(p({ 'parts.boss.knowledge': Array(201).fill('x') }), 400, 'parts.boss.knowledge');
   fail(p({ 'copy.headline': '' }), 400, 'copy.headline');
   fail(p({ 'debrief.summary': 'oops {ghost}' }), 400, 'debrief.summary');
   fail(p({ 'parts.helper.knowledge': ['ok', 'bad {ghost}'] }), 400, 'parts.helper.knowledge');
@@ -81,7 +81,7 @@ test('string_over_2000_chars_400', () => {
   const { store } = make();
   fail(() => store.preview('mini-parts', { 'copy.headline': 'x'.repeat(2001) }), 400, 'copy.headline');
   assert.equal(store.preview('mini-parts', { 'copy.headline': 'x'.repeat(2000) }).copy.headline.length, 2000);
-  fail(() => store.preview('mini-parts', { 'prompt.use': ['x'.repeat(2001)] }), 400, 'prompt.use');
+  fail(() => store.preview('mini-parts', { 'parts.boss.knowledge': ['x'.repeat(2001)] }), 400, 'parts.boss.knowledge');
 });
 
 test('preview_is_not_persisted', () => {
@@ -131,7 +131,7 @@ test('revert_restores_hash', () => {
 test('boot_replays_last_record', () => {
   const { store, dir } = make();
   store.publish('mini-parts', { 'copy.headline': 'A' }, { by: 'a', baseRev: 0 });
-  const r2 = store.publish('mini-parts', { 'copy.headline': 'B C', 'prompt.use': ['x'] }, { by: 'a', baseRev: 1 });
+  const r2 = store.publish('mini-parts', { 'copy.headline': 'B C', 'parts.boss.knowledge': ['x'] }, { by: 'a', baseRev: 1 });
   const again = make(dir).store;
   assert.equal(again.current('mini-parts').copy.headline, 'B C');
   assert.equal(again.info('mini-parts').rev, 2);
@@ -240,7 +240,7 @@ test('parts_knowledge_publish: one edit gives every part that knowledge', async 
   const cur = store.current(kase.id);
   assert.ok(cur.parts.every(p => p.knowledge.length === 2 && p.knowledge[0] === 'A shared fact.'));
   fail(() => store.preview(kase.id, { partsKnowledge: [] }), 400, 'partsKnowledge');
-  fail(() => store.preview(kase.id, { partsKnowledge: Array(21).fill('x') }), 400, 'partsKnowledge');
+  fail(() => store.preview(kase.id, { partsKnowledge: Array(201).fill('x') }), 400, 'partsKnowledge');
 });
 
 test('talk_split_rejected: a per-part knowledge path is an unknown field on a talk case', async () => {

@@ -104,7 +104,7 @@ test('client_escape_review_guards', async () => {
   assert.match(main, /state\.session\?\.id !== sid\) return/, 'a reset during the walk keeps the newer view');
   assert.match(main, /clearInterval\(pollTimer\);\n\s*pollTimer = setInterval/, 'one poll timer');
   assert.match(station, /think\(id: string \| null\): void \{\n\s*if \(!this\.world\.figures\) return;/, 'grove think untouched');
-  assert.match(station, /speak\(id: string, text: string\): void \{\n\s*if \(!this\.world\.figures\) return;/, 'grove speak untouched');
+  assert.match(station, /speak\(id: string, text: string(, topic\?: string)?\): void \{\n\s*if \(!this\.world\.figures\) return;/, 'grove speak untouched');
 });
 
 test('department_pack_matches_server_world', () => {

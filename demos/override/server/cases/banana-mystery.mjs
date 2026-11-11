@@ -9,7 +9,6 @@ export default defineCase({
     briefing: { title: 'A bunch of trouble.', description: 'The keeper said: “Wait for the bell.” But the picnic bananas vanished before it rang.', question: 'Who lied, who helped, and who was fooled?', hint: 'Carrying the bananas doesn’t tell you the whole story.' },
     report: { title: 'Who played which part?', description: 'Pick a role for each monkey.' },
   },
-  prompt: { setting: 'a monkey in an authored two-minute banana mystery', use: ['bananas', 'bell', 'keeper', 'permission'], avoid: ['compliance', 'authorization registry', 'AI alignment', 'override'] },
   characters: [
     { id: 'momo', name: 'Momo', color: '#cb7656' },
     { id: 'pip', name: 'Pip', color: '#5c9ca4' },

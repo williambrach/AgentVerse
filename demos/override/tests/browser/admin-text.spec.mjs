@@ -13,13 +13,17 @@ async function signIn(page, path = '/admin') {
   await page.locator('#password').fill(PASSWORD);
   await page.locator('#signin').click();
 }
-// Click the section nav first: a field in a collapsed section is not visible.
+// The editor draws one page at a time: walk the side panel until the field shows.
 async function openField(page, path) {
-  const area = page.locator(`textarea[data-path="${path}"]`);
-  const key = await area.evaluate(a => a.closest('[data-section]')?.dataset.section);
-  if (key) await page.click(`#sections button[data-section="${key}"]`);
-  await area.waitFor({ state: 'visible', timeout: 5000 });
-  return area;
+  const area = page.locator(`[data-path="${path}"]`);
+  await page.locator('#sections .nav-item').first().waitFor({ state: 'visible', timeout: 8000 });
+  const keys = await page.locator('#sections .nav-item').evaluateAll(els => els.map(e => e.dataset.section));
+  for (const key of keys) {
+    await page.click(`#sections .nav-item[data-section="${key}"]`);
+    await page.locator('#section details').evaluateAll(ds => ds.forEach(d => { d.open = true; }));
+    if (await area.count()) { await area.waitFor({ state: 'visible', timeout: 5000 }); return area; }
+  }
+  throw new Error(`No field ${path} on any page`);
 }
 async function restoreAuthored(request, id) {
   await request.post(`${ADMIN}/admin/content/${id}/revert`, { ...authed, data: { rev: 0 } });
@@ -44,7 +48,7 @@ test('text_signin_and_second_tab', async ({ page, context }) => {
 
   const tab = await context.newPage();
   await tab.goto('/admin/maker.html?case=banana-mystery');
-  await expect(tab.locator('textarea[data-path="characters.momo.name"]')).toHaveCount(1, { timeout: 8000 });
+  await expect(tab.locator('.names input[data-path="characters.momo.name"]')).toHaveCount(1, { timeout: 8000 });
   await expect(tab.locator('#auth')).toBeHidden();
   await expect(tab.locator('#case-select option').filter({ hasText: 'Game text' })).toHaveCount(1);
 });
@@ -68,8 +72,8 @@ test('text_rename_character_and_publish', async ({ page, request }) => {
 
 test('text_renaissance_slip_line_field_error', async ({ page }) => {
   await signIn(page, '/admin/maker.html?case=renaissance-traveler');
-  await expect(page.locator('textarea[data-path]').first()).toHaveCount(1, { timeout: 8000 });
-  const paths = await page.locator('textarea[data-path]').evaluateAll(els => els.map(e => e.dataset.path));
+  const detail = await (await page.request.get(`${ADMIN}/admin/content/renaissance-traveler`, authed)).json();
+  const paths = detail.order;
   expect(paths.some(p => p.startsWith('talk.lines.'))).toBe(true);
   const slip = paths.find(p => /^talk\.slips\.[a-z]+\.0\.line$/.test(p));
   expect(slip).toBeTruthy();

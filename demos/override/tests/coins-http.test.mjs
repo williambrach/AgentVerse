@@ -53,7 +53,7 @@ test('live_continue_seam: a live thread line carries provenance and prompt versi
   assert.equal(r.body.session.thread[0].text, 'I never heard the bell, so I guessed it was snack time.');
   const line = readFileSync(g.file('sessions'), 'utf8').trim().split('\n').map(JSON.parse).find(e => e.type === 'chatter_line');
   assert.equal(line.provenance.endpoint, 'a');
-  assert.equal(line.threadPromptVersion, 'thread-v5');
+  assert.equal(line.threadPromptVersion, 'thread-v7');
 });
 
 test('coin_budget_env_is_ignored', async t => {

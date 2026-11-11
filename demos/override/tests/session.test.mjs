@@ -72,7 +72,7 @@ test('research events use the case version; reset keeps the previous session log
     assert.equal(event.sequence, i + 1);
     assert.equal(event.sessionId, originalId);
     assert.equal(event.caseVersion, 'mini-parts-v1');
-    assert.equal(event.promptVersion, 'interview-v5');
+    assert.equal(event.promptVersion, 'interview-v6');
     assert.equal(event.schemaVersion, 3);
     assert.equal(event.revealedPosition, null);
     assert.equal(event.selectedEvidence, null);
@@ -403,11 +403,12 @@ test('cast_logged_and_hidden: session_started carries the cast; the view and the
   const id = view.session.id;
   const started = events(id)[0];
   assert.deepEqual(started.cast, { momo: 'bystander', pip: 'helper', nori: 'boss' });
-  assert.equal(started.promptVersion, 'interview-v5');
+  assert.equal(started.promptVersion, 'interview-v6');
   assert.equal(JSON.stringify(view).includes('"cast":{"momo"'), false);
   assert.equal(JSON.stringify(view).includes('"boss"'), false);
   assert.equal('cast' in view.session, false);
-  assert.deepEqual(view.characters.map(c => c.role), ['The bystander', 'The helper', 'The boss']);
+  // A dealt part's name would give the deal away, so it stays off the open game's view.
+  assert.deepEqual(view.characters.map(c => c.role), ['', '', '']);
   assert.equal(view.roles.length, 4);
   assert.deepEqual(games.find(id).session.cast, started.cast);
   assert.equal(games.view(id).authored, true);
@@ -418,8 +419,9 @@ test('before a start the view uses the identity cast', t => {
   const { games } = fleet(t);
   const view = games.view(undefined);
   assert.equal(view.session, null);
-  assert.deepEqual(view, { ...view, ...JSON.parse(JSON.stringify({ ...publicView(kase, identityCast(kase)), roles: view.roles, authored: true, mode: view.mode, model: view.model, session: null, debrief: null })) });
-  assert.deepEqual(view.characters.map(c => c.role), ['The boss', 'The helper', 'The bystander']);
+  assert.deepEqual(view, { ...view, ...JSON.parse(JSON.stringify({ ...publicView(kase, identityCast(kase), { hideParts: true }), roles: view.roles, authored: true, mode: view.mode, model: view.model, session: null, debrief: null })) });
+  assert.deepEqual(view.characters.map(c => c.role), ['', '', '']);
+  assert.deepEqual(publicView(kase, identityCast(kase)).characters.map(c => c.role), ['The boss', 'The helper', 'The bystander']);
 });
 
 test('reset_and_case_switch_reshuffle: every start, reset and case switch draws a new cast', async t => {
@@ -541,7 +543,7 @@ test('export_redacts_until_verdict: the cast is null while active and back once 
   const exported = games.export(id);
   const rawLines = raw.split('\n'), outLines = exported.split('\n');
   assert.equal(outLines.length, rawLines.length);
-  assert.deepEqual(JSON.parse(outLines[0]), { ...JSON.parse(rawLines[0]), cast: null });
+  assert.deepEqual(JSON.parse(outLines[0]), { ...JSON.parse(rawLines[0]), cast: null, talkSeed: null });
   assert.deepEqual(outLines.slice(1), rawLines.slice(1));
   assert.equal(exported.includes('"cast":{'), false);
   await talkToAll(act, id);
@@ -673,9 +675,9 @@ test('dev mode shows draft cases and lets them start', async t => {
 
 test('prompt_resolved: the part label and resolved knowledge reach the prompt, with no placeholder left', () => {
   const session = { cast: { momo: 'boss', pip: 'helper', nori: 'bystander' }, interviews: Object.fromEntries(IDS.map(id => [id, []])) };
-  assert.equal(promptVersion, 'interview-v5');
+  assert.equal(promptVersion, 'interview-v6');
   const system = buildMessages(kase, session, 'momo', 'Why?')[0].content;
-  assert.ok(system.startsWith('You play Momo (The boss), a test monkey (mini-parts-v1, interview-v5).'));
+  assert.ok(system.startsWith('You play Momo (The boss) (mini-parts-v1, interview-v6).'));
   assert.ok(system.includes('SECRET boss knowledge, Pip was misled'));
   assert.equal(system.includes('{'), false);
   assert.equal(system.includes('the The'), false);

@@ -70,7 +70,9 @@ export function hudShell(v: { teamName: string; headline: string; topline: strin
 
 /** One cast button in the rail. The portrait size comes from `--cell`, so the rail shares one rule with the dialogue and lineup. */
 export function castCard(c: CastCard): string {
-  const sub = c.state === 'talking' ? t('hud.talking', { part: c.part }) : c.state === 'new' ? t('hud.notAsked', { part: c.part }) : esc(c.part);
+  // A dealt part's name is hidden while the game is open: then the line is only the state.
+  const bare = (line: string) => (c.part ? line : line.replace(/^\s*·\s*/, ''));
+  const sub = c.state === 'talking' ? bare(t('hud.talking', { part: c.part })) : c.state === 'new' ? bare(t('hud.notAsked', { part: c.part })) : esc(c.part);
   const check = c.state === 'asked' || (c.state === 'talking' && c.asked === true);
   return `<button data-go="${esc(c.id)}" class="cast-card ${c.state}"${c.state === 'talking' ? ' aria-current="true"' : ''}>` +
     `<span class="cast-tile"><i class="monkey-face ${esc(c.faceClass)}"></i></span>` +

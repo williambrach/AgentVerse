@@ -119,28 +119,22 @@ test('shuffle_varies', async ({ page }) => {
 });
 
 
-async function expectNavLabels(page) {
-  const id = await sessionId(page);
-  const cast = castOf(id);
-  for (const cid of IDS) await expect(page.locator(`#room-nav [data-go="${cid}"] small`)).toContainText(LABEL[cast[cid]]);
-  return cast;
+// A part is dealt in secret: while the game is open its name is on no card, in the nav or in the verdict rows.
+async function expectNoPartNames(page) {
+  for (const cid of IDS) {
+    const small = page.locator(`#room-nav [data-go="${cid}"] small`);
+    for (const label of Object.values(LABEL)) await expect(small).not.toContainText(label);
+    await expect(small).not.toContainText('·');
+  }
 }
 
-test('nav_labels_follow_cast', async ({ page }) => {
+test('nav_hides_dealt_part_names', async ({ page }) => {
   await fresh(page);
-  const first = await expectNavLabels(page);
-  // The report panel row must agree with the nav (it opens once every character is interviewed).
+  await expectNoPartNames(page);
+  const state = await (await page.request.get('/api/state')).json();
+  expect(state.characters.map(c => c.role)).toEqual(['', '', '', '']);
+  // The verdict rows carry no part name either (they open once every character is interviewed).
   await interviewAll(page);
   await go(page, 'report');
-  for (const cid of IDS) await expect(page.locator(`fieldset.role-row:has(input[name="role-${cid}"]) .role-who .role-part`)).toHaveText(LABEL[first[cid]]);
-  let current = first;
-  for (let tries = 0; tries < 8 && JSON.stringify(current) === JSON.stringify(first); tries++) {
-    const state = await (await page.request.get('/api/state')).json();
-    await page.request.post('/api/reset', { data: { sessionId: state.session.id, revision: state.session.revision } });
-    await page.reload();
-    if (await page.locator('#begin-button').count()) await page.locator('#begin-button').click();
-    await expect(page.locator('#room-nav [data-go="momo"]')).toBeVisible();
-    current = await expectNavLabels(page);
-  }
-  expect(JSON.stringify(current)).not.toBe(JSON.stringify(first));
+  for (const cid of IDS) await expect(page.locator(`fieldset.role-row:has(input[name="role-${cid}"]) .role-who .role-part`)).toHaveText('');
 });

@@ -26,12 +26,12 @@ test('fields_cover_all', () => {
   const paths = fields.map(f => f.path);
   assert.equal(new Set(paths).size, paths.length);
   for (const key of Object.keys(defaults)) assert.ok(paths.includes(`ui.${key}`));
-  assert.ok(paths.includes('prompt.interview') && paths.includes('prompt.thread'));
+  assert.ok(!paths.includes('prompt.interview') && paths.includes('prompt.thread'));
   assert.equal(Object.keys(worlds).length, 6);
   for (const id of Object.keys(worlds)) for (const f of ['frame', 'persona', 'memory', 'cast.one', 'cast.many']) assert.ok(paths.includes(`worlds.${id}.${f}`), `${id}.${f}`);
   assert.equal(fields.find(f => f.path === 'worlds.grove.cast.one').value, 'a monkey');
   assert.equal(fields.find(f => f.path === 'prompt.thread').value, DEFAULT_TEMPLATES.thread);
-  assert.equal(paths.length, 2 + 2 + 6 * 5);
+  assert.equal(paths.length, 2 + 1 + 6 * 5);
 });
 
 test('check_game_edit', () => {
@@ -49,13 +49,13 @@ test('check_game_edit', () => {
 test('length_caps', () => {
   assert.equal(checkGameEdit('ui.hud.notebook', 'a'.repeat(2001), defaults, worlds), 'Must be at most 2000 characters.');
   assert.equal(checkGameEdit('ui.hud.notebook', 'a'.repeat(2000), defaults, worlds), null);
-  assert.equal(checkGameEdit('prompt.interview', 'a'.repeat(8001), defaults, worlds), 'Must be at most 8000 characters.');
+  assert.equal(checkGameEdit('prompt.thread', 'a'.repeat(8001), defaults, worlds), 'Must be at most 8000 characters.');
 });
 
 test('template_checked', () => {
-  assert.equal(checkGameEdit('prompt.interview', 'hello', defaults, worlds), 'The template needs [[knowledge]] exactly once.');
-  assert.equal(checkGameEdit('prompt.thread', '[[knowledge]] [[foo]]', defaults, worlds), 'Unknown token [[foo]].');
-  assert.equal(checkGameEdit('prompt.interview', DEFAULT_TEMPLATES.interview, defaults, worlds), null);
+  assert.equal(checkGameEdit('prompt.interview', 'hello [[knowledge]]', defaults, worlds), 'Unknown field prompt.interview.');
+  assert.equal(checkGameEdit('prompt.thread', '[[others]] [[foo]]', defaults, worlds), 'Unknown token [[foo]].');
+  assert.equal(checkGameEdit('prompt.thread', DEFAULT_TEMPLATES.thread, defaults, worlds), null);
 });
 
 test('apply_empty_is_identity', () => {
@@ -80,10 +80,9 @@ test('world_edit_builds_prompts_without_mutating', () => {
   assert.equal(out.worlds.grove.cast.many, 'monkeys');
   assert.equal(out.worlds.tower, worlds.tower);
   assert.ok(Object.isFrozen(out.worlds) && Object.isFrozen(out.worlds.grove) && Object.isFrozen(out.worlds.grove.cast));
-  assert.equal(out.prompts.interview, DEFAULT_TEMPLATES.interview);
   assert.equal(out.prompts.thread, DEFAULT_TEMPLATES.thread);
-  assert.match(out.prompts.interviewVersion, /^interview-v5\+[0-9a-f]{8}$/);
-  assert.match(out.prompts.threadVersion, /^thread-v5\+[0-9a-f]{8}$/);
+  assert.match(out.prompts.interviewVersion, /^interview-v6\+[0-9a-f]{8}$/);
+  assert.match(out.prompts.threadVersion, /^thread-v7\+[0-9a-f]{8}$/);
   const same = applyGame({ 'worlds.grove.cast.one': 'an ape', 'worlds.grove.persona': 'ape' }, worlds);
   assert.equal(same.prompts.interviewVersion, out.prompts.interviewVersion);
   assert.notEqual(applyGame({ 'worlds.grove.persona': 'gibbon' }, worlds).prompts.interviewVersion, out.prompts.interviewVersion);
@@ -96,9 +95,9 @@ test('cast_only_edit_keeps_prompts_null', () => {
 });
 
 test('prompt_edit', () => {
-  const tpl = '[[knowledge]] only';
-  const out = applyGame({ 'prompt.interview': tpl }, worlds);
-  assert.equal(out.prompts.interview, tpl);
-  assert.equal(out.prompts.thread, DEFAULT_TEMPLATES.thread);
+  const tpl = 'Post now, with [[others]].';
+  const out = applyGame({ 'prompt.thread': tpl }, worlds);
+  assert.equal(out.prompts.thread, tpl);
+  assert.equal('interview' in out.prompts, false);
   assert.equal(out.worlds, worlds);
 });

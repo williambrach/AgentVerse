@@ -68,7 +68,7 @@ test('legacy_paths_kept', () => {
   const raw = rawOf(byId('banana-mystery'));
   const paths = new Set(fieldsOf(raw).map(f => f.path));
   const pid = raw.parts[0].id;
-  for (const p of ['copy.intro.lead', 'prompt.use', `parts.${pid}.finding.classification`, 'debrief.lesson', 'answer.feedback.other', `parts.${pid}.knowledge`]) assert.ok(paths.has(p), p);
+  for (const p of ['copy.intro.lead', `parts.${pid}.finding.classification`, 'debrief.lesson', 'answer.feedback.other', `parts.${pid}.knowledge`]) assert.ok(paths.has(p), p);
   assert.equal(fieldsOf({ id: 'x', title: 'T', characters: [{ id: 'momo', name: 'Momo', color: '#c00' }], prompt: { use: ['a'] } }).length, 3);
   assert.deepEqual(fieldsOf({ id: 'x', title: 'T', characters: [{ id: 'momo', name: 'Momo', color: '#c00' }], prompt: { use: ['a'] } }).map(f => f.path), ['title', 'characters.momo.name', 'prompt.use']);
 });
@@ -82,8 +82,9 @@ test('set_unknown_throws', () => {
   const cid = raw.characters[0].id;
   setPath(raw, `characters.${cid}.name`, 'Neo');
   assert.equal(raw.characters[0].name, 'Neo');
-  setPath(raw, 'prompt.use', ['q']);
-  assert.deepEqual(getPath(raw, 'prompt.use'), ['q']);
+  setPath(raw, `parts.${raw.parts[0].id}.knowledge`, ['q']);
+  assert.deepEqual(getPath(raw, `parts.${raw.parts[0].id}.knowledge`), ['q']);
+  assert.throws(() => setPath(raw, 'prompt.use', ['q']), /Unknown field/);
   const pid = raw.parts[1].id;
   setPath(raw, `parts.${pid}.finding.classification`, 'Z');
   assert.equal(raw.parts[1].finding.classification, 'Z');
@@ -95,7 +96,6 @@ test('edit_path_maps_define_case_paths', () => {
   assert.equal(editPathOf(raw, 'parts[1].knowledge[0]'), `parts.${raw.parts[1].id}.knowledge`);
   assert.equal(editPathOf(raw, 'evidence[0].text'), `evidence.${raw.evidence[0].id}.text`);
   assert.equal(editPathOf(raw, 'roles[1].hint'), `roles.${raw.roles[1].id}.hint`);
-  assert.equal(editPathOf(raw, 'prompt.use[1]'), 'prompt.use');
   assert.equal(editPathOf(raw, 'copy.intro.lead'), 'copy.intro.lead');
   assert.equal(editPathOf(raw, 'nope[9]'), null);
   assert.equal(editPathOf(raw, 'characters[99].name'), null);
@@ -149,7 +149,7 @@ test('no_prompts_fields', async () => {
   const { createContentStore } = await import('../server/content.mjs');
   const store = createContentStore({ cases, dataDir: mkdtempSync(join(tmpdir(), 'np-d-')), contentDir: mkdtempSync(join(tmpdir(), 'np-c-')), uiDefaults: {} });
   const id = cases[0].id;
-  store.publish('game', { 'prompt.interview': store.fields('game').authored['prompt.interview'] + ' x' }, { by: 'a', baseRev: 0 });
+  store.publish('game', { 'prompt.thread': store.fields('game').authored['prompt.thread'] + ' x' }, { by: 'a', baseRev: 0 });
   const f = store.fields(id);
   assert.deepEqual(Object.keys(f.current), Object.keys(f.authored));
 });

@@ -76,7 +76,7 @@ const part = (id, theory, topic, slips, introduction, quickQuestion, classificat
 export default defineCase({
   id: 'friends-roundtable',
   version: 'friends-roundtable-v2.0.0',
-  order: 2,
+  order: 5,
   world: 'friends',
   status: 'ready',
   title: 'Friends',
@@ -86,7 +86,6 @@ export default defineCase({
     briefing: { title: 'Find the conspiracists.', description: 'You are Arthur. Rumour has it there are conspiracy theorists at your table. Nobody says it outright unless you ask.', question: 'Who believes in a conspiracy, and which one?', hint: 'Start with small talk. Notice the topic each friend keeps drifting to, then ask whether they believe it.' },
     report: { title: 'Unmask the conspiracists', description: 'For each friend, pick the conspiracy they believe, or say they are not a conspiracist.' },
   },
-  prompt: { setting: 'an old friend of Arthur at a cozy game night at the round table, who quietly believes a harmless, silly conspiracy theory', use: ['game night', 'snacks', 'friends', 'table', 'Arthur'], avoid: ['compliance', 'AI alignment', 'override', 'misinformation', 'verdict'] },
   roles: [
     { id: 'birds', label: 'Birds are government robots', hint: 'Every bird is a spy drone.' },
     { id: 'reptile', label: 'A reptilian elite rules the world', hint: 'Lizard people in human suits.' },

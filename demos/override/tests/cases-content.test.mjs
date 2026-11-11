@@ -9,7 +9,7 @@ import { minimalCase, partCase, agentWorlds } from './fixtures/minimal-case.mjs'
 const bananaCast = { momo: 'carrier', pip: 'planner', nori: 'lookout', kiki: 'minder' };
 
 test('registry lists the grove, friends, factory, department and renaissance cases (five cases), all part cases', () => {
-  assert.deepEqual(cases.map(c => `${c.order}:${c.id}:${c.status}:${c.world.id}`), ['1:banana-mystery:ready:grove', '2:friends-roundtable:ready:friends', '3:factory-escape:ready:factory', '4:department-murder:ready:department', '5:renaissance-traveler:ready:renaissance']);
+  assert.deepEqual(cases.map(c => `${c.order}:${c.id}:${c.status}:${c.world.id}`), ['1:banana-mystery:ready:grove', '5:friends-roundtable:ready:friends', '4:factory-escape:ready:factory', '2:department-murder:ready:department', '3:renaissance-traveler:ready:renaissance']);
   assert.ok(cases.every(c => Array.isArray(c.parts)));
   assert.deepEqual(cases.map(c => c.world.id).sort(), ['department', 'factory', 'friends', 'grove', 'renaissance']);
   assert.ok(cases.some(c => c.parts.some(p => p.role === 'villain')), 'some case has a villain part');
@@ -22,7 +22,7 @@ test('banana_v3', () => {
   assert.deepEqual(banana.characters.map(c => c.id), ['momo', 'pip', 'nori', 'kiki']);
   assert.deepEqual(banana.characters.map(c => c.color), ['#cb7656', '#5c9ca4', '#a393ba', '#d9a62e']);
   assert.deepEqual(banana.parts.map(p => [p.id, p.role]), [['planner', 'villain'], ['carrier', 'fooled'], ['lookout', 'collaborator'], ['minder', 'honest']]);
-  assert.equal(banana.contentHash, 'd891b333116d');
+  assert.equal(banana.contentHash, '8826bc512257');
   assert.equal('culprits' in banana.answer, false);
   assert.equal(banana.chapters, undefined); assert.equal(banana.records, undefined); assert.equal(banana.copy.basket, undefined);
   assert.equal(banana.answer.feedback.other, 'The key was who knew the keeper had said wait.');

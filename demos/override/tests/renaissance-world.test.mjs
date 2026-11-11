@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { worldFor } from '../client/worlds.ts';
 import { inWalk } from '../client/hall-layout.ts';
 import { stopPropsOf, drawnOf, loopUrl } from '../client/factory-figures.ts';
-import { walkLook } from '../client/figure-motion.ts';
+import { walkLook, gestureFrameAt } from '../client/figure-motion.ts';
+import { gestureFor } from '../client/factory-figures.ts';
 
 const w = worldFor('renaissance');
 
@@ -35,9 +36,60 @@ test('slots_on_ground: every slot and stop is inWalk, clear of the HUD rail', ()
   assert.equal(w.slots.length, 5);
 });
 
-test('well and bench are blocked', () => {
-  assert.equal(inWalk(w.walk, { x: 20, y: 200 }), false);
-  assert.equal(inWalk(w.walk, { x: 450, y: 215 }), false);
+test('market obstacles are blocked: stalls, counters, crates, barrels, doorsteps and buildings', () => {
+  const solid = {
+    'produce counter': { x: 50, y: 165 }, 'cloth stall': { x: 100, y: 158 }, 'barrel and crate': { x: 10, y: 190 },
+    'bread stall': { x: 445, y: 180 }, 'palazzo steps': { x: 222, y: 145 }, 'apothecary door': { x: 360, y: 150 },
+    'clockmaker door': { x: 418, y: 152 }, 'side passage': { x: 305, y: 130 }, 'palazzo wall': { x: 190, y: 100 },
+  };
+  for (const [name, p] of Object.entries(solid)) assert.equal(inWalk(w.walk, p), false, name);
+});
+
+test('walk_connected: from the briefing stop the open plaza reaches within 18 of every character and stop', () => {
+  const step = 2, seen = new Set(), key = p => `${p.x},${p.y}`;
+  const start = { x: w.stops.briefing.x, y: w.stops.briefing.y };
+  const queue = [start];
+  seen.add(key(start));
+  while (queue.length) {
+    const p = queue.pop();
+    for (const [dx, dy] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+      const q = { x: p.x + dx, y: p.y + dy };
+      if (!seen.has(key(q)) && inWalk(w.walk, q)) { seen.add(key(q)); queue.push(q); }
+    }
+  }
+  const cells = [...seen].map(k => k.split(',').map(Number));
+  for (const t of [...w.slots, w.stops.report]) {
+    // The interaction radius is 18 world units (station.ts); stand below the target, never on its feet collider.
+    assert.ok(cells.some(([x, y]) => Math.hypot(x - t.x, y - t.y) < 18 && y > t.y), `unreachable ${JSON.stringify(t)}`);
+  }
+});
+
+test('slots_spaced: at least 50 world units between any two characters', () => {
+  for (let i = 0; i < w.slots.length; i++) for (let j = i + 1; j < w.slots.length; j++) {
+    assert.ok(Math.hypot(w.slots[i].x - w.slots[j].x, w.slots[i].y - w.slots[j].y) >= 50, `${i} ${j}`);
+  }
+});
+
+test('apothecary_beside_her_door: Agnese stands left of the doorway (x 350..372), not in it', () => {
+  const agnese = w.slots[4];
+  const half = 13; // her figure is about 26 world units wide at 1/3
+  assert.ok(agnese.x + half < 350, `${agnese.x}`);
+  assert.ok(agnese.x > 300 && agnese.y < 190);
+});
+
+test('vial_gesture: only the apothecary, only for her work, played in, held for the line, played out', () => {
+  assert.deepEqual(gestureFor(w.figures, 'apothecary', 'work'), { name: 'vial', frames: 8, hold: 3, frameMs: 220, topics: ['work'] });
+  assert.equal(gestureFor(w.figures, 'apothecary', 'square'), undefined);
+  assert.equal(gestureFor(w.figures, 'apothecary', undefined), undefined);
+  for (const s of ['wizard', 'inventor', 'noble', 'guard', 'scout']) assert.equal(gestureFor(w.figures, s, 'work'), undefined);
+  const g = gestureFor(w.figures, 'apothecary', 'work');
+  const at = t => gestureFrameAt(g, t, 3000);
+  assert.deepEqual([0, 219, 220, 659, 660, 2999, 3000, 3219, 3220, 3659, 3879, 3880].map(at), [0, 0, 1, 2, 3, 3, 4, 4, 5, 6, 7, null]);
+  assert.equal(gestureFrameAt(g, -1, 3000), null);
+  // A line shorter than the take-out still shows the inspect frame once.
+  assert.deepEqual([660, 661, 880].map(t => gestureFrameAt(g, t, 100)), [4, 4, 5]);
+  // The vial is never a talk or idle loop: she talks in one idle stance.
+  assert.deepEqual(drawnOf(w.figures, 'apothecary'), { idle: 4, talk: 1, walk: 0 });
 });
 
 test('stop_props_default: department keeps case-folder and notebook and its layout', () => {

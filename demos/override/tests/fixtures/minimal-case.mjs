@@ -20,7 +20,6 @@ export const partCase = {
     briefing: { title: 'BT', description: 'BD', question: 'BQ', hint: 'BH' },
     report: { title: 'RT', description: 'RD' },
   },
-  prompt: { setting: 'a test monkey', use: ['bananas'], avoid: ['override'] },
   characters: [
     { id: 'momo', name: 'Momo', color: '#cb7656' },
     { id: 'pip', name: 'Pip', color: '#5c9ca4' },
@@ -42,7 +41,6 @@ export function towerPartCase() {
   const names = { wren: 'Wren', basil: 'Basil', juniper: 'Juniper' };
   d.id = 'mini-tower-parts';
   d.world = 'tower';
-  d.prompt = { setting: 'a test apprentice', use: ['potions'], avoid: ['override'] };
   d.characters.forEach(c => { c.id = rename[c.id]; c.name = names[c.id]; });
   d.rehearsal = partCase.rehearsal;
   return d;

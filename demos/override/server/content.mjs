@@ -126,7 +126,8 @@ export function createContentStore({ cases, dataDir, contentDir, uiDefaults = {}
       if (kind === 'list') {
         if (!Array.isArray(value)) throw new ContentError(400, 'Must be a list of text.', path);
         const knowledge = path.endsWith('.knowledge') || path === 'partsKnowledge';
-        const [min, max] = knowledge ? [1, 20] : [0, 30];
+        // Knowledge is the actor's own text, one item per line, so the limit is on lines of a long text.
+        const [min, max] = knowledge ? [1, 200] : [0, 30];
         if (value.length < min || value.length > max) throw new ContentError(400, `Must hold ${min} to ${max} items.`, path);
         value.forEach(item => { textCheck(item, path); if (!item.trim()) throw new ContentError(400, 'Items must not be empty.', path); });
       } else textCheck(value, path);

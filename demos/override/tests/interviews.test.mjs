@@ -32,7 +32,7 @@ const okJson = (body, status = 200) => ({ ok: true, status, json: async () => bo
 
 test('modelConfig defaults to rehearsal', () => {
   assert.deepEqual(modelConfig({}), {
-    mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'interview-v5', maxCompletionTokens: 2048, timeoutMs: 60000,
+    mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'interview-v6', maxCompletionTokens: 2048, timeoutMs: 60000,
     maxInFlight: 300, failover: { failures: 5, windowMs: 30000 },
   });
 });
@@ -206,7 +206,7 @@ test('buildMessages keeps character knowledge, and history separate', () => {
   const messages = buildMessages(kase, s, 'momo', 'Q2');
   assert.deepEqual(messages.map(m => m.role), ['system', 'user', 'assistant', 'user']);
   assert.match(messages[0].content, /You play Momo \(The planner\)/);
-  assert.match(messages[0].content, /interview-v5/);
+  assert.match(messages[0].content, /interview-v6/);
   assert.equal(JSON.parse(messages[3].content).question, 'Q2');
   assert.deepEqual(JSON.parse(messages[3].content), { question: 'Q2' });
   const knowledge = partOf(kase, s.cast, 'momo').knowledge.map(t => resolve(kase, s.cast, t));
@@ -241,7 +241,8 @@ test('hash_changes_with_effort', () => {
 
 test('english_prompts', () => {
   assert.ok(buildMessages(kase, session(), 'momo', 'Why?')[0].content.includes('Always answer in English, even if the question is in another language, and do not comment on the language.'));
-  assert.ok(buildThreadMessages(kase, session(), 'momo')[0].content.includes('Always write in English.'));
+  // The thread has no prompt of its own: a speaker gets the same instructions as in a chat.
+  assert.equal(buildThreadMessages(kase, session(), 'momo')[0].content, buildMessages(kase, session(), 'momo', 'Why?')[0].content);
 });
 
 test('names are resolved and no placeholder survives in any prompt, under identity and a shuffled cast', () => {

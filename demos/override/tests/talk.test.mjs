@@ -267,9 +267,7 @@ test('checkTalk: no placeholder in pre-reveal copy or wrong-accusation feedback'
   assert.doesNotThrow(() => checkTalk({ ...talkData, answer: { feedback: { correct: '{traveler} it was.', other: 'Not this one.' } } }));
 });
 
-test('checkTalk scans the prompt and names part paths by index in brackets', () => {
-  assert.throws(() => checkTalk({ ...talkData, prompt: { setting: 'a man with a smartphone' } }), /^Error: prompt\.setting: uses a modern word \(smartphone\)$/);
-  assert.throws(() => checkTalk({ ...talkData, prompt: { use: ['bread', 'a laptop'] } }), /^Error: prompt\.use\[1\]: uses a modern word \(laptop\)$/);
+test('checkTalk names part paths by index in brackets', () => {
   const parts = [{ id: 'p0', finding: { explanation: 'fine' } }, { id: 'p1', finding: { explanation: 'he has a phone' } }];
   assert.throws(() => checkTalk({ ...talkData, parts }), /^Error: parts\[1\]\.finding\.explanation: uses a modern word \(phone\)$/);
 });

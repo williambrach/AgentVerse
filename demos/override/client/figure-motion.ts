@@ -5,7 +5,7 @@ import type { Pose } from './factory-figures';
 
 /** What a figure shows this frame: a pose image or a drawn loop frame, plus whole-pixel offsets. */
 export type Look = {
-  texture: { kind: 'pose'; pose: Pose } | { kind: 'idle' | 'talk' | 'walk'; frame: number };
+  texture: { kind: 'pose'; pose: Pose } | { kind: 'idle' | 'talk' | 'walk' | 'gesture'; frame: number };
   /** Height change in canvas pixels, about the feet: negative squashes, positive stretches. */
   stretch: number;
   /** Lift off the ground in canvas pixels. */
@@ -80,6 +80,18 @@ export function standLook(pose: Pose, t: number, seed: number, sincePose: number
   return { texture: { kind: 'pose', pose }, stretch: pop || breath(t, seed), lift: 0, lean: 0 };
 }
 
+/** A one-shot gesture `t` ms after it began, for a line read in `holdMs`: frames 0..hold at frameMs each,
+ * `hold` until the line ends, then hold+1..frames-1 at frameMs each. null: the gesture is over (or not started). */
+export function gestureFrameAt(g: { frames: number; hold: number; frameMs: number }, t: number, holdMs: number): number | null {
+  if (!Number.isFinite(t) || t < 0 || g.frames < 1) return null;
+  const inMs = g.hold * g.frameMs;
+  if (t < inMs) return Math.floor(t / g.frameMs);
+  const outAt = Math.max(inMs, holdMs);
+  if (t < outAt) return g.hold;
+  const k = g.hold + 1 + Math.floor((t - outAt) / g.frameMs);
+  return k < g.frames ? k : null;
+}
+
 /** World units per drawn walk frame: four frames make one step of about 38 units at the renaissance scale. */
 export const WALK_FRAME_UNITS = 9.5;
 /** World units per step for static art: a hop and a lean each step, leaning the other way the next. */
@@ -110,4 +122,42 @@ export function strideNext(prev: Stride, traveled: number, held: boolean, deltaM
   if (traveled >= .01) return { distance: (prev.distance + traveled) % 1e6, ms, stillMs: 0, walking: true };
   const stillMs = prev.stillMs + deltaMs;
   return stillMs >= 80 ? { ...STANDING, stillMs } : { ...prev, ms, stillMs };
+}
+
+/** What a standing, idle figure is doing on its own: nothing, pondering (the thinking pose), glancing the
+ * other way, or a held weight shift. `since`: ms into the act, for the pose pop. */
+export type Chill = { act: 'rest' | 'ponder' | 'glance' | 'shift'; since: number; lean: number };
+export const CHILL_REST: Chill = { act: 'rest', since: 0, lean: 0 };
+
+/** The idle routine at time `t`: time runs in windows of 7 to 12 s (by seed); each window holds one act
+ * of 2.4 to 4 s at a seeded start, so no two figures move in step. Pure and repeatable for a seed. */
+export function chillAt(t: number, seed: number): Chill {
+  if (!Number.isFinite(t) || t < 0) return CHILL_REST;
+  const windowMs = 7000 + 5000 * seed;
+  const local = t + seed * 31000;
+  const k = Math.floor(local / windowMs);
+  const into = local - k * windowMs;
+  const salt = Math.floor(seed * 1e6);
+  const r = unit(k * 7919 + salt);
+  const lengthMs = 2400 + 1600 * unit(k * 104729 + salt);
+  const startMs = (windowMs - lengthMs) * unit(k * 15485863 + salt);
+  if (into < startMs || into >= startMs + lengthMs) return CHILL_REST;
+  const since = into - startMs;
+  if (r < .25) return CHILL_REST;
+  if (r < .55) return { act: 'ponder', since, lean: 0 };
+  if (r < .8) return { act: 'glance', since, lean: 0 };
+  return { act: 'shift', since, lean: unit(k * 31 + salt) < .5 ? -1 : 1 };
+}
+
+/** Which way a figure faces: flipped means facing left (the art faces right). It turns to the detective
+ * while being asked or answering, or when the detective stands within `near` units; otherwise it keeps its
+ * slot's facing, turned the other way during a glance. Within 6 units sideways it keeps its current facing. */
+export function faceFor(o: { home: boolean; current: boolean; x: number; detective?: { x: number; y: number }; y: number; engaged: boolean; glance: boolean; near?: number }): boolean {
+  const d = o.detective;
+  const near = o.near ?? 64;
+  if (d && (o.engaged || Math.hypot(d.x - o.x, d.y - o.y) <= near)) {
+    if (Math.abs(d.x - o.x) < 6) return o.current;
+    return d.x < o.x;
+  }
+  return o.glance ? !o.home : o.home;
 }

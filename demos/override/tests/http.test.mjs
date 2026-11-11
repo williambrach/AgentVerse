@@ -483,7 +483,7 @@ test('content_publish_reaches_new_games', async t => {
   const { view, id } = await startGame(server.url);
   assert.equal(view.copy.intro.lead, 'A new lead.');
   const hash = startedEvent(server.dir, id).contentHash;
-  assert.notEqual(hash, 'd891b333116d');
+  assert.notEqual(hash, '8826bc512257');
   const list = await (await fetch(`${server.adminUrl}/admin/content`, { headers: asAdmin })).json();
   const info = list.cases.find(c => c.id === 'banana-mystery');
   assert.equal(info.by, 'admin');

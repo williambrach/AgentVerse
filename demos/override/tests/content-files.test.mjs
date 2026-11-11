@@ -155,23 +155,23 @@ test('define_error_maps', () => {
 
 test('game_rebuilds_cases', () => {
   const d = make();
-  const tpl = d.store.fields('game').authored['prompt.interview'].replace(/^/, 'Custom rule. ');
-  const r = d.store.publish('game', { 'prompt.interview': tpl, 'ui.tools.talk': 'Chat' }, { by: 'admin', baseRev: 0 });
+  const tpl = d.store.fields('game').authored['prompt.thread'].replace(/^/, 'Custom line. ');
+  const r = d.store.publish('game', { 'prompt.thread': tpl, 'ui.tools.talk': 'Chat' }, { by: 'admin', baseRev: 0 });
   assert.equal(r.rev, 1);
   const cur = d.store.current('banana-mystery');
-  assert.equal(cur.prompts.interview, tpl);
-  assert.match(cur.prompts.interviewVersion, /^interview-v5\+[0-9a-f]{8}$/);
+  assert.equal(cur.prompts.thread, tpl);
+  assert.match(cur.prompts.interviewVersion, /^interview-v6\+[0-9a-f]{8}$/);
   assert.equal(d.store.base('banana-mystery').prompts, undefined);
   assert.equal(cur.contentHash, banana.contentHash, 'prompts are not hashed');
   assert.equal(d.store.list()[0], cur);
   assert.deepEqual(d.store.uiText(), { 'tools.talk': 'Chat' });
-  assert.deepEqual(JSON.parse(readFileSync(join(d.content, 'game.json'), 'utf8')), { id: 'game', edits: { 'prompt.interview': tpl, 'ui.tools.talk': 'Chat' } });
+  assert.deepEqual(JSON.parse(readFileSync(join(d.content, 'game.json'), 'utf8')), { id: 'game', edits: { 'prompt.thread': tpl, 'ui.tools.talk': 'Chat' } });
   // A case edit composes with the game edit.
   d.store.publish('banana-mystery', { 'copy.headline': 'Both' }, { by: 'a', baseRev: 0 });
-  assert.equal(d.store.current('banana-mystery').prompts.interview, tpl);
+  assert.equal(d.store.current('banana-mystery').prompts.thread, tpl);
   // Boot restores both.
   const again = make(d).store;
-  assert.equal(again.current('banana-mystery').prompts.interview, tpl);
+  assert.equal(again.current('banana-mystery').prompts.thread, tpl);
   assert.equal(again.current('banana-mystery').copy.headline, 'Both');
   assert.deepEqual(again.uiText(), { 'tools.talk': 'Chat' });
   // Reverting the game doc returns the other cases to authored.
@@ -184,7 +184,10 @@ test('game_rebuilds_cases', () => {
 test('game_validation', () => {
   const { store } = make();
   fail(() => store.publish('game', { 'ui.nope': 'x' }, { by: 'a', baseRev: 0 }), 400, 'ui.nope');
-  fail(() => store.publish('game', { 'prompt.interview': 'no slot' }, { by: 'a', baseRev: 0 }), 400, 'prompt.interview');
+  fail(() => store.publish('game', { 'prompt.thread': 'a [[foo]] slot' }, { by: 'a', baseRev: 0 }), 400, 'prompt.thread');
+  // The rules for all actors belong to a case, not to the game document.
+  fail(() => store.publish('game', { 'prompt.interview': 'x [[knowledge]]' }, { by: 'a', baseRev: 0 }), 400, 'prompt.interview');
+  fail(() => store.publish('banana-mystery', { rules: 'no slot' }, { by: 'a', baseRev: 0 }), 400, 'rules');
   fail(() => store.publish('game', { 'ui.tools.coins': '{foo}' }, { by: 'a', baseRev: 0 }), 400, 'ui.tools.coins');
   fail(() => store.preview('game', {}), 409);
   fail(() => store.publish('game', { 'ui.tools.talk': 'x' }, { by: 'a', baseRev: 3 }), 409);

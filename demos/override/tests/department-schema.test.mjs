@@ -91,40 +91,40 @@ test('prompt_job_then_role', () => {
   const k = make(d => { d.characters[0].label = 'Professor'; d.characters[0].knowledge = ['You teach.']; });
   const session = { cast: identityCast(k), interviews: { momo: [] }, thread: [] };
   for (const sys of [buildMessages(k, session, 'momo', 'Hi')[0].content, buildThreadMessages(k, session, 'momo')[0].content]) {
-    assert.ok(sys.startsWith('You play Momo (Professor), '));
+    assert.ok(sys.startsWith('You play Momo (Professor) ('));
     const know = sys.slice(sys.indexOf('YOUR KNOWLEDGE:'));
     assert.ok(know.indexOf('You teach.') < know.indexOf('SECRET boss knowledge'));
   }
   const plain = make();
   const s2 = { cast: identityCast(plain), interviews: { momo: [] }, thread: [] };
-  assert.ok(buildMessages(plain, s2, 'momo', 'Hi')[0].content.startsWith('You play Momo (The boss), '));
+  assert.ok(buildMessages(plain, s2, 'momo', 'Hi')[0].content.startsWith('You play Momo (The boss) ('));
 });
 
 // Pinned values computed on b949300 (before the department case existed).
 const BASE = {
   "banana-mystery": {
-    "view": "9e6f4a0017cdde14",
+    "view": "fdfbf725a8d69352",
     "chars": "73ebc57d6d79cd93",
     "roles": "6ea8e1ad0448ab4b",
-    "msgs": "5a823fc4c2bc99d9",
-    "thread": "44a55501f9587173",
-    "contentHash": "d891b333116d"
+    "msgs": "8f71cef53a2560e4",
+    "thread": "54afee9951ded86d",
+    "contentHash": "8826bc512257"
   },
   "friends-roundtable": {
-    "view": "63c1d09788fb26f9",
+    "view": "ea0305de1cb08a7b",
     "chars": "a649ab932c68ee4f",
     "roles": "da52c5588cfffe9a",
-    "msgs": "f4f09e31070f1ea6",
-    "thread": "5f609ee8c5301faf",
-    "contentHash": "c097961cadff"
+    "msgs": "58042191891073e5",
+    "thread": "771d486ccb15296f",
+    "contentHash": "640561c63616"
   },
   "factory-escape": {
-    "view": "bd471bee05707dcf",
+    "view": "e6f5b8e91c1310a3",
     "chars": "f92df788e9ae6d4c",
     "roles": "8205567f12253456",
-    "msgs": "01d099cd2e72c55d",
-    "thread": "2eac89e5b3351413",
-    "contentHash": "2171e3404532"
+    "msgs": "e3bd2695f2b55e70",
+    "thread": "48e261ec2459b232",
+    "contentHash": "3c549c8bb2f9"
   }
 };
 

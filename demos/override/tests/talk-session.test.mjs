@@ -34,7 +34,6 @@ function buildCase() {
     knowledge: ['The town stands on a hill.'], finding: { classification: 'c', explanation: 'e' },
   }));
   d.copy = t.copy ? { ...d.copy, headline: t.copy.headline } : d.copy;
-  d.prompt = { setting: 'a townsperson', use: ['bread'], avoid: ['override'] };
   d.debrief = { title: 'The traveller', summary: 'It was found.', lesson: 'Words slip.' };
   d.answer = { feedback: { correct: 'Right, signora.', other: 'Not this one.' } };
   d.tools = { inspect: false, talk: false };

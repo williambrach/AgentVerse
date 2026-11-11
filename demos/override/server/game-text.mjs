@@ -7,7 +7,8 @@ import { DEFAULT_TEMPLATES, checkTemplate, promptVersion, threadPromptVersion } 
 const UI_MAX = 2000;
 const TEMPLATE_MAX = 8000;
 const WORLD_FIELDS = ['frame', 'persona', 'memory', 'cast.one', 'cast.many'];
-const PROMPT_KINDS = ['interview', 'thread'];
+// The rules for all actors are per case (`rules`); the game document keeps only the thread task line.
+const PROMPT_KINDS = ['thread'];
 
 /** Reads every `<name>.json` in `dir` into one map. Each key must start with `<name>.` and appear once. */
 export function loadUiDefaults(dir) {
@@ -91,7 +92,6 @@ export function applyGame(edits, worlds) {
   return {
     worlds: applied,
     prompts: {
-      interview: prompt.interview ?? DEFAULT_TEMPLATES.interview,
       thread: prompt.thread ?? DEFAULT_TEMPLATES.thread,
       interviewVersion: `${promptVersion}+${hash}`,
       threadVersion: `${threadPromptVersion}+${hash}`,

@@ -15,11 +15,11 @@ const withFns = { ...banana, rehearsalReasoning: p => `R:{${p}}`, rehearsalChatt
 const identity = ids => [...ids];
 const ok = async () => 'fine';
 
-function setup(t, { rules = { budget: 15 }, kase = withFns, answer = ok, shuffle = identity } = {}) {
+function setup(t, { rules = { budget: 15 }, kase = withFns, answer = ok, shuffle = identity, order = identity } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'override-tools-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const config = { ...modelConfig({}), economy: economyRules(rules) };
-  const g = new Investigation({ dataDir: dir, config, kase, answer, shuffle });
+  const g = new Investigation({ dataDir: dir, config, kase, answer, shuffle, order });
   const act = (action, input = {}) => g.mutate(action, { sessionId: g.session?.id, revision: g.session?.revision, ...input });
   const ask = (character = 'momo') => act('interview', { character, question: 'What happened?' });
   const events = () => g.export().trim().split('\n').map(JSON.parse);
@@ -90,13 +90,13 @@ test('continue_rotates_and_rounds', async t => {
   for (let i = 0; i < 4; i++) await act('continue');
   assert.deepEqual(g.session.thread.map(l => l.character), ['momo', 'pip', 'nori', 'kiki']);
   assert.deepEqual(g.session.thread.map(l => l.text), ['Momo#0', 'Pip#0', 'Nori#0', 'Kiki#0']);
-  assert.deepEqual(g.session.chatter, { round: 1, pending: 0 });
+  assert.deepEqual(g.session.chatter, { round: 1, pending: 0, order: ['momo', 'pip', 'nori', 'kiki'] });
   assert.equal(g.session.economy.spent, 1);
   await act('continue');
   assert.equal(g.session.thread[4].character, 'momo');
-  assert.deepEqual(g.session.chatter, { round: 2, pending: 3 });
+  assert.deepEqual(g.session.chatter, { round: 2, pending: 3, order: ['momo', 'pip', 'nori', 'kiki'] });
   for (let i = 0; i < 3 + 4; i++) await act('continue');
-  assert.deepEqual(g.session.chatter, { round: 3, pending: 0 });
+  assert.deepEqual(g.session.chatter, { round: 3, pending: 0, order: ['momo', 'pip', 'nori', 'kiki'] });
   assert.equal(g.session.economy.charges.continue.used, 3);
   await assert.rejects(act('continue'), { status: 409, message: 'No conversations left.' });
 });
@@ -212,24 +212,24 @@ const rotate = ids => [...ids.slice(1), ids[0]]; // momo carrier, pip lookout, n
 const PART_OR_ROLE = /\{|\b(planner|carrier|lookout|minder|villain|collaborator|fooled|honest)\b/i;
 
 test('rehearsal inspect and chatter resolve through a shuffled cast', async t => {
-  const { act, ask, g } = await begun(t, { kase: banana, shuffle: rotate });
+  const { act, ask, g } = await begun(t, { kase: banana, shuffle: rotate, order: rotate });
   assert.deepEqual(g.session.cast, { momo: 'carrier', pip: 'lookout', nori: 'minder', kiki: 'planner' });
   await ask('momo');
   await act('inspect', { character: 'momo' });
   const reasoning = g.session.inspections[0].reasoning;
   assert.ok(reasoning.startsWith('Kiki sounded so sure, so I did not stop to wonder.'), reasoning);
   assert.doesNotMatch(reasoning, PART_OR_ROLE);
-  await act('continue');
-  const post = g.session.thread[0];
-  assert.equal(post.character, 'momo');
+  // The same rotate deals the speaking order: pip, nori, kiki, momo.
+  for (let i = 0; i < 4; i++) await act('continue');
+  assert.deepEqual(g.session.thread.map(l => l.character), ['pip', 'nori', 'kiki', 'momo']);
+  const post = g.session.thread.find(l => l.character === 'momo');
   assert.equal(post.text, 'Kiki, you told me we could take them, so I did. I never heard a bell, though. Nori, did you? I keep wondering why I did not check with the keeper first.');
   assert.doesNotMatch(post.text, PART_OR_ROLE);
-  await act('continue');
-  assert.equal(g.session.thread[1].text, 'Quiet morning on the path. Nobody came by, not once. Momo, you did all the heavy lifting. Kiki, the picnic looked lovely from where I sat.');
+  assert.equal(g.session.thread.find(l => l.character === 'pip').text, 'Quiet morning on the path. Nobody came by, not once. Momo, you did all the heavy lifting. Kiki, the picnic looked lovely from where I sat.');
 });
 
 test('replay of a v3 log restores economy, cast, thread and inspections', async t => {
-  const { act, ask, g, dir, config, events } = await begun(t, { kase: banana, shuffle: rotate });
+  const { act, ask, g, dir, config, events } = await begun(t, { kase: banana, shuffle: rotate, order: rotate });
   await ask('pip');
   await act('inspect', { character: 'pip' });
   await act('continue');
@@ -245,7 +245,7 @@ test('replay of a v3 log restores economy, cast, thread and inspections', async 
   assert.equal(restored.economy.budget, 15);
   assert.deepEqual(restored.thread, g.session.thread);
   assert.deepEqual(restored.inspections, g.session.inspections);
-  assert.deepEqual(restored.chatter, { round: 1, pending: 3 });
+  assert.deepEqual(restored.chatter, { round: 1, pending: 3, order: ['pip', 'nori', 'kiki', 'momo'] });
   assert.deepEqual(restored, g.session);
   assert.deepEqual(again.find(g.session.id).view(), g.view());
 });
@@ -349,7 +349,7 @@ test('live: chatter_line_provenance', async t => {
   const view = await x.act('continue');
   const line = x.log().find(e => e.type === 'chatter_line');
   assert.deepEqual(line.provenance, liveProv);
-  assert.equal(line.threadPromptVersion, 'thread-v5');
+  assert.equal(line.threadPromptVersion, 'thread-v7');
   assert.ok(!JSON.stringify(view).includes('TR'));
   const speaker = line.character;
   const v = await x.act('inspect', { character: speaker });

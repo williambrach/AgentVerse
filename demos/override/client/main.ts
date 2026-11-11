@@ -713,7 +713,7 @@ async function askQuestion(how: { topic?: string; about?: { line: string; text: 
   if (asked) {
     const turns = state.session?.interviews[character];
     const answer = turns?.[turns.length - 1]?.answer;
-    if (answer) station.speak(character, answer);
+    if (answer) station.speak(character, answer, how.topic);
   }
   pendingCharacter = null;
   document.querySelector<HTMLTextAreaElement>('#question')?.focus({ preventScroll: true });

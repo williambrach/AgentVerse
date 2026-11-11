@@ -12,7 +12,7 @@ export interface StageScene {
   setEnabled(on: boolean): void;
   setCovered(covered: boolean): void;
   think?(id: string | null): void;
-  speak?(id: string, text: string): void;
+  speak?(id: string, text: string, topic?: string): void;
   detective?(pose: Pose): void;
   escape?(id: string): Promise<void>;
   evidence?(items: EvidenceMark[]): void;
@@ -21,7 +21,8 @@ export interface StageScene {
 export interface TableScene extends StageScene {
   focus(id: string | null): void;
   think(id: string | null): void;
-  speak(id: string, text: string): void;
+  /** topic: the topic chip answered, if any (a figure may gesture for it). */
+  speak(id: string, text: string, topic?: string): void;
 }
 
 export interface Stage extends TableScene {
@@ -76,7 +77,8 @@ export function createStage(deps: StageDeps): Stage {
     setCovered(c) { covered = c; live()?.setCovered(c); },
     focus(id) { liveTable()?.focus(id); },
     think(id) { live()?.think?.(id); },
-    speak(id, text) { live()?.speak?.(id, text); },
+    // Forwarded as given: a call without a topic reaches the scene with two arguments.
+    speak(...args: Parameters<TableScene['speak']>) { live()?.speak?.(...args); },
     detective(pose) { live()?.detective?.(pose); },
     evidence(items) { live()?.evidence?.(items); },
     escape(id) { return live()?.escape?.(id) ?? Promise.resolve(); },

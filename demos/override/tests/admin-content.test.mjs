@@ -41,7 +41,8 @@ test('list_and_detail_shapes', async () => {
   assert.equal(d.json.rev, 0);
   assert.ok(d.json.structure.characters.length === 3);
   assert.equal(d.json.authored['copy.intro.lead'], a.kase.copy.intro.lead);
-  assert.ok(Array.isArray(d.json.current['prompt.use']));
+  assert.ok(Object.keys(d.json.current).some(k => /\.knowledge$/.test(k) && Array.isArray(d.json.current[k])));
+  assert.equal('prompt.use' in d.json.current, false);
   assert.deepEqual(d.json.history, []);
   a.close();
 });
@@ -94,7 +95,7 @@ test('bad_path_400_with_path', async () => {
 test('preview_equals_buildMessages', async () => {
   const a = await start();
   const history = [{ question: 'q1', answer: 'a1' }, { question: 'q2', answer: 'a2' }];
-  const edits = { 'prompt.setting': 'a quite different monkey' };
+  const edits = { 'copy.headline': 'A quite different headline' };
   const r = await a.call('POST', `/admin/content/${ID}/preview`, { edits, characterId: 'pip', question: 'Why?', history });
   assert.equal(r.status, 200);
   const draft = a.content.preview(ID, edits);

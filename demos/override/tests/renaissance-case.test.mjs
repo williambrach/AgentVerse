@@ -18,7 +18,7 @@ const castWith = traveller => {
 test('registry_five: the case is fifth, after After Hours, and the others keep their places', () => {
   assert.equal(cases.length, 5);
   assert.equal(cases[4], kase);
-  assert.equal(kase.order, 5);
+  assert.equal(kase.order, 3);
   assert.equal(kase.status, 'ready');
   assert.equal(kase.version, 'renaissance-traveler-v1.0.0');
   assert.equal(cases[0].id, 'banana-mystery');

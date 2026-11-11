@@ -12,17 +12,14 @@ export const COPY = {
   'copy.briefing.hint': ['Briefing hint', 'Small print under the question in the briefing.'],
   'copy.report.title': ['Report title', NP + 'Heading for the report page.'],
   'copy.report.description': ['Report text', NP + 'Text under the report heading.'],
-  'prompt.setting': ['Setting', 'Who the characters are, in one phrase. It opens every character\'s instructions, after their name and part name.'],
-  'prompt.use': ['Words to use', 'Simple words the characters are told to talk in.' + LIST],
-  'prompt.avoid': ['Words to avoid', 'Technical terms the characters are told not to use.' + LIST],
   'parts.*.label': ['Part name', 'What this character is called in the story, for example "The planner". Also used in the character\'s instructions.'],
   'parts.*.introduction': ['Opening line', 'The first thing the character says when the player opens the chat.'],
   'parts.*.quickQuestion': ['Suggested question', 'The one-click question offered before the player has asked anything.'],
   'parts.*.knowledge': ['What this character knows', 'The facts the character may use when it answers. It is told to use only these.' + LIST],
   'parts.*.finding.classification': ['Debrief verdict', 'The short verdict shown for this character in the debrief.'],
   'parts.*.finding.explanation': ['Debrief explanation', 'The reason given for the verdict in the debrief.'],
-  'prompt.interview': ['Interview prompt', 'The instructions every character gets when the player asks a question. Slots in [[double brackets]] are filled in per character; [[knowledge]] must appear exactly once.'],
-  'prompt.thread': ['Thread prompt', 'The instructions every character gets when writing a post in the forum thread. Slots in [[double brackets]] are filled in per character; [[knowledge]] must appear exactly once.'],
+  'rules': ['Rules for all actors', 'The instructions every character of this game gets, in a one-to-one chat and in the forum thread alike. Slots in [[double brackets]] are filled in per character; [[knowledge]] must appear exactly once.'],
+  'prompt.thread': ['Thread line', 'Sent with the posts when a character writes in the forum thread: it says what to do with them. [[others]] becomes the names of the other characters.'],
   'worlds.*.frame': ['World frame', 'The line that frames the character in this world, put near the top of the interview prompt.'],
   'worlds.*.persona': ['World persona', 'The personality word dropped into the prompt for characters of this world.'],
   'worlds.*.memory': ['World memory rule', 'The sentence about what the character remembers, put after the knowledge rule.'],
@@ -76,6 +73,7 @@ export function routeOf(path, structure = {}) {
   if (a === 'copy' || a === 'title') return { key: 'story', title: 'Story' };
   if (a === 'partsKnowledge') return { key: 'prompt', title: 'Prompt' };
   if (a === 'prompt') return { key: 'prompt', title: 'Prompt' };
+  if (a === 'rules' && seg.length === 1) return { key: 'prompt', title: 'Prompt' };
   if (a === 'roles') return { key: 'roles', title: 'Roles' };
   if (a === 'characters' && b) return { key: `character:${b}`, title: `Character: ${nameOf(find(structure.characters, b) ?? b)}` };
   if (a === 'talk' && b !== 'topics' && b !== 'glossary' && find(structure.characters, c)) {

@@ -26,13 +26,12 @@
   </form>
   <button id="signout" type="button" class="ghost" hidden>Sign out</button>
 </header>
-<div class="maker">
-  <div class="side"><input id="field-search" type="search" placeholder="Search fields…" aria-label="Search fields" autocomplete="off"><nav id="sections" aria-label="Sections"></nav></div>
-  <main id="editor"><div id="form"></div>
-    <section id="history-section" class="form-section" data-section="history" hidden><h2 class="section-title">History</h2><ol id="history"></ol></section></main>
+<div class="simple">
+  <div class="side"><nav id="sections" aria-label="Sections"></nav></div>
+  <main id="editor"><section id="section" class="form-section"></section></main>
   <aside id="panel" class="card chat">
-    <div class="card-head"><h2 class="card-title">Test chat</h2><button id="new-chat" type="button" class="ghost">New chat</button></div>
-    <label for="character">Character</label><select id="character"></select>
+    <div class="card-head"><h2 class="card-title">Try this actor</h2><button id="new-chat" type="button" class="ghost">New chat</button></div>
+    <select id="character" aria-label="Character" hidden></select>
     <div id="thread" aria-live="polite"></div>
     <p id="try-note" class="muted"></p>
     <form id="ask"><input id="question" type="text" autocomplete="off" placeholder="Ask a question…"><button id="try" type="submit" class="primary">Send</button></form>

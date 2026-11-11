@@ -2,7 +2,8 @@ import type { FigureArt, WalkSheet } from './factory-figures.ts';
 import type { Walk } from './hall-layout.ts';
 import { plain } from './text.ts';
 
-export type SlotPoint = { x: number; y: number };
+/** flip: draw the figure mirrored. The pose art faces right, so a flipped figure faces left. */
+export type SlotPoint = { x: number; y: number; flip?: boolean };
 export type FloorProp = { id: string; x: number; y: number };
 
 export interface WorldPack {
@@ -25,6 +26,9 @@ export interface WorldPack {
   stops?: { report: SlotPoint; briefing: SlotPoint };
   /** Painted backdrop (department): drawn at scale world units per image px, top-left at (x, y); fill beyond it. */
   backdrop?: { url: string; width: number; height: number; scale: number; x: number; y: number; fill: string };
+  /** Painted floor under the factory's own props (factory): the image lowest, at scale world units per image px,
+   * top-left at (x, y), fill beyond it. Unlike backdrop it changes nothing else: stops, labels and the [E] prompt stay as they are. */
+  floorArt?: { url: string; width: number; height: number; scale: number; x: number; y: number; fill: string };
   /** Where the detective may stand (department). */
   walk?: Walk;
   /** Examinable evidence spots by foot point (department). */
@@ -80,7 +84,10 @@ const factory: WorldPack = {
   text: { get place() { return plain('worlds.factory.place'); }, get eyebrow() { return plain('worlds.factory.eyebrow'); }, day: "LAST SHIFT", get one() { return plain('worlds.factory.one'); }, get many() { return plain('worlds.factory.many'); }, castLabel: "WORKER", get hint() { return plain('worlds.factory.hint'); }, get oneWithArticle() { return plain('worlds.factory.oneWithArticle'); }, get investigator() { return plain('worlds.factory.investigator'); }, icon: '<path d="M3 20V9l6 4V9l6 4V5h3v15zm4-3h2m3 0h2"/>' },
   art: { cast: '', idle: '', walk: '', props: '' },
   palette: { ground: '#6e7780', label: '#2c343b', labelBg: '#e9edf0' },
-  slots: [{ x: 110, y: 190 }, { x: 240, y: 200 }, { x: 370, y: 190 }, { x: 150, y: 290 }, { x: 330, y: 290 }],
+  // At work, left to right: Marta at the conveyor, Ama at the control terminal (both facing left), Vera at the
+  // electrical cabinet and Theo at the assembly robot (both facing right), each in the gap beside the machine
+  // (machine edges 27..73, 109..145, 191..226, 270..308, 347..393); Bruno at the shipping crates, facing them.
+  slots: [{ x: 92, y: 112, flip: true }, { x: 168, y: 112, flip: true }, { x: 248, y: 112 }, { x: 327, y: 112 }, { x: 404, y: 320 }],
   figures: {
     base: '/assets/factory/characters',
     props: '/assets/factory/props',
@@ -93,6 +100,12 @@ const factory: WorldPack = {
     labelLift: 68,
     walkSheet: factoryWalk,
   },
+  // Brightwell Snow Globe Works (factory-floor.json): 1536 x 1024, opaque. At 5/12 it is 640 x 427 world units,
+  // x -88..552 and y -20..407: it covers the whole stage in every window up to 16:9 (the stage shows at most
+  // x -87..517 at 1280 x 720 and -62..542 at 1920 x 1080). Its wall meets the floor at source y 234 (world y 77.5),
+  // so the wall props, whose feet stand at y 100, sit on the floor just in front of the wall.
+  // The fill is the concrete at the image's side edges, for windows wider than 16:9.
+  floorArt: { url: '/assets/factory/factory-floor.png', width: 1536, height: 1024, scale: 5 / 12, x: -88, y: -20, fill: '#7b755e' },
   // Clear of every worker and prop box: the spawn stands just above the parts bin, the guess point on open floor between Ama, Vera and Bruno.
   stops: { report: { x: 290, y: 245 }, briefing: { x: 240, y: 266 } },
   floor: {
@@ -134,7 +147,8 @@ const department: WorldPack = {
   text: { get place() { return plain('worlds.department.place'); }, get eyebrow() { return plain('worlds.department.eyebrow'); }, day: "FRIDAY MORNING", get one() { return plain('worlds.department.one'); }, get many() { return plain('worlds.department.many'); }, castLabel: "COLLEAGUE", get hint() { return plain('worlds.department.hint'); }, get oneWithArticle() { return plain('worlds.department.oneWithArticle'); }, get investigator() { return plain('worlds.department.investigator'); }, icon: '<path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm4.5 10.5L20 20"/>' },
   art: { cast: '', idle: '', walk: '', props: '' },
   palette: { ground: '#1b1714', label: '#2b2320', labelBg: '#f6efe4' },
-  slots: [{ x: 150, y: 286 }, { x: 330, y: 296 }, { x: 100, y: 214 }, { x: 280, y: 240 }, { x: 365, y: 214 }],
+  // Facing varies: the right-hand pair look back into the hall, the rest face right (the art faces right).
+  slots: [{ x: 150, y: 286 }, { x: 330, y: 296, flip: true }, { x: 100, y: 214 }, { x: 280, y: 240 }, { x: 365, y: 214, flip: true }],
   figures: {
     base: '/assets/department/characters',
     props: '/assets/department/props',
@@ -143,9 +157,12 @@ const department: WorldPack = {
     frame: { w: 192, h: 384 },
     anchor: { x: 96, y: 376 },
     scale: 1 / 6,
+    // The poses are drawn 294..352 px tall in the same frame (alpha >= 128); scale each up to the detective's 352.
+    sizes: { 'department-admin': 352 / 329, 'it-admin': 352 / 302, 'phd-01': 352 / 297, 'phd-02': 352 / 313, professor: 352 / 313 },
     density: 3,
     labelLift: 68,
     walkSheet: departmentWalk,
+    chill: true,
   },
   backdrop: { url: '/assets/department/department-hall.png', width: 1536, height: 1024, scale: 1 / 3, x: -16, y: 0, fill: '#1b1714' },
   walk: {
@@ -182,8 +199,10 @@ const renaissance: WorldPack = {
   text: { get place() { return plain('worlds.renaissance.place'); }, get eyebrow() { return plain('worlds.renaissance.eyebrow'); }, day: "JUNE 1489", get one() { return plain('worlds.renaissance.one'); }, get many() { return plain('worlds.renaissance.many'); }, castLabel: "TOWNSPERSON", get hint() { return plain('worlds.renaissance.hint'); }, get oneWithArticle() { return plain('worlds.renaissance.oneWithArticle'); }, get investigator() { return plain('worlds.renaissance.investigator'); }, icon: '<path d="M4 20V10l4-3 4 3 4-3 4 3v10zm5 0v-5h6v5"/>' },
   art: { cast: '', idle: '', walk: '', props: '' },
   palette: { ground: '#2a2018', label: '#3b2a1c', labelBg: '#f6ead2' },
-  // Cast order: Ottavio (centre-front, sundial steps), Matteo, Beatrice, Bruno, Agnese (right of the well).
-  slots: [{ x: 240, y: 262 }, { x: 130, y: 150 }, { x: 330, y: 150 }, { x: 410, y: 260 }, { x: 115, y: 215 }],
+  // Cast order: Ottavio (before the palazzo door), Matteo (by his clock workshop), Beatrice (by the cloth stall),
+  // Bruno (open plaza, watching the square), Agnese (beside her herb pot, left of the shop door at x 350..372).
+  // Feet points in world units (image px / 3, x - 16); every one is on open cobbles.
+  slots: [{ x: 222, y: 166 }, { x: 410, y: 192 }, { x: 150, y: 190 }, { x: 395, y: 255 }, { x: 330, y: 168 }],
   figures: {
     base: '/assets/renaissance/characters',
     props: '/assets/renaissance/props',
@@ -196,14 +215,20 @@ const renaissance: WorldPack = {
     density: 3,
     labelLift: 66,
     walkSheet: scoutWalk,
-    loops: { idle: 4, talk: { wizard: 1, inventor: 1, noble: 2, guard: 1, apothecary: 2, scout: 1 } },
+    loops: { idle: 4, talk: { wizard: 1, inventor: 1, noble: 2, guard: 1, apothecary: 1, scout: 1 } },
+    // Agnese takes out her amber vial, inspects it while she answers about her work, then hides it under her shawl.
+    // Same in every deal, so it says nothing about who the traveller is.
+    gestures: { apothecary: { name: 'vial', frames: 8, hold: 3, frameMs: 220, topics: ['work'] } },
     stopProps: { briefing: 'scroll', report: 'seal' },
   },
   backdrop: { url: '/assets/renaissance/town-square.png', width: 1536, height: 1024, scale: 1 / 3, x: -16, y: 0, fill: '#2a2018' },
-  // Cobbled ground only (feet y 122..326); the well and the bench with crates are blocked.
+  // The painted market square (market-square.png, copied untouched): at 1/3 it is 512 x 341 world units, x -16..496.
+  // Measured on the art (world units): the palazzo steps and the shop doorsteps end at y 142..153, the produce stall's
+  // counter at x <= 72, y <= 169, the cloth stall at x 68..121, y <= 160, the barrel and crate at x <= 21, y <= 196,
+  // the bread stall at x >= 438, y <= 186. Feet stay on the open cobbles below them.
   walk: {
-    bounds: { x: 40, y: 122, w: 420, h: 204 },
-    blocks: [{ x: -3, y: 173, w: 54, h: 60 }, { x: 417, y: 187, w: 68, h: 60 }],
+    bounds: { x: 30, y: 158, w: 420, h: 168 },
+    blocks: [{ x: -16, y: 140, w: 92, h: 38 }, { x: 60, y: 140, w: 68, h: 28 }, { x: -16, y: 140, w: 44, h: 64 }, { x: 432, y: 140, w: 64, h: 52 }],
   },
   stops: { briefing: { x: 240, y: 300 }, report: { x: 330, y: 290 } },
 };

@@ -41,10 +41,11 @@ test('every_world_keeps_chats_private: a chat goes to its own speaker and to nob
       thread: [{ character: second, text: 'P1', timestamp: t(2) }],
     };
     const thread = [{ post: 1, author: kase.characters[1].name, text: 'P1' }];
-    assert.deepEqual(JSON.parse(buildThreadMessages(kase, session, first)[1].content), { privateChat: [{ question: 'ZQX-Q?', answer: 'ZQX-A1' }], thread });
+    const sent = m => { const { task, ...rest } = JSON.parse(m[1].content); assert.equal(typeof task, 'string'); return rest; };
+    assert.deepEqual(sent(buildThreadMessages(kase, session, first)), { privateChat: [{ question: 'ZQX-Q?', answer: 'ZQX-A1' }], thread });
     for (const c of kase.characters.filter(x => x.id !== first)) {
       const messages = buildThreadMessages(kase, session, c.id);
-      assert.deepEqual(JSON.parse(messages[1].content), { privateChat: [], thread });
+      assert.deepEqual(sent(messages), { privateChat: [], thread });
       assert.equal(JSON.stringify(messages).includes('ZQX-'), false);
     }
   }

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { worlds as liveWorlds } from './worlds.mjs';
+import { checkTemplate, defaultRules } from './templates.mjs';
 import { ROLES, ROLE_IDS } from './roles.mjs';
 import { checkTalk } from './talk.mjs';
 
@@ -77,10 +78,8 @@ export function defineCase(data, { worlds = liveWorlds, prompts } = {}) {
     if (!data.copy[group] || typeof data.copy[group] !== 'object') fail(`copy.${group}`, 'is required');
     for (const key of keys) str(data.copy[group][key], `copy.${group}.${key}`);
   }
-  const prompt = data.prompt;
-  if (!prompt || typeof prompt !== 'object') fail('prompt', 'is required');
-  str(prompt.setting, 'prompt.setting');
-  for (const key of ['use', 'avoid']) if (!Array.isArray(prompt[key]) || !prompt[key].every(s => typeof s === 'string')) fail(`prompt.${key}`, 'must be an array of strings');
+  // A case has no prompt text of its own: the prompt is the shared template, the world's wording and the knowledge.
+  if (data.prompt !== undefined) fail('prompt', 'is no longer used; put what a character should know into its knowledge');
   data.characters.forEach((c, i) => ['id', 'name', 'color'].forEach(k => str(c[k], `characters[${i}].${k}`)));
   data.characters.forEach((c, i) => {
     // Character text is the same in every deal, so a placeholder here would show the dealt part on the rail.
@@ -151,7 +150,16 @@ export function defineCase(data, { worlds = liveWorlds, prompts } = {}) {
     try { checkTalk(data); } catch (e) { throw new Error(`case ${id}: ${e.message}`); }
   }
   if (typeof data.rehearsal !== 'function') fail('rehearsal', 'must be a function');
-  return deepFreeze({ ...clone(data), world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...toolsOf(data, fail), ...(prompts ? { prompts: clone(prompts) } : {}), contentHash: contentHash(data) });
+  // Each case has its own rules for all its actors. A case file without any starts from the default ones.
+  if (data.rules !== undefined) {
+    str(data.rules, 'rules');
+    const problem = checkTemplate('interview', data.rules);
+    if (problem) fail('rules', problem);
+  }
+  const rules = data.rules ?? defaultRules(worlds[worldId]);
+  // Default rules are not part of a case's content: an untouched case keeps its hash when it is rebuilt from its editable shape.
+  const hashed = data.rules === defaultRules(worlds[worldId]) ? (({ rules: _same, ...rest }) => rest)(data) : data;
+  return deepFreeze({ ...clone(data), rules, world: { ...worlds[worldId] }, rehearsal: data.rehearsal, ...toolsOf(data, fail), ...(prompts ? { prompts: clone(prompts) } : {}), contentHash: contentHash(hashed) });
 }
 
 const nameMap = (kase, cast) => {
@@ -181,11 +189,13 @@ export function partOf(kase, cast, characterId) {
   return kase.parts.find(p => p.id === cast[characterId]);
 }
 
-export function castCharacters(kase, cast) {
+// `hideParts`: a part is dealt in secret, so its name stays off the player's screen while the game is open.
+// A character's own label (a job) is the same in every game and always shows.
+export function castCharacters(kase, cast, { hideParts = false } = {}) {
   return kase.characters.map((c, i) => {
     const p = partOf(kase, cast, c.id);
     return {
-      id: c.id, name: c.name, role: resolve(kase, cast, c.label ?? p.label), room: String(i + 1).padStart(2, '0'), color: c.color,
+      id: c.id, name: c.name, role: c.label === undefined && hideParts ? '' : resolve(kase, cast, c.label ?? p.label), room: String(i + 1).padStart(2, '0'), color: c.color,
       introduction: resolve(kase, cast, c.introduction ?? p.introduction), quickQuestion: resolve(kase, cast, c.quickQuestion ?? p.quickQuestion),
     };
   });
@@ -198,7 +208,7 @@ const resolveDeep = (kase, cast, value) => {
   return value;
 };
 
-export function publicView(kase, cast) {
+export function publicView(kase, cast, { hideParts = false } = {}) {
   return {
     caseId: kase.id,
     caseVersion: kase.version,
@@ -207,7 +217,7 @@ export function publicView(kase, cast) {
     order: kase.order,
     copy: resolveDeep(kase, cast, kase.copy),
     world: (({ persona, frame, memory, clueSpot, agents, ...rest }) => ({ ...rest, agents, cast: { ...rest.cast } }))(kase.world),
-    characters: castCharacters(kase, cast),
+    characters: castCharacters(kase, cast, { hideParts }),
     ...(kase.evidence ? { evidence: kase.evidence.map(({ id, title }) => ({ id, title })) } : {}),
     ...(kase.talk ? { talk: { topics: kase.talk.topics.map(({ id, label, question }) => ({ id, label, question })) } } : {}),
     ...(kase.tools ? { tools: { ...kase.tools } } : {}),
