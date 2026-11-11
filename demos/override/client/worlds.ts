@@ -96,9 +96,12 @@ const factory: WorldPack = {
     frame: { w: 192, h: 384 },
     anchor: { x: 96, y: 376 },
     scale: 1 / 6,
+    // The listening poses are drawn 245..321 px tall in the same frame (alpha >= 128); scale each up to the detective's 353.
+    sizes: { 'worker-01': 353 / 291, 'worker-02': 353 / 283, 'worker-03': 353 / 304, 'worker-04': 353 / 321, 'worker-05': 353 / 245 },
     density: 3,
     labelLift: 68,
     walkSheet: factoryWalk,
+    chill: true,
   },
   // Brightwell Snow Globe Works (factory-floor.json): 1536 x 1024, opaque. At 5/12 it is 640 x 427 world units,
   // x -88..552 and y -20..407: it covers the whole stage in every window up to 16:9 (the stage shows at most

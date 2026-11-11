@@ -31,3 +31,13 @@ test('factory_floor_png: opaque 1536 x 1024 PNG', () => {
 test('floor_art_factory_only', () => {
   for (const id of ['grove', 'tower', 'friends', 'department', 'renaissance']) assert.equal(worldFor(id).floorArt, undefined, id);
 });
+
+test('factory_cast_alive_and_detective_sized', () => {
+  const art = worldFor('factory').figures;
+  assert.equal(art.chill, true);
+  // Each worker's listening pose ends up as tall on screen as the detective's 353 px pose.
+  const drawn = { 'worker-01': 291, 'worker-02': 283, 'worker-03': 304, 'worker-04': 321, 'worker-05': 245 };
+  for (const sprite of Object.values(art.sprites)) {
+    assert.ok(Math.abs(drawn[sprite] * (art.sizes?.[sprite] ?? 1) - 353) < 1e-9, sprite);
+  }
+});
