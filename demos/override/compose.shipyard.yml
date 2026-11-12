@@ -1,0 +1,68 @@
+# Included by /home/ramang/rmngs-shipyard/services-stack.yml.
+# Relative paths resolve from this file, including the root repository .env.
+#
+# Game:  https://arbitergame.brch.sk (Traefik -> 3001)
+# Admin: https://arbitergame-admin.brch.sk/admin (Traefik -> 3002, admin password only)
+# Text edits published on the admin page land in ./content of this checkout.
+services:
+  imadacup:
+    image: agentverse-override:latest
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3001"
+      OVERRIDE_ADMIN_HOST: 0.0.0.0
+      OVERRIDE_ADMIN_PORT: "3002"
+      OVERRIDE_DATA_DIR: /app/data
+      OVERRIDE_CONTENT_DIR: /app/content
+      # Traefik appends the client to X-Forwarded-For; the middleware below strips a spoofed CF-Connecting-IP.
+      OVERRIDE_TRUST_PROXY: "1"
+      OVERRIDE_PUBLIC_URL: https://arbitergame.brch.sk
+      # Admin is reached through Traefik on its own hostname; the limiter keys on the real client.
+      OVERRIDE_ADMIN_HOSTS: arbitergame-admin.brch.sk
+      OVERRIDE_ADMIN_TRUST_PROXY: "1"
+    volumes:
+      - imadacup-data:/app/data
+      - ./content:/app/content
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      traefik.enable: "true"
+      # Match the network Traefik actually joins in the shipyard stack.
+      traefik.docker.network: rmngs-shipyard_default
+      # Game
+      traefik.http.routers.arbitergame.rule: Host(`arbitergame.brch.sk`)
+      traefik.http.routers.arbitergame.entrypoints: websecure
+      traefik.http.routers.arbitergame.tls: "true"
+      traefik.http.routers.arbitergame.tls.certresolver: letsencrypt
+      traefik.http.routers.arbitergame.service: arbitergame
+      traefik.http.routers.arbitergame.middlewares: arbitergame-strip-cf
+      traefik.http.services.arbitergame.loadbalancer.server.port: "3001"
+      # Admin
+      traefik.http.routers.arbitergame-admin.rule: Host(`arbitergame-admin.brch.sk`)
+      traefik.http.routers.arbitergame-admin.entrypoints: websecure
+      traefik.http.routers.arbitergame-admin.tls: "true"
+      traefik.http.routers.arbitergame-admin.tls.certresolver: letsencrypt
+      traefik.http.routers.arbitergame-admin.service: arbitergame-admin
+      traefik.http.routers.arbitergame-admin.middlewares: arbitergame-strip-cf
+      traefik.http.services.arbitergame-admin.loadbalancer.server.port: "3002"
+      # Players could send this header to fake their address; the app trusts X-Forwarded-For from Traefik instead.
+      traefik.http.middlewares.arbitergame-strip-cf.headers.customrequestheaders.CF-Connecting-IP: ""
+
+volumes:
+  imadacup-data:
