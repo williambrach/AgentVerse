@@ -70,13 +70,13 @@ test('identity_without_accept', () => {
   assert.equal(r.headers['vary'], 'Accept-Encoding');
 });
 
-test('root serves index.html with no-cache; other assets 1h', () => {
+test('root serves index.html with no-cache; unhashed assets revalidate', () => {
   const files = loadStatic(fixture());
   const r = call(files, 'GET', '/?x=1');
   assert.equal(r.status, 200);
   assert.equal(r.headers['cache-control'], 'no-cache');
   assert.match(r.headers['content-type'], /^text\/html/);
-  assert.equal(call(files, 'GET', '/assets/plain.css').headers['cache-control'], 'public, max-age=3600');
+  assert.equal(call(files, 'GET', '/assets/plain.css').headers['cache-control'], 'no-cache');
   const png = call(files, 'GET', '/logo.png', { 'accept-encoding': 'br' });
   assert.equal(png.headers['content-encoding'], undefined);
   assert.equal(png.headers['content-type'], 'image/png');
@@ -144,11 +144,24 @@ test('etag_304', () => {
 
 test('hashed_png_immutable', () => {
   const dir = fixture();
-  writeFileSync(join(dir, 'assets', 'x-abc123.png'), Buffer.from([1, 2, 3]));
-  writeFileSync(join(dir, 'assets', 'y-abc123.webp'), Buffer.from([1, 2, 3]));
+  writeFileSync(join(dir, 'assets', 'x-abc12345.png'), Buffer.from([1, 2, 3]));
+  writeFileSync(join(dir, 'assets', 'y-abc12345.webp'), Buffer.from([1, 2, 3]));
   const files = loadStatic(dir);
-  assert.equal(call(files, 'GET', '/assets/x-abc123.png').headers['cache-control'], 'public, max-age=31536000, immutable');
-  const webp = call(files, 'GET', '/assets/y-abc123.webp');
+  assert.equal(call(files, 'GET', '/assets/x-abc12345.png').headers['cache-control'], 'public, max-age=31536000, immutable');
+  const webp = call(files, 'GET', '/assets/y-abc12345.webp');
   assert.equal(webp.headers['cache-control'], 'public, max-age=31536000, immutable');
   assert.equal(webp.headers['content-type'], 'image/webp');
+});
+
+test('world_art_is_not_immutable: hyphenated art in /assets/<world>/ revalidates, so replaced art shows', () => {
+  const dir = fixture();
+  mkdirSync(join(dir, 'assets', 'renaissance', 'characters'), { recursive: true });
+  writeFileSync(join(dir, 'assets', 'renaissance', 'town-square.png'), Buffer.from([1, 2, 3]));
+  writeFileSync(join(dir, 'assets', 'renaissance', 'characters', 'apothecary-idle-0.png'), Buffer.from([1, 2, 3]));
+  const files = loadStatic(dir);
+  for (const url of ['/assets/renaissance/town-square.png', '/assets/renaissance/characters/apothecary-idle-0.png']) {
+    const r = call(files, 'GET', url);
+    assert.equal(r.headers['cache-control'], 'no-cache', url);
+    assert.equal(call(files, 'GET', url, { 'if-none-match': r.headers['etag'] }).status, 304, url);
+  }
 });

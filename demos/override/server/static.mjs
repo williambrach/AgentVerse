@@ -5,7 +5,9 @@ import { gzipSync, brotliCompressSync, constants } from 'node:zlib';
 
 const mimeTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.webp': 'image/webp' };
 const compressible = new Set(['.html', '.js', '.css', '.svg']);
-const hashed = /^\/assets\/.+-[A-Za-z0-9_-]{6,}\.(js|css|woff2|png|webp)$/;
+// Vite's output only: flat in /assets/, name-<hash>. Art in /assets/<world>/ (town-square.png, apothecary-idle-0.png)
+// is never hashed, however its name looks, so it must not be cached as immutable: replaced art would never show.
+const hashed = /^\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.(js|css|woff2|png|webp)$/;
 
 function walk(dir, prefix, out) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -25,7 +27,8 @@ export function loadStatic(publicDir) {
     const body = readFileSync(file);
     const entry = {
       type: mimeTypes[ext] || 'application/octet-stream',
-      cache: ext === '.html' ? 'no-cache' : hashed.test(path) ? 'public, max-age=31536000, immutable' : 'public, max-age=3600',
+      // Unhashed files revalidate every load (a 304 by ETag when unchanged), so new art shows at once.
+      cache: hashed.test(path) && ext !== '.html' ? 'public, max-age=31536000, immutable' : 'no-cache',
       identity: body,
       etag: `"${createHash('sha1').update(body).digest('hex')}"`,
       vary: compressible.has(ext),
