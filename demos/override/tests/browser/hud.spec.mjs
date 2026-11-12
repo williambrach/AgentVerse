@@ -565,12 +565,12 @@ test('fonts_load_with_every_outside_host_blocked', async ({ page, baseURL }) => 
   await begin(page);
   await page.evaluate(() => document.fonts.ready);
   expect(outside).toEqual([]);
-  const loaded = await page.evaluate(() => [...document.fonts].filter(f => f.family.includes('Atkinson Hyperlegible Next') && f.status === 'loaded').length);
+  const loaded = await page.evaluate(() => [...document.fonts].filter(f => f.family.includes('Pixelify Sans') && f.status === 'loaded').length);
   expect(loaded).toBeGreaterThan(0);
   expect(fonts.length).toBeGreaterThan(0);
   expect(fonts[0].headers()['content-type']).toBe('font/woff2');
   expect(fonts[0].headers()['cache-control']).toContain('immutable');
-  expect(await page.locator('.topbar #case-headline').evaluate(el => getComputedStyle(el).fontFamily)).toContain('Atkinson Hyperlegible Next');
+  expect(await page.locator('.topbar #case-headline').evaluate(el => getComputedStyle(el).fontFamily)).toContain('Pixelify Sans');
 });
 
 test('box_does_not_blink_on_updates', async ({ page }) => {

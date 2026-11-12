@@ -4,7 +4,7 @@
   --gold: #F4B740; --sky-ui: #5CC8F5; --parchment: #FFF6DE; --text: #18252D; --rule: #D9C796;
   --honest: #6DBE63; --fooled: #A68BE0; --collaborator: #F08A3C; --villain: #EA6A55;
   --accent: #8CC56A; --sky: #BFE0EE; --ground: #A7CF7E;
-  --font: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font: 'Pixelify Sans', system-ui, sans-serif;
   --mono: var(--font); --paper: var(--parchment); --line: var(--rule); --green: var(--accent);
   --surface: #0F1B22EB; --shadow: 0 4px 0 #0A1217;
   font-family: var(--font); font-synthesis: none; font-size: 16px; font-variant-numeric: tabular-nums; color: var(--cream); background: var(--ink);

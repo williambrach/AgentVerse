@@ -395,6 +395,6 @@ If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:e
 
 **Missing art, Castelvento.** Only the scroll, seal and quill icons are still script-drawn (art request R8). Ottavio comes from his own conversation sheet (R2: idle with a blink, talk, think), and the apothecary and the painted town square are delivered art too. The command to re-run the cut is in `art/renaissance/ARTWORK.md`.
 
-The font is Atkinson Hyperlegible Next, bundled in `client/fonts` under the SIL Open Font License, so the game makes no third-party requests and looks the same on a closed network.
+The font is Pixelify Sans, bundled in `client/fonts` under the SIL Open Font License, so the game makes no third-party requests and looks the same on a closed network.
 
 For a research study, add controlled case assignment, configurable budgets, validated cases (including no-misalignment cases), and debrief timing controls. Those features are deliberately outside this demo.

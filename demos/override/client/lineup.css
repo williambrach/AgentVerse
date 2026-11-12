@@ -2,7 +2,7 @@
 .lineup-board { --ink: #0F1B22; --deep: #0B151B; --panel: #13232C; --edge: #355A6B; --cream: #F4EBD3; --muted: #A9BEC6; --gold: #F4B740; --parch: #FFF6DE;
   --honest: #6DBE63; --fooled: #A68BE0; --collaborator: #F08A3C; --villain: #EA6A55;
   min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; padding: 24px 32px 26px; background: var(--ink); color: var(--cream);
-  font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif; font-variant-numeric: tabular-nums; overflow: auto; }
+  font-family: 'Pixelify Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums; overflow: auto; }
 .lineup-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 28px; }
 .lineup-title { display: flex; flex-direction: column; gap: 8px; flex: 1 1 520px; }
 .lineup-eyebrow { font-size: 13px; letter-spacing: 2px; color: var(--muted); }
@@ -66,7 +66,7 @@
 .debrief-page { --ink: #0F1B22; --deep: #0B151B; --panel: #13232C; --edge: #355A6B; --cream: #F4EBD3; --muted: #A9BEC6; --gold: #F4B740; --parch: #FFF6DE; --rule: #D9C796;
   --honest: #6DBE63; --fooled: #A68BE0; --collaborator: #F08A3C; --villain: #EA6A55;
   min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; padding: 24px 32px 28px; background: var(--ink); color: var(--cream); overflow: auto;
-  font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  font-family: 'Pixelify Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 .debrief-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 28px; }
 .debrief-title { display: flex; flex-direction: column; gap: 8px; flex: 1 1 520px; }
 .debrief-eyebrow { font-size: 13px; letter-spacing: 2px; color: var(--muted); }

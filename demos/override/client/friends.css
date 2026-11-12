@@ -34,10 +34,10 @@ html [data-world="friends"] .portrait.nora .pixel-person { background-image: url
 html [data-world="friends"] .portrait.sam .pixel-person { background-image: url('/assets/friends/sam-idle.png') !important; background-position: calc(var(--fc) * -42 / 96) calc(var(--fc) * -12 / 96) !important; }
 
 /* Scene overlay: one room pixel = --u CSS px, set by the scene. */
-.roundtable-labels { position: absolute; pointer-events: none; overflow: visible; font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif; }
+.roundtable-labels { position: absolute; pointer-events: none; overflow: visible; font-family: 'Pixelify Sans', system-ui, sans-serif; }
 .roundtable-tag { position: absolute; transform: translateX(-50%); box-sizing: border-box; padding: calc(var(--u) * 2) calc(var(--u) * 8); font-size: calc(var(--u) * 14); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; color: #E8D9B5; background: #261E27E6; border: calc(var(--u) * 2) solid #BDA06C; border-radius: calc(var(--u) * 3); transition: color .15s, box-shadow .15s; }
 .roundtable-tag.you { color: #F4EBD3; border-color: #8CC5E0; }
 .roundtable-tag.active { color: #FFF6DE; border-color: #F4B740; box-shadow: 0 0 calc(var(--u) * 12) #F4B74099; }
-.roundtable-bubble { position: absolute; box-sizing: border-box; max-width: calc(var(--u) * 320); padding: calc(var(--u) * 8) calc(var(--u) * 12); font: 500 calc(var(--u) * 17) / 1.3 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, sans-serif; color: #40533c; background: #fff6dd; border: calc(var(--u) * 2) solid #40533c; border-radius: calc(var(--u) * 6); overflow-wrap: anywhere; animation: bubble-in .18s ease-out; }
+.roundtable-bubble { position: absolute; box-sizing: border-box; max-width: calc(var(--u) * 320); padding: calc(var(--u) * 8) calc(var(--u) * 12); font: 500 calc(var(--u) * 17) / 1.3 'Pixelify Sans', system-ui, sans-serif; color: #40533c; background: #fff6dd; border: calc(var(--u) * 2) solid #40533c; border-radius: calc(var(--u) * 6); overflow-wrap: anywhere; animation: bubble-in .18s ease-out; }
 .roundtable-bubble::after { content: ''; position: absolute; bottom: calc(var(--u) * -7); left: var(--tail, 50%); width: calc(var(--u) * 10); height: calc(var(--u) * 10); transform: translateX(-50%) rotate(45deg); background: #fff6dd; border-right: calc(var(--u) * 2) solid #40533c; border-bottom: calc(var(--u) * 2) solid #40533c; }
 @media (prefers-reduced-motion: reduce) { .roundtable-bubble { animation: none; } }
