@@ -1,4 +1,5 @@
 // In-process admin monitor: composes injected round stats, windows, presence and sources.
+import { createTokenCounter } from './monitor-tokens.mjs';
 const KINDS = {
   session_started: 'start', briefing_viewed: 'briefing', location_visited: 'visit',
   interview_question: 'question', interview_answer: 'answer',
@@ -61,14 +62,14 @@ export function toRow(e, ctx = {}, team = null) {
 export function createMonitor(opts) {
   const {
     cases = [], roundStats, windows, presence, sample = () => ({}), extras = () => ({}),
-    readSession = () => null, now = Date.now, mode = 'live', ringSize = 1000,
+    readSession = () => null, now = Date.now, mode = 'live', ringSize = 1000, tokens = createTokenCounter({ now }),
   } = opts;
   const ring = [];
   const subscribers = new Set();
   const questions = new Map(); // eventId -> at, for answer latency
   const system = [];
   const teams = new Map(); // sessionId -> team name
-  let round = { label: null, startedAt: 0 };
+  let round = { label: null, startedAt: 0, endedAt: null };
   let last = {};
   let failoverAt = null;
   const ctx = { cases, mode, questions };
@@ -121,6 +122,7 @@ export function createMonitor(opts) {
     try {
       if (e?.type === 'failover') failoverAt = now();
       else if (e?.type === 'attempt') {
+        try { tokens.add(e); } catch { /* ignore */ }
         const sec = Math.floor(now() / 1000);
         let b = attempts[attempts.length - 1];
         if (!b || b[0] !== sec) {
@@ -145,7 +147,7 @@ export function createMonitor(opts) {
     } catch { /* a bad sample never stops the timer */ }
   }
   function load(events, r) {
-    round = { label: r?.label ?? null, startedAt: isNum(r?.startedAt) ? r.startedAt : 0 };
+    round = { label: r?.label ?? null, startedAt: isNum(r?.startedAt) ? r.startedAt : 0, endedAt: isNum(r?.endedAt) ? r.endedAt : null };
     roundStats.reset();
     for (const e of events ?? []) {
       try {
@@ -166,6 +168,8 @@ export function createMonitor(opts) {
     const p = presence.counts();
     const rs = roundStats.players();
     const n = (v) => (isNum(v) ? v : 0);
+    let tk = null;
+    try { tk = tokens.stats(); } catch { /* ignore */ }
     return {
       at: now(), mode, round: { ...round },
       players: { online: p.online, onlineInGame: p.onlineInGame, onlineBoard: p.onlineBoard, playing: n(x.sessions?.games), round: rs.round, finished: rs.finished },
@@ -174,7 +178,7 @@ export function createMonitor(opts) {
         questionsPerMin: w.questionsPerMin, answerP95Ms: w.answerP95Ms, llmErrorRate: attemptRate(),
         queue: n(r?.queued), inFlight: n(r?.inFlight), cap: n(r?.maxInFlight), active: r?.active ?? null, pinned: r?.pinned === true,
         loopP99Ms: n(last.loopP99Ms), rssBytes: n(last.rssBytes), diskFreeBytes: isNum(last.diskFreeBytes) ? last.diskFreeBytes : null,
-        writeFailures5m: n(last.writeFailures5m), failoverAt, credentialsRejected5m: n(last.credentialsRejected5m),
+        tokens: tk, tokensPerMin: n(tk?.perMin), writeFailures5m: n(last.writeFailures5m), failoverAt, credentialsRejected5m: n(last.credentialsRejected5m),
       },
       history: windows.history(), funnel: roundStats.funnel(), tallies: roundStats.tallies(), router: r,
       sessions: x.sessions ?? null, leaderboard: x.leaderboard ?? null, system: (Array.isArray(x.system) ? x.system : system).slice(-SYSTEM_CAP),
@@ -191,7 +195,12 @@ export function createMonitor(opts) {
     subscribe(fn) { subscribers.add(fn); return () => subscribers.delete(fn); },
     startRound({ label } = {}) {
       roundStats.reset();
-      round = { label: String(label ?? '').trim() || null, startedAt: now() };
+      try { tokens.startRound(); } catch { /* ignore */ }
+      round = { label: String(label ?? '').trim() || null, startedAt: now(), endedAt: null };
+      return { label: round.label, startedAt: round.startedAt };
+    },
+    endRound({ at } = {}) {
+      round = { ...round, endedAt: isNum(at) ? at : now() };
       return { ...round };
     },
     sessionCoins(id) {

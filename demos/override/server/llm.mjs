@@ -264,7 +264,8 @@ export class LlmRouter {
           attempt: n, endpoint: ep.name, providerStatus: result.status, finishReason: result.finishReason,
           completionTokens: Number.isInteger(result.usage?.completion_tokens) ? result.usage.completion_tokens : null, completionTokenLimit: budget, durationMs: result.durationMs,
         });
-        this.onEvent({ type: 'attempt', endpoint: ep.name, ok: !result.code, reason: result.code, durationMs: result.durationMs, semantic, queueMs });
+        this.onEvent({ type: 'attempt', endpoint: ep.name, ok: !result.code, reason: result.code, durationMs: result.durationMs, semantic, queueMs,
+          promptTokens: Number.isInteger(result.usage?.prompt_tokens) ? result.usage.prompt_tokens : null, completionTokens: Number.isInteger(result.usage?.completion_tokens) ? result.usage.completion_tokens : null });
         if (!result.code) {
           ep.lastSuccessAt = this.iso();
           held = null; this.release(idx);

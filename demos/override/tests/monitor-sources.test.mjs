@@ -46,11 +46,20 @@ test('write failures and rejected credentials age out after five minutes', t => 
 
 test('loadRound reads the last round_started', t => {
   const d = dir(t);
-  assert.deepEqual(sources.loadRound(resolve(d, 'none.jsonl')), { label: null, startedAt: 0 });
+  assert.deepEqual(sources.loadRound(resolve(d, 'none.jsonl')), { label: null, startedAt: 0, endedAt: null });
   const f = resolve(d, 'system.jsonl');
   const rec = (label, startedAt) => JSON.stringify({ type: 'round_started', label, startedAt });
   writeFileSync(f, `${rec('A', 1)}\n{"type":"other"}\n${rec('B', 1793030000000)}\n{"type":"other"}\n`);
-  assert.deepEqual(sources.loadRound(f), { label: 'B', startedAt: 1793030000000 });
+  assert.deepEqual(sources.loadRound(f), { label: 'B', startedAt: 1793030000000, endedAt: null });
+});
+
+test('loadRound reads a round_ended only after the newest start', t => {
+  const f = resolve(dir(t), 'system.jsonl');
+  const j = o => JSON.stringify(o);
+  writeFileSync(f, [j({ type: 'round_started', startedAt: 1000, label: 'A' }), j({ type: 'round_ended', endedAt: 2000 })].join('\n') + '\n');
+  assert.deepEqual(sources.loadRound(f), { label: 'A', startedAt: 1000, endedAt: 2000 });
+  writeFileSync(f, [j({ type: 'round_ended', endedAt: 500 }), j({ type: 'round_started', startedAt: 1000, label: 'B' })].join('\n') + '\n');
+  assert.deepEqual(sources.loadRound(f), { label: 'B', startedAt: 1000, endedAt: null });
 });
 
 const uuid = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;

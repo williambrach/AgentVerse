@@ -185,23 +185,27 @@ for (const [name, url, ready] of [['centre', '/admin', '#status'], ['editor', `/
 test('centre_areas_order', async ({ page }) => {
   await page.goto('/admin');
   await expect(page.locator('.area-title').first()).toBeVisible();
-  expect(await page.locator('.area-title').allTextContents()).toEqual(['Live now', 'Players and log', 'Results', 'LLM ops']);
+  // Read only the title's own text nodes so a visible badge cannot break the order.
+  const titles = await page.locator('.area-title').evaluateAll((els) =>
+    els.map((el) => Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim()));
+  expect(titles).toEqual(['Live now', 'Players and log', 'Results', 'LLM ops']);
 });
 
 test('centre_collapse_persists', async ({ page }) => {
   await page.goto('/admin');
-  const health = page.locator('details.panel[data-panel="health"]');
-  await expect(health).toHaveAttribute('open', '');
-  await health.locator('summary').click();
-  await expect(health).not.toHaveAttribute('open', '');
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('override.admin.collapsed'))).toContain('health');
+  const panel = () => page.locator('details.panel[data-panel="records"]');
+  const stored = () => page.evaluate(() => localStorage.getItem('override.admin.collapsed'));
+  await expect(panel()).not.toHaveAttribute('open', '');
+  await panel().locator('summary').click();
+  await expect(panel()).toHaveAttribute('open', '');
+  await expect.poll(stored).not.toContain('records');
   await page.reload();
-  await expect(page.locator('details.panel[data-panel="health"]')).not.toHaveAttribute('open', '');
-  await page.locator('details.panel[data-panel="health"] summary').click();
-  await expect(page.locator('details.panel[data-panel="health"]')).toHaveAttribute('open', '');
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('override.admin.collapsed'))).not.toContain('health');
+  await expect(panel()).toHaveAttribute('open', '');
+  await panel().locator('summary').click();
+  await expect(panel()).not.toHaveAttribute('open', '');
+  await expect.poll(stored).toContain('records');
   await page.reload();
-  await expect(page.locator('details.panel[data-panel="health"]')).toHaveAttribute('open', '');
+  await expect(panel()).not.toHaveAttribute('open', '');
 });
 
 // Live mode over the mock LLM (project admin-live).

@@ -160,7 +160,9 @@ export function createRoundControl(root, opts) {
       if (r && r.label) {
         const d = new Date(r.startedAt);
         const mins = Math.max(0, Math.floor((snap.at - r.startedAt) / 60000));
-        s = `${r.label} · since ${pad(d.getHours())}:${pad(d.getMinutes())} (${mins} min)`;
+        if (r.endedAt != null) s = `${r.label} · ended, final standings`;
+        else if (opts.short) s = `${r.label} · ${mins} min`;
+        else s = `${r.label} · since ${pad(d.getHours())}:${pad(d.getMinutes())} (${mins} min)`;
       }
       if (label.textContent !== s) label.textContent = s;
     },

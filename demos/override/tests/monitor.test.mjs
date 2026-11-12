@@ -80,7 +80,7 @@ test('snapshot keys; tick samples once, snapshot never', () => {
   assert.equal(calls.sample, 0);
   assert.deepEqual(Object.keys(s), ['at', 'mode', 'round', 'players', 'traffic', 'history', 'funnel', 'tallies', 'router', 'sessions', 'leaderboard', 'system']);
   assert.deepEqual(Object.keys(s.players), ['online', 'onlineInGame', 'onlineBoard', 'playing', 'round', 'finished']);
-  assert.deepEqual(Object.keys(s.traffic), ['reqPerSec', 'share4xx', 'share5xx', 'share429', 'questionsPerMin', 'answerP95Ms', 'llmErrorRate', 'queue', 'inFlight', 'cap', 'active', 'pinned', 'loopP99Ms', 'rssBytes', 'diskFreeBytes', 'writeFailures5m', 'failoverAt', 'credentialsRejected5m']);
+  assert.deepEqual(Object.keys(s.traffic), ['reqPerSec', 'share4xx', 'share5xx', 'share429', 'questionsPerMin', 'answerP95Ms', 'llmErrorRate', 'queue', 'inFlight', 'cap', 'active', 'pinned', 'loopP99Ms', 'rssBytes', 'diskFreeBytes', 'tokens', 'tokensPerMin', 'writeFailures5m', 'failoverAt', 'credentialsRejected5m']);
   assert.equal(s.players.playing, 7);
   m.tick();
   assert.equal(calls.sample, 1);
@@ -164,4 +164,30 @@ test('sessionCoins reads budget and last spend total; old logs give 0 / null', (
   assert.deepEqual(m.sessionCoins('s1'), { spent: 5, budget: 9 });
   assert.deepEqual(m.sessionCoins('s2'), { spent: 0, budget: null });
   assert.equal(m.sessionCoins('none'), null);
+});
+
+test('test_snapshot_tokens', () => {
+  const { m } = fakes();
+  m.observeLlm({ type: 'attempt', ok: true, promptTokens: 100, completionTokens: 20 });
+  m.observeLlm({ type: 'attempt', ok: true, promptTokens: 100, completionTokens: 20 });
+  let t = m.snapshot().traffic;
+  assert.equal(t.tokens.total.total, 240);
+  assert.equal(t.tokens.round.total, 240);
+  assert.equal(t.tokensPerMin, 240);
+  m.startRound({ label: 'R' });
+  t = m.snapshot().traffic;
+  assert.equal(t.tokens.round.total, 0);
+  assert.equal(t.tokens.total.total, 240);
+});
+
+test('endRound sets round.endedAt, startRound clears it, load keeps it', () => {
+  const { m } = fakes();
+  m.startRound({ label: 'R' });
+  assert.equal(m.snapshot().round.endedAt, null);
+  m.endRound({ at: 55_000 });
+  assert.deepEqual(m.snapshot().round, { label: 'R', startedAt: 50_000, endedAt: 55_000 });
+  m.startRound({ label: 'S' });
+  assert.equal(m.snapshot().round.endedAt, null);
+  m.load([], { label: 'L', startedAt: 1, endedAt: 9 });
+  assert.equal(m.snapshot().round.endedAt, 9);
 });

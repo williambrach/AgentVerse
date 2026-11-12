@@ -7,6 +7,7 @@
 <script src="/admin/theme.js"></script>
 <link rel="stylesheet" href="/admin/app.css">
 <link rel="stylesheet" href="/admin/tiles.css">
+<link rel="stylesheet" href="/admin/charts.css">
 <link rel="stylesheet" href="/admin/log.css">
 <link rel="stylesheet" href="/admin/round.css">
 <link rel="stylesheet" href="/admin/controls.css">
@@ -22,7 +23,7 @@
     <a id="board-link" target="_blank" rel="noreferrer" hidden>big-screen ↗</a>
     <a id="maker-link" href="/admin/maker.html">Content editor</a>
   </nav>
-  <div id="round"></div>
+  <div id="bar"></div>
   <button id="theme-toggle" type="button" class="ghost" aria-pressed="false">Light mode</button>
   <form class="auth" id="auth" hidden>
     <input id="password" type="password" placeholder="password" autocomplete="current-password">
@@ -33,10 +34,12 @@
 </header>
 <main class="centre">
 <section id="watch" hidden></section>
-<section class="area" id="area-live"><h2 class="area-title">Live now</h2>
+<section class="area" id="area-live"><h2 class="area-title">Live now <span id="health-badge" class="badge" hidden></span></h2>
   <section id="players"></section>
-  <section id="history"></section>
-  <details class="panel" data-panel="health" open><summary><span class="panel-title">Server health</span><span id="health-badge" class="badge" hidden></span></summary><section id="tiles"></section></details>
+  <section id="tiles"></section>
+  <p id="data-path" class="muted data-path" hidden></p>
+  <div class="charts-head"><span class="card-title">Last</span><span id="range" class="range"></span></div>
+  <section id="charts"></section>
 </section>
 <section class="area" id="area-players"><h2 class="area-title">Players and log</h2>
   <div class="cols"><section id="log" class="card"></section><div class="side"><section id="board" class="card"></section></div></div>

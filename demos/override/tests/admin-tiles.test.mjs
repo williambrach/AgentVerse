@@ -74,7 +74,7 @@ test('renderTiles returns worst level and sets data-level in place', () => {
   assert.equal(tiles.renderTiles(root, snap()), 'ok');
   const n = doc.created;
   const tilesEls = find(root, (e) => e.dataset.level !== undefined);
-  assert.ok(tilesEls.length >= 8);
+  assert.equal(tilesEls.length, 5);
   assert.equal(tiles.renderTiles(root, snap({ traffic: { queue: 11 } })), 'warn');
   assert.equal(tiles.renderTiles(root, snap({ traffic: { queue: 11, writeFailures5m: 2 } })), 'bad');
   assert.equal(doc.created, n, 'no nodes rebuilt');
@@ -92,27 +92,6 @@ test('renderPlayers shows the numbers', () => {
   assert.ok(root.textContent.includes('7'));
 });
 
-test('sparkPoints numeric edges', () => {
-  assert.equal(tiles.sparkPoints([], 100, 20), '');
-  assert.equal(tiles.sparkPoints([0, 0], 100, 20), '0,20 100,20');
-  assert.equal(tiles.sparkPoints([5], 100, 20), '0,0');
-  assert.equal(tiles.sparkPoints([0, 10, null], 100, 20), '0,20 50,0 100,20');
-});
-
-test('renderHistory draws five sparklines with SVG, last value as text', () => {
-  const doc = makeDoc(); const root = doc.root();
-  const history = [{ at: 1, online: 1, questions: 2, failures: 0, p95Ms: 1000, reqs: 5 }, { at: 2, online: 4, questions: 6, failures: 1, p95Ms: null, reqs: 9 }];
-  tiles.renderHistory(root, snap({ history }));
-  assert.equal(find(root, (e) => e.tagName === 'svg').length, 5);
-  assert.equal(find(root, (e) => e.tagName === 'polyline').length, 5);
-  const n = doc.created;
-  tiles.renderHistory(root, snap({ history: history.concat([{ at: 3, online: 7, questions: 1, failures: 0, p95Ms: 2500, reqs: 3 }]) }));
-  assert.equal(doc.created, n);
-  assert.ok(root.textContent.includes('2.5 s'));
-  tiles.renderHistory(root, snap({ history: [] }));
-  assert.ok(root.textContent.includes('–'));
-});
-
 test('module never uses innerHTML', async () => {
   const { readFile } = await import('node:fs/promises');
   const src = await readFile(new URL('../server/admin/tiles.js', import.meta.url), 'utf8');
@@ -120,13 +99,41 @@ test('module never uses innerHTML', async () => {
 });
 
 test('labels, failover text and units', () => {
-  const doc = makeDoc(); const root = doc.root(); const h = doc.root(); const p = doc.root();
+  const doc = makeDoc(); const root = doc.root(); const p = doc.root();
   tiles.renderPlayers(p, snap());
   assert.ok(p.textContent.includes('Games finished'));
-  tiles.renderHistory(h, snap());
-  for (const l of ['Online (peak)', 'Questions / min', 'Failures / min', 'Answer p95', 'Requests / min']) assert.ok(h.textContent.includes(l), l);
   tiles.renderTiles(root, snap());
   assert.ok(root.textContent.includes('none'));
   tiles.renderTiles(root, snap({ at: 1_000_000, traffic: { failoverAt: 1_000_000 - 130_000 } }), { timeFormat: () => '09:15' });
   assert.ok(root.textContent.includes('09:15 (2 min ago)'));
+});
+
+test('test_no_duplicate_metrics', () => {
+  const doc = makeDoc(); const root = doc.root();
+  tiles.renderTiles(root, snap());
+  const labels = find(root, (e) => e.className === 'tile-l').map((e) => e.textContent);
+  assert.deepEqual(labels, ['Tokens used', 'Disk free', 'Log-write failures', 'Credentials rejected', 'Last failover']);
+});
+
+test('test_tokens_tile', () => {
+  const doc = makeDoc(); const root = doc.root();
+  const tokens = { total: { total: 1234567, prompt: 1000000, completion: 234567 }, round: { total: 5600 } };
+  tiles.renderTiles(root, snap({ traffic: { tokens } }));
+  const tile = find(root, (e) => e.className === 'tile')[0];
+  assert.equal(find(tile, (e) => e.className === 'tile-v')[0].textContent, '5.6k this round');
+  assert.equal(find(tile, (e) => e.className === 'tile-s')[0].textContent, '1.23M since start · 1M in / 235k out');
+  tiles.renderTiles(root, snap());
+  assert.equal(find(tile, (e) => e.className === 'tile-v')[0].textContent, '–');
+  assert.equal(find(tile, (e) => e.className === 'tile-s')[0].textContent, '');
+});
+
+test('test_worst_level', () => {
+  assert.equal(tiles.worstLevel({ at: 0, traffic: { loopP99Ms: 600 } }), 'bad');
+  assert.equal(tiles.worstLevel({ at: 0, traffic: {} }), 'ok');
+  assert.equal(tiles.worstLevel({ at: 0, traffic: { queue: 11 } }), 'warn');
+});
+
+test('test_render_history_removed', () => {
+  assert.equal(tiles.renderHistory, undefined);
+  assert.equal(tiles.sparkPoints, undefined);
 });

@@ -1,6 +1,5 @@
-// Player numbers, health tiles and sparklines. Pure DOM, text via textContent only.
+// Player numbers and the stat strip. Pure DOM, text via textContent only.
 import { isNum, pad2 } from './dom.js';
-const SVGNS = 'http://www.w3.org/2000/svg';
 
 // key: [direction, amber, red]. 'gt' = worse when above, 'lt' = worse when below.
 export const THRESHOLDS = {
@@ -97,20 +96,44 @@ export function renderPlayers(root, snap) {
   }
 }
 
+// Token counts: 5600 -> 5.6k, 235567 -> 235k, 1234567 -> 1.23M.
+export function fmtTokens(n) {
+  if (!num(n)) return '–';
+  const t = (x, d) => String(Math.round(x * 10 ** d) / 10 ** d);
+  if (n >= 1e6) return `${t(n / 1e6, 2)}M`;
+  if (n >= 1e5) return `${Math.round(n / 1e3)}k`;
+  if (n >= 1e3) return `${t(n / 1e3, 1)}k`;
+  return String(Math.round(n));
+}
+
+// The stat strip shows only what no chart shows. Everything else is a chart panel.
 const TILES = [
-  ['llmErrorRate', 'LLM errors, 5 min'],
-  ['queue', 'Queue'],
-  ['answerP95Ms', 'Answer p95'],
-  ['loopP99Ms', 'Loop delay p99'],
+  ['tokens', 'Tokens used'],
   ['diskFreeBytes', 'Disk free'],
   ['writeFailures5m', 'Log-write failures'],
-  ['failoverAt', 'Last failover'],
   ['credentialsRejected5m', 'Credentials rejected'],
-  ['reqPerSec', 'Requests / s'],
-  ['questionsPerMin', 'Questions / min'],
-  ['inFlight', 'In flight'],
-  ['rssBytes', 'Memory'],
+  ['failoverAt', 'Last failover'],
 ];
+
+function tokenTexts(tok) {
+  const t = tok && tok.total;
+  const r = tok && tok.round;
+  if (!t || !num(t.total)) return { v: '–', sub: '' };
+  const v = r && num(r.total) ? `${fmtTokens(r.total)} this round` : '–';
+  return { v, sub: `${fmtTokens(t.total)} since start · ${fmtTokens(t.prompt)} in / ${fmtTokens(t.completion)} out` };
+}
+
+// Worst level over every thresholded metric, charted or not.
+export function worstLevel(snap) {
+  const tr = (snap && snap.traffic) || {};
+  const now = snap && typeof snap.at === 'number' ? snap.at : 0;
+  let worst = 'ok';
+  for (const k of Object.keys(THRESHOLDS)) {
+    const lvl = levelOf(k, tr[k], now);
+    if (ORDER[lvl] > ORDER[worst]) worst = lvl;
+  }
+  return worst;
+}
 
 export function renderTiles(root, snap, opts = {}) {
   const timeFormat = opts.timeFormat || ((t) => format('failoverAt', t));
@@ -122,70 +145,21 @@ export function renderTiles(root, snap, opts = {}) {
       const box = el(doc, 'div', 'tile', root);
       box.dataset.level = 'ok';
       el(doc, 'div', 'tile-l', box).textContent = label;
-      st[k] = { box, v: el(doc, 'div', 'tile-v', box) };
+      st[k] = { box, v: el(doc, 'div', 'tile-v', box), sub: el(doc, 'div', 'tile-s', box) };
     }
     states.set(root, st);
   }
   const tr = snap.traffic || {};
   const now = typeof snap.at === 'number' ? snap.at : 0;
-  let worst = 'ok';
   for (const [k] of TILES) {
     const lvl = levelOf(k, tr[k], now);
     if (st[k].box.dataset.level !== lvl) st[k].box.dataset.level = lvl;
     let text = format(k, tr[k]);
+    let sub = '';
     if (k === 'failoverAt') text = num(tr[k]) ? `${timeFormat(tr[k])} (${Math.max(0, Math.floor((now - tr[k]) / 60000))} min ago)` : 'none';
+    if (k === 'tokens') ({ v: text, sub } = tokenTexts(tr.tokens));
     setText(st[k].v, text);
-    if (ORDER[lvl] > ORDER[worst]) worst = lvl;
+    setText(st[k].sub, sub);
   }
-  return worst;
-}
-
-const SPARKS = [
-  ['online', 'Online (peak)'],
-  ['questions', 'Questions / min'],
-  ['failures', 'Failures / min'],
-  ['p95Ms', 'Answer p95'],
-  ['reqs', 'Requests / min'],
-];
-const SW = 120;
-const SH = 28;
-
-export function sparkPoints(values, w, h) {
-  const vs = values.map((v) => (num(v) ? v : 0));
-  if (!vs.length) return '';
-  const max = Math.max(...vs);
-  return vs.map((v, i) => {
-    const x = vs.length === 1 ? 0 : (i / (vs.length - 1)) * w;
-    const y = max > 0 ? h - (v / max) * h : h;
-    return `${Math.round(x * 10) / 10},${Math.round(y * 10) / 10}`;
-  }).join(' ');
-}
-
-export function renderHistory(root, snap) {
-  const doc = root.ownerDocument;
-  let st = states.get(root);
-  if (!st) {
-    st = {};
-    for (const [k, label] of SPARKS) {
-      const box = el(doc, 'div', 'spark', root);
-      el(doc, 'div', 'spark-l', box).textContent = label;
-      const svg = doc.createElementNS(SVGNS, 'svg');
-      svg.setAttribute('viewBox', `0 0 ${SW} ${SH}`);
-      svg.setAttribute('class', 'spark-svg');
-      svg.setAttribute('preserveAspectRatio', 'none');
-      const line = doc.createElementNS(SVGNS, 'polyline');
-      line.setAttribute('fill', 'none');
-      line.setAttribute('class', 'spark-line');
-      svg.appendChild(line);
-      box.appendChild(svg);
-      st[k] = { line, pts: null, v: el(doc, 'div', 'spark-v', box) };
-    }
-    states.set(root, st);
-  }
-  const h = Array.isArray(snap.history) ? snap.history : [];
-  for (const [k] of SPARKS) {
-    const pts = sparkPoints(h.map((r) => r[k]), SW, SH);
-    if (st[k].pts !== pts) { st[k].pts = pts; st[k].line.setAttribute('points', pts); }
-    setText(st[k].v, h.length ? format(k === 'p95Ms' ? 'answerP95Ms' : k === 'reqs' ? 'reqs' : k, h[h.length - 1][k]) : '–');
-  }
+  return worstLevel(snap);
 }

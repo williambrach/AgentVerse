@@ -96,3 +96,26 @@ test('replay_ignores_duplicate_names_and_normalises', () => {
   assert.equal(teams.find('t2'), null);
   assert.equal(teams.exists('Other Name'), false);
 });
+
+test('test_teams_reset_survives_restart', () => {
+  const f = tmp();
+  const a = createTeams({ file: f });
+  const A = a.join('Alpha').team;
+  assert.equal(a.reset(), 1);
+  a.attach(A.id, 'sid');
+  assert.equal(a.find(A.id), null);
+  const B = a.join('Bravo').team;
+  const b = createTeams({ file: f });
+  assert.equal(b.exists('Alpha'), false);
+  assert.equal(b.find(A.id), null);
+  assert.equal(b.exists('Bravo'), true);
+  assert.equal(b.find(B.id).name, 'Bravo');
+});
+
+test('test_reset_frees_name', () => {
+  const t = createTeams({ file: tmp() });
+  t.join('Owls'); t.join('Lynx');
+  assert.equal(t.reset(), 2);
+  assert.equal(t.exists('Owls'), false);
+  assert.equal(t.join('Owls').created, true);
+});

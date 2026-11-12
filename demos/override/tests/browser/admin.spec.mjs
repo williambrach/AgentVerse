@@ -105,11 +105,11 @@ test('drilldown', async ({ page, request }) => {
 
 test('round', async ({ page }) => {
   await connect(page);
-  await page.locator('#round button', { hasText: 'Start round' }).click();
-  await page.locator('#round input').first().fill('Session B');
-  await page.locator('#round button', { hasText: /^Start$/ }).click();
-  await expect(page.locator('#round')).toContainText('Session B', { timeout: 5000 });
-  await expect(page.locator('#round')).toContainText(/0/);
+  await page.locator('#bar button', { hasText: 'Start round' }).click();
+  await page.locator('#bar input').first().fill('Session B');
+  await page.locator('#bar button', { hasText: /^Start$/ }).click();
+  await expect(page.locator('#bar')).toContainText('Session B', { timeout: 5000 });
+  await expect(page.locator('#bar')).toContainText(/0/);
 });
 
 test('stream_401', async ({ request }) => {

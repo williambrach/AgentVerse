@@ -179,3 +179,59 @@ test('start_race_pointer_follows_last, stale_session_cookie_ignored, no_attach_o
   for (const path of ['/api/leaderboard', '/api/cases']) assert.equal(JSON.stringify((await a.call(path)).body).includes(id), false);
   assert.equal(JSON.stringify((await b.team('owls')).body).includes(id), false);
 });
+
+const post = (s, path, body) => fetch(s.adminUrl + path, { method: 'POST', headers: { Authorization: 'Bearer admin-token', ...json }, body: JSON.stringify(body) });
+
+test('test_end_round_freezes_public_board', async t => {
+  const s = await boot(t);
+  const a = browser(s.url);
+  const b = browser(s.url);
+  await a.team('Owls');
+  await b.team('Lynx');
+  assert.equal((await post(s, '/admin/round', { label: 'R1' })).status, 200);
+  await new Promise(r => setTimeout(r, 5));
+  await solve(a);
+  await new Promise(r => setTimeout(r, 5));
+  const ended = await post(s, '/admin/round/end', {});
+  assert.equal(ended.status, 200);
+  const { endedAt } = await ended.json();
+  await new Promise(r => setTimeout(r, 5));
+  await solve(b);
+  const board = (await a.call('/api/leaderboard')).body;
+  assert.equal(board.endedAt, endedAt);
+  assert.deepEqual(board.teams.filter(r => r.played > 0).map(r => r.name), ['Owls']);
+});
+
+test('test_end_round_restored_after_restart', async t => {
+  const first = await boot(t);
+  assert.equal((await post(first, '/admin/round', { label: 'R1' })).status, 200);
+  const { endedAt } = await (await post(first, '/admin/round/end', {})).json();
+  await first.close();
+  const second = await boot(t, {}, first.dir);
+  const board = (await browser(second.url).call('/api/leaderboard')).body;
+  assert.equal(board.endedAt, endedAt);
+  assert.equal(board.round, 'R1');
+});
+
+test('test_reset_event_clears_teams', async t => {
+  const s = await boot(t);
+  const a = browser(s.url);
+  await a.team('Owls');
+  const r = await post(s, '/admin/event/reset', { confirm: 'RESET' });
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.deepEqual([body.ok, body.teamsCleared, body.round.label], [true, 1, 'Event reset']);
+  assert.deepEqual((await a.call('/api/team')).body, { team: null });
+  const again = await a.team('Owls');
+  assert.equal(again.status, 200);
+  assert.equal(again.body.created, true);
+});
+
+test('test_reset_requires_confirm', async t => {
+  const s = await boot(t);
+  const a = browser(s.url);
+  await a.team('Owls');
+  const r = await post(s, '/admin/event/reset', {});
+  assert.equal(r.status, 400);
+  assert.deepEqual((await a.call('/api/team')).body, { team: { name: 'Owls' } });
+});

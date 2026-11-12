@@ -31,7 +31,7 @@ test('example standings', () => {
     start('c', C, 'banana-mystery', 0),
   ]);
   assert.deepEqual(lb.standings({ includeHidden: false, you: 'A' }), {
-    rankBy: 'time', startedAt: 0, round: null, cases: caseList, teams: [
+    rankBy: 'time', startedAt: 0, endedAt: null, round: null, cases: caseList, teams: [
       { rank: 1, teamId: 'A', name: 'Banana Squad', points: 4, played: 1, timeMs: 120000, coins: 8, hidden: false, you: true, cells: [{ caseId: 'banana-mystery', state: 'perfect', points: 4 }, none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
       { rank: 2, teamId: 'B', name: 'Owls', points: 0, played: 1, timeMs: 60000, coins: 4, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'zero', points: 0 }, none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
       { rank: null, teamId: 'C', name: 'Lynx', points: 0, played: 0, timeMs: 0, coins: 0, hidden: false, you: false, cells: [{ caseId: 'banana-mystery', state: 'playing', points: 0 }, none('friends-roundtable'), none('factory-escape'), none('department-murder'), none('renaissance-traveler')] },
@@ -105,7 +105,7 @@ test('reset_round', () => {
   feed(lb, [start('a', A, 'banana-mystery', 50), verdict('a', 'momo', 120), start('b', B, 'banana-mystery', 110)]);
   assert.deepEqual(names(lb), ['Owls']);
   lb.reset(500000);
-  assert.deepEqual(lb.standings({}), { rankBy: 'time', startedAt: 500000, round: null, cases: caseList, teams: [] });
+  assert.deepEqual(lb.standings({}), { rankBy: 'time', startedAt: 500000, endedAt: null, round: null, cases: caseList, teams: [] });
   feed(lb, [start('c', C, 'banana-mystery', 400)]);
   assert.deepEqual(names(lb), []);
 });
@@ -256,4 +256,32 @@ test('verdict_visible_immediately', () => {
   feed(lb, [roleVerdict('a', 'banana-mystery', 3, 10)]);
   const [t] = lb.standings({}).teams;
   assert.equal(t.points, 3); assert.equal(t.played, 1);
+});
+
+test('test_verdict_after_end_ignored', () => {
+  const lb = board();
+  lb.reset(1000, 'R1');
+  lb.end(2000);
+  feed(lb, [start('s1', A, cases[0].id, 1.5), verdict('s1', 'x', 2.5)]);
+  const st = lb.standings();
+  assert.equal(st.endedAt, 2000);
+  assert.equal(st.teams[0].played, 0);
+});
+
+test('end before observe applies and a verdict at the end counts', () => {
+  const lb = board();
+  lb.reset(1000);
+  lb.end(2000);
+  feed(lb, [start('s1', A, cases[0].id, 1.2), roleVerdict('s1', cases[0].id, 1, 2)]);
+  assert.equal(lb.standings().teams[0].played, 1);
+});
+
+test('test_end_then_reset_reopens', () => {
+  const lb = board();
+  lb.reset(1000);
+  lb.end(2000);
+  lb.reset(3000, 'R2');
+  assert.equal(lb.standings().endedAt, null);
+  feed(lb, [start('s1', A, cases[0].id, 3.2), roleVerdict('s1', cases[0].id, 1, 3.5)]);
+  assert.equal(lb.standings().teams[0].played, 1);
 });

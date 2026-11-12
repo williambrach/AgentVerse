@@ -7,7 +7,6 @@ main.centre { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; m
 .status[data-state="bad"], .status[data-state="bad-token"] { color: var(--bad); }
 .status[data-state="stale"], .status[data-state="reconnecting"] { color: var(--gold); }
 #players { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-#history { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
 .cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
 .cols > #log { min-width: 0; }
 .side { display: grid; gap: 20px; min-width: 0; }
@@ -26,5 +25,31 @@ main.centre { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; m
 .badge[data-tone="warn"] { color: var(--warn); border: 1px solid var(--warn); }
 .badge[data-tone="bad"] { color: var(--bad); border: 1px solid var(--bad); }
 @media (max-width: 860px) {
-  #players, #history, .cols, .results { grid-template-columns: minmax(0, 1fr); }
+  #players, .cols, .results { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Grafana-style board */
+#players, #tiles, #charts { gap: 8px; }
+#players { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.big, .tile { border-radius: var(--panel-radius); box-shadow: none; padding: 10px 12px; background: var(--surface); }
+.big-l, .tile-l { text-transform: uppercase; letter-spacing: .06em; font-size: var(--fs-xs); order: -1; }
+.charts-head { display: flex; align-items: center; gap: 10px; }
+.range { display: flex; gap: 6px; }
+#charts { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.chart-cell { grid-column: span 4; min-width: 0; }
+#charts .chart { border-radius: var(--panel-radius); padding: 8px 10px; gap: 4px; height: 100%; box-sizing: border-box; }
+#charts .chart-title { text-transform: uppercase; letter-spacing: .06em; font-size: var(--fs-xs); font-weight: 600; }
+#charts .chart-value { font-size: var(--fs-lg); color: var(--fg); }
+#charts .chart[data-level="warn"] .chart-value { color: var(--warn); }
+#charts .chart[data-level="bad"] .chart-value { color: var(--bad); }
+#charts .chart-body { height: 96px; }
+#charts .chart-ylabel, #charts .chart-xaxis { font-size: 10px; }
+@media (max-width: 1100px) {
+  .chart-cell { grid-column: span 6; }
+  #tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .chart-cell { grid-column: span 12; }
+  #tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

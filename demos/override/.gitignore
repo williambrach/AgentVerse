@@ -4,3 +4,11 @@ dist/
 data/
 playwright-report/
 test-results/
+
+# superlite: dependency, build and cache folders
+.superlite/
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+coverage/

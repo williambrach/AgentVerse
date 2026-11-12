@@ -61,6 +61,7 @@ test('health shape', async () => {
   const j = await r.json();
   assert.equal(j.ok, true);
   assert.equal(j.dataWritable, true);
+  assert.equal(typeof j.dataDir, 'string'); assert.ok(j.dataDir.length > 0);
   assert.equal(typeof j.diskFreeBytes, 'number');
   assert.deepEqual(j.router, SNAP);
   assert.deepEqual(j.sessions, STATS);
@@ -167,16 +168,19 @@ const UID = '0123abcd-0000-4000-8000-000000000001';
 function fakeMonitor() {
   const subs = new Set();
   const row = { id: 1, at: 1, sessionId: UID, player: '0123', kind: 'start' };
-  return {
+  const m = {
     subs,
-    snapshot: () => ({ at: 1, mode: 'live' }),
+    roundState: { label: null, startedAt: 0, endedAt: null },
+    snapshot: () => ({ at: 1, mode: 'live', round: { ...m.roundState } }),
+    endRound(o) { this.ended = o; this.roundState = { ...this.roundState, endedAt: o.at }; },
     recent: () => [row],
     catalog: () => [{ id: 'c', title: 'C', world: 'w', characters: [] }],
     subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
-    startRound(o) { this.round = o; return { label: o.label, startedAt: 777 }; },
+    startRound(o) { this.round = o; this.roundState = { label: o.label, startedAt: 777, endedAt: null }; return { label: o.label, startedAt: 777 }; },
     session: (id) => (id === UID ? [row] : null),
     push(r) { for (const f of [...subs]) f(r); },
   };
+  return m;
 }
 
 function openStream(a, { host } = {}) {
@@ -483,4 +487,47 @@ test('healthy tile values are plain light text, problems keep colour', () => {
   assert.match(css, /\[data-level="ok"\] \.tile-v \{ color: #E8EEF0;/);
   assert.match(css, /\[data-level="warn"\] \.tile-v \{ color: var\(--gold\)/);
   assert.match(css, /\[data-level="bad"\] \.tile-v \{ color: var\(--bad\)/);
+});
+
+test('round_end_and_reset_routes', async () => {
+  const monitor = fakeMonitor();
+  const resets = [];
+  const a = await boot({ monitor, resetEvent: (o) => { resets.push(o); return { teamsCleared: 3, round: { label: o.label, startedAt: 888 } }; } });
+  let r = await a.req('/admin/round/end', { method: 'POST', body: {} });
+  assert.deepEqual([r.status, await r.json()], [409, { error: 'No open round to end.' }]);
+  await a.req('/admin/round', { method: 'POST', body: { label: 'R1' } });
+  r = await a.req('/admin/round/end', { method: 'POST', body: {} });
+  const done = await r.json();
+  assert.equal(r.status, 200);
+  assert.deepEqual([done.label, done.startedAt, typeof done.endedAt], ['R1', 777, 'number']);
+  assert.equal(monitor.snapshot().round.endedAt, done.endedAt);
+  const ev = a.events.find((e) => e.type === 'round_ended');
+  assert.deepEqual([ev.endedAt, ev.label, typeof ev.timestamp], [done.endedAt, 'R1', 'number']);
+  assert.equal((await a.req('/admin/round/end', { method: 'POST', body: {} })).status, 409);
+  // reset needs the exact word
+  for (const body of [{}, { confirm: 'reset' }, { confirm: true }]) {
+    r = await a.req('/admin/event/reset', { method: 'POST', body });
+    assert.deepEqual([r.status, await r.json()], [400, { error: 'Type RESET to confirm.' }]);
+  }
+  assert.equal(resets.length, 0);
+  r = await a.req('/admin/event/reset', { method: 'POST', body: { confirm: 'RESET' } });
+  assert.deepEqual([r.status, await r.json()], [200, { ok: true, teamsCleared: 3, round: { label: 'Event reset', startedAt: 888 } }]);
+  assert.deepEqual(resets, [{ label: 'Event reset' }]);
+  assert.deepEqual(a.events.find((e) => e.action === 'event_reset') && { a: a.events.find((e) => e.action === 'event_reset').teamsCleared }, { a: 3 });
+  r = await a.req('/admin/event/reset', { method: 'POST', body: { confirm: 'RESET', label: 'x'.repeat(61) } });
+  assert.equal(r.status, 400);
+  assert.equal((await a.req('/admin/event/reset', { method: 'POST', token: null, body: { confirm: 'RESET' } })).status, 401);
+  a.close();
+});
+
+test('test_reset_cookie_cross_site', async () => {
+  const a = await boot({ monitor: fakeMonitor(), resetEvent: () => ({ teamsCleared: 0, round: { label: 'x', startedAt: 1 } }) });
+  const base = `http://127.0.0.1:${a.srv.address().port}`;
+  const login = await fetch(base + '/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: 't' }) });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  for (const path of ['/admin/event/reset', '/admin/round/end']) {
+    const bad = await fetch(base + path, { method: 'POST', headers: { cookie, 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' }, body: JSON.stringify({ confirm: 'RESET' }) });
+    assert.equal(bad.status, 403, path);
+  }
+  a.close();
 });

@@ -42,7 +42,7 @@ function loadPage(dir) {
   return files;
 }
 
-export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = new URL('./admin/', import.meta.url), router = null, content = null, secret = randomBytes(32).toString('hex'), investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {}, leaderboard = null, boardUrl = '', trustProxy = false }) {
+export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = new URL('./admin/', import.meta.url), router = null, content = null, secret = randomBytes(32).toString('hex'), investigations, registry, dataDir, probeMessages = [], allowedHosts = [], readSystem = () => [], onSystem = () => {}, resetEvent = null, leaderboard = null, boardUrl = '', trustProxy = false }) {
   if (typeof token !== 'string' || !token) throw new Error('An admin token is required.');
   // `token` is the admin password. A Bearer header or a signed cookie both open the panel.
   const key = adminKey(secret, token);
@@ -113,7 +113,7 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
   const health = () => {
     let dataWritable = false;
     try { accessSync(dataDir, constants.W_OK); dataWritable = true; } catch {}
-    return { ok: true, dataWritable, diskFreeBytes: diskFreeBytes(dataDir), router: router ? router.snapshot() : null, sessions: investigations.stats(), recentSystem: readSystem().slice(-20) };
+    return { ok: true, dataDir, dataWritable, diskFreeBytes: diskFreeBytes(dataDir), router: router ? router.snapshot() : null, sessions: investigations.stats(), recentSystem: readSystem().slice(-20) };
   };
 
   const nonNegInt = (v, what) => { if (!Number.isInteger(v) || v < 0) throw new RequestError(400, `${what} must be a non-negative integer.`); return v; };
@@ -221,6 +221,25 @@ export function createAdmin({ token, monitor = null, tickMs = 1000, pageDir = ne
       const { startedAt } = monitor.startRound({ label, reason });
       onSystem({ type: 'round_started', timestamp: Date.now(), label, reason, startedAt });
       return { label, startedAt };
+    },
+    'POST /admin/round/end': async () => {
+      needMonitor();
+      const r = monitor.snapshot()?.round;
+      if (!r?.label || r.endedAt != null) throw new RequestError(409, 'No open round to end.');
+      const endedAt = Date.now();
+      monitor.endRound({ at: endedAt });
+      onSystem({ type: 'round_ended', timestamp: endedAt, endedAt, label: r.label });
+      return { label: r.label, startedAt: r.startedAt, endedAt };
+    },
+    'POST /admin/event/reset': async (body) => {
+      needMonitor();
+      if (body.confirm !== 'RESET') throw new RequestError(400, 'Type RESET to confirm.');
+      if (typeof resetEvent !== 'function') throw new RequestError(409, 'Event reset is off.');
+      const label = body.label === undefined || body.label === null ? 'Event reset' : typeof body.label === 'string' ? body.label.trim() : '';
+      if (!label || label.length > 60) throw new RequestError(400, 'Label is required (1-60 characters).');
+      const { teamsCleared, round } = resetEvent({ label });
+      log('event_reset', { teamsCleared });
+      return { ok: true, teamsCleared, round };
     },
     'GET /admin/links': () => ({ board: boardUrl }),
     'GET /admin/leaderboard': () => { needBoard(); return leaderboard.standings(); },

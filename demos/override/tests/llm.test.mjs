@@ -493,3 +493,17 @@ test('trace_carries_tag: a tag lands on the trace record, no tag means no key', 
   assert.equal(traces[0].tag, 'maker_try');
   assert.equal('tag' in traces[1], false);
 });
+
+test('test_attempt_event_has_tokens: attempt events carry usage, failed attempts too', async () => {
+  const bad = { ok: true, status: 200, json: async () => ({ choices: [{ finish_reason: 'length', message: { content: null } }], usage: { prompt_tokens: 7, completion_tokens: 2048 } }) };
+  const good = ok('x', { body: { usage: { prompt_tokens: 120, completion_tokens: 12 } } });
+  const { r, events } = router(['a'], { a: (_c, calls) => (calls.length === 1 ? bad : good) });
+  await r.complete({ messages: MSGS });
+  const at = events.filter(e => e.type === 'attempt');
+  assert.equal(at[0].promptTokens, 7);
+  assert.equal(at[1].promptTokens, 120);
+  assert.equal(at[1].completionTokens, 12);
+  const n = router(['a'], { a: ok('y', { body: { usage: undefined } }) });
+  await n.r.complete({ messages: MSGS });
+  assert.equal(n.events.find(e => e.type === 'attempt').promptTokens, null);
+});

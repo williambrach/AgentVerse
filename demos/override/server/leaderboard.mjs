@@ -10,6 +10,7 @@ export function createLeaderboard(cases, { startedAt = 0, now = Date.now } = {})
   let since = startedAt;
   let rankBy = 'time';
   let round = null;
+  let endedAt = null;
   const hidden = new Set();
   let teams = new Map(); // teamId -> { name, cases: Map(caseId -> { firstStart, verdict }) }
   const live = new Map(); // sessionId -> its newest session { teamId, caseId, startMs, coins, frozen }
@@ -22,6 +23,7 @@ export function createLeaderboard(cases, { startedAt = 0, now = Date.now } = {})
       if (!e || typeof e !== 'object') return;
       const ms = Date.parse(e.timestamp);
       if (!Number.isFinite(ms) || ms < since) return;
+      if (endedAt !== null && ms > endedAt) return; // the round is over: nothing later counts
       cache = null; // any accepted event may change the standings
       if (e.type === 'session_started') {
         const t = e.team;
@@ -52,8 +54,15 @@ export function createLeaderboard(cases, { startedAt = 0, now = Date.now } = {})
   function reset(at, label = null) {
     round = typeof label === 'string' && label ? label : null;
     since = Number.isFinite(at) ? at : Number.isFinite(Date.parse(at)) ? Date.parse(at) : since;
+    endedAt = null;
     teams = new Map();
     live.clear();
+    cache = null;
+  }
+
+  function end(at) {
+    const ms = Number.isFinite(at) ? at : Date.parse(at);
+    endedAt = Number.isFinite(ms) ? ms : null;
     cache = null;
   }
 
@@ -121,8 +130,8 @@ export function createLeaderboard(cases, { startedAt = 0, now = Date.now } = {})
 
   function standings({ includeHidden = false, you = null } = {}) {
     const rows = sortedRows().map((r) => ({ ...r, you: r.teamId === you }));
-    return { rankBy, startedAt: since, round, cases: cases.map((k) => ({ id: k.id, title: k.title, order: k.order, total: k.characters?.length ?? 0 })), teams: includeHidden ? rows : rows.filter((r) => !r.hidden) };
+    return { rankBy, startedAt: since, endedAt, round, cases: cases.map((k) => ({ id: k.id, title: k.title, order: k.order, total: k.characters?.length ?? 0 })), teams: includeHidden ? rows : rows.filter((r) => !r.hidden) };
   }
 
-  return { observe, reset, setRankBy, setHidden, restore, standings };
+  return { observe, reset, end, setRankBy, setHidden, restore, standings };
 }

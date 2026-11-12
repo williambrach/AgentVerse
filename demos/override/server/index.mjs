@@ -101,7 +101,7 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
         }
         if (url.pathname === '/api/leaderboard' && req.method === 'GET') {
           const board = leaderboard ? leaderboard.standings({ includeHidden: false, you: team?.id ?? null }) : { rankBy: 'time', teams: [] };
-          return json(res, 200, { rankBy: board.rankBy, startedAt: board.startedAt ?? 0, round: board.round ?? null, cases: board.cases ?? [], teams: board.teams.map(r => ({ rank: r.rank, name: r.name, points: r.points, played: r.played, timeMs: r.timeMs, coins: r.coins, you: r.you, cells: r.cells ?? [] })) });
+          return json(res, 200, { rankBy: board.rankBy, startedAt: board.startedAt ?? 0, round: board.round ?? null, endedAt: board.endedAt ?? null, cases: board.cases ?? [], teams: board.teams.map(r => ({ rank: r.rank, name: r.name, points: r.points, played: r.played, timeMs: r.timeMs, coins: r.coins, you: r.you, cells: r.cells ?? [] })) });
         }
         if (url.pathname === '/api/heartbeat' && req.method === 'POST') {
           if (typeof input.tab !== 'string' || !tabPattern.test(input.tab)) throw new RequestError(400, 'Send a tab id.');
@@ -217,6 +217,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     if (systemRing.length > 20) systemRing.shift();
     feed('observeSystem', record);
     if (record?.type === 'round_started') { try { board.reset(Number(record.startedAt) || 0, record.label); } catch { /* the board must not break a round */ } }
+    else if (record?.type === 'round_ended') { try { board.end(Number(record.endedAt)); } catch { /* the board must not break a round */ } }
   };
   // Traces are admin-only. Probes and anything without a valid session go to one shared file.
   const onTrace = record => appendJsonl(join(paths.traces, !record.probe && sessionIdPattern.test(record.sessionId || '') ? `${record.sessionId}.jsonl` : 'probes.jsonl'), record, 'trace');
@@ -239,6 +240,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
   const events = loadEvents(paths.sessions, round.startedAt);
   board.restore(readJsonl(paths.system));
   board.reset(round.startedAt, round.label);
+  if (round.endedAt != null) board.end(round.endedAt);
   for (const e of events) board.observe(e);
   const teams = createTeams({ file: join(paths.root, 'teams.jsonl') });
 
@@ -302,6 +304,12 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
         trustProxy: adminTrustProxy(env), token: adminAuth.password, secret, monitor, router, investigations, registry, dataDir,
         content, allowedHosts: adminHosts(env), probeMessages,
         readSystem: () => [...systemRing], onSystem,
+        resetEvent: ({ label }) => {
+          const teamsCleared = teams.reset();
+          const { startedAt } = monitor.startRound({ label, reason: 'event_reset' });
+          onSystem({ type: 'round_started', timestamp: Date.now(), label, reason: 'event_reset', startedAt });
+          return { teamsCleared, round: { label, startedAt } };
+        },
         leaderboard: {
           standings: () => board.standings({ includeHidden: true, you: null }),
           setRankBy: mode => { board.setRankBy(mode); onSystem({ type: 'leaderboard_settings', timestamp: Date.now(), rankBy: mode }); },

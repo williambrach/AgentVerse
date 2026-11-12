@@ -35,12 +35,14 @@
   --line: var(--border);
   --hair: #132129;
   --edge: #2A4552;
+  --board: #080F14;
+  --panel-radius: 4px;
   --gold: var(--warn);
   --sky: var(--accent);
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { margin: 0; padding: 0 28px 28px; background: var(--bg); color: var(--fg); font: var(--fs)/1.5 var(--sans); }
+body { margin: 0; padding: 0 28px 28px; background: var(--board, var(--bg)); color: var(--fg); font: var(--fs)/1.5 var(--sans); }
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 pre, code, kbd { font-family: var(--mono); }
 a { color: var(--accent); }
@@ -66,8 +68,8 @@ button.ghost { background: transparent; }
 .top-links a[aria-current] { color: var(--accent); }
 #board-link { text-decoration: underline; }
 .auth { display: flex; gap: 6px; margin-left: auto; }
-#round { margin-left: auto; }
-#round ~ #theme-toggle, #round ~ .auth { margin-left: 0; }
+#bar { margin-left: auto; }
+#bar ~ #theme-toggle, #bar ~ .auth { margin-left: 0; }
 
 .status { display: inline-flex; align-items: center; gap: 8px; padding: 2px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: var(--fs-sm); }
 .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
@@ -125,6 +127,7 @@ details.panel[open] > summary { margin-bottom: 12px; }
   --bad-bg: #B02E201A;
   --hair: #E3E9ED;
   --edge: #B8C6CF;
+  --board: #E9EEF2;
   --shadow: 0 1px 2px #12202A14, 0 4px 12px #12202A12;
   --hover: #E1E8ED;
   --top-bg: #F5F7F9cc;
@@ -132,3 +135,5 @@ details.panel[open] > summary { margin-bottom: 12px; }
 }
 :root[data-theme="light"] button.primary:hover:not(:disabled) { background: #085A82; border-color: #085A82; }
 :root[data-theme="light"] #player-panel { box-shadow: -4px 0 16px rgba(0, 0, 0, .12); }
+
+.data-path { margin: 8px 0 0; font-size: var(--fs-xs); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; user-select: all; }

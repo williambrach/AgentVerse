@@ -1,4 +1,4 @@
-// Operator controls: router summary, per-endpoint actions, global cap, pause, session stats, system records.
+// Operator controls: router summary, per-endpoint actions, global cap, session stats, system records.
 // Text only (textContent); no document/window access at import time.
 import { el as mk } from './dom.js';
 
@@ -18,6 +18,7 @@ export function systemLine(rec, fmt) {
   if (kind === 'content_reverted') return `${at} content ${rec.caseId} rev ${rec.rev} reverted to rev ${rec.revertOf} by ${rec.by}`;
   if (kind === 'content_try') return `${at} content try ${rec.caseId} ${rec.characterId} by ${rec.by} ${rec.ok ? 'ok' : 'failed'}`;
   if (rec.type === 'admin_action') {
+    if (rec.action === 'event_reset') return `${at} event reset (${rec.teamsCleared ?? 0} ${rec.teamsCleared === 1 ? 'team' : 'teams'} cleared)`;
     if (rec.action === 'cap') return `${at} cap ${rec.endpoint ?? 'all'} → ${rec.value}`;
     if (rec.action === 'pause') return `${at} ${rec.paused ? 'pause' : 'resume'} new games`;
     if (rec.action === 'probe') return `${at} probe ${rec.endpoint} ${rec.ok ? 'ok' : 'failed'}`;
@@ -26,6 +27,7 @@ export function systemLine(rec, fmt) {
   if (rec.type === 'leaderboard_settings') return `${at} leaderboard ties by ${rec.rankBy}`;
   if (rec.type === 'team_hidden') return `${at} team ${String(rec.teamId).slice(0, 8)} ${rec.hidden ? 'hidden' : 'shown'}`;
   if (rec.type === 'round_started') return `${at} round "${rec.label}" started`;
+  if (rec.type === 'round_ended') return `${at} round "${rec.label}" ended`;
   return `${at} ${rec.type}`;
 }
 
@@ -40,8 +42,7 @@ function build(root, opts) {
   st.endpoints = el(doc, 'div', 'ctl-endpoints');
   st.global = el(doc, 'div', 'ctl-global');
   st.capAll = el(doc, 'button', 'ctl-btn', 'Cap all');
-  st.pause = el(doc, 'button', 'ctl-btn', 'Pause new games');
-  st.global.append(st.capAll, st.pause);
+  st.global.append(st.capAll);
   st.stats = el(doc, 'div', 'ctl-stats');
   st.statsHead = el(doc, 'span', 'ctl-stats-head');
   st.statsState = el(doc, 'span', 'ctl-stats-state');
@@ -93,14 +94,8 @@ function build(root, opts) {
       await api('/admin/llm/cap', { endpoint: name, value });
       return `Cap ${name ?? 'all'} set to ${value}.`;
     }),
-    pause: (btn) => run(btn, async () => {
-      const paused = !st.snap.sessions?.paused;
-      await api('/admin/sessions/pause', { paused });
-      return paused ? 'New games paused.' : 'New games resumed.';
-    }),
   };
   st.capAll.addEventListener('click', () => st.actions.cap(null, st.capAll));
-  st.pause.addEventListener('click', () => st.actions.pause(st.pause));
   return st;
 }
 
@@ -152,7 +147,6 @@ export function renderControls(root, snap, opts) {
   }
 
   const s = snap.sessions;
-  st.pause.textContent = s?.paused ? 'Resume new games' : 'Pause new games';
   st.statsHead.textContent = s ? `In memory (last 30 min): ${s.games} games · ${s.waiting} waiting for an answer · ` : '';
   st.statsState.textContent = s ? (s.paused ? 'new games paused' : 'accepting new games') : '';
   st.statsState.className = s?.paused ? 'ctl-stats-state ctl-paused' : 'ctl-stats-state';

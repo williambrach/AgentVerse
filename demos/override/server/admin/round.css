@@ -13,3 +13,9 @@
 .bar-fill.good { background: var(--ok); }
 .bar-fill.wrong { background: var(--bad); }
 .tally-head, .muted { font-size: var(--fs-sm); color: var(--muted); margin-bottom: 4px; }
+#bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.bar-round { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bar-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bar-actions [hidden], .bar-endpoint[hidden] { display: none; }
+.bar-reset { color: var(--bad); }
+.bar-msg { font-size: var(--fs-sm); color: var(--muted); flex-basis: 100%; }

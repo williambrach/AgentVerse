@@ -1,21 +1,18 @@
-#players, #tiles, #history { display: grid; gap: var(--gap); }
+#players, #tiles { display: grid; gap: var(--gap); }
 #players { grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }
 #tiles { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); }
-#history { grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); }
-#players:empty, #tiles:empty, #history:empty { display: none; }
-.big, .tile, .spark { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+#players:empty, #tiles:empty { display: none; }
+.big, .tile { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .big-n { font-family: var(--mono); font-size: var(--fs-num); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.big-l, .tile-l, .spark-l { font-size: var(--fs-sm); color: var(--muted); }
+.big-l, .tile-l { font-size: var(--fs-sm); color: var(--muted); }
 .big-s { font-size: var(--fs-xs); color: var(--dim); min-height: 1em; }
+.tile-s { font-size: var(--fs-xs); color: var(--dim); min-height: 1em; }
 .tile-v { font-family: var(--mono); font-size: var(--fs-xl); font-weight: 600; font-variant-numeric: tabular-nums; }
 .tile[data-level="ok"] .tile-v { color: #E8EEF0; }
 .tile[data-level="warn"] { background: #2B241266; border-color: var(--warn); }
 .tile[data-level="warn"] .tile-v { color: var(--gold); }
 .tile[data-level="bad"] { background: #EA6A5518; border-color: var(--bad); }
 .tile[data-level="bad"] .tile-v { color: var(--bad); }
-.spark-svg { width: 100%; height: 32px; display: block; }
-.spark-line { stroke: var(--accent); fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-.spark-v { font-family: var(--mono); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 :root[data-theme="light"] .tile[data-level="ok"] .tile-v { color: var(--fg); }
 :root[data-theme="light"] .tile[data-level="warn"] { background: var(--warn-bg); }
 :root[data-theme="light"] .tile[data-level="bad"] { background: var(--bad-bg); }

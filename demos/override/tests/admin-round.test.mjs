@@ -111,6 +111,16 @@ test('round control label, form, success and failure', async () => {
   assert.equal(form.hidden, true);
 });
 
+test('round control shows the ended state and the short label', () => {
+  const doc = makeDoc(); const root = new El('div', doc);
+  const ctl = round.createRoundControl(root, { api: async () => ({}), short: true });
+  const label = () => byClass(root, 'round-label')[0].textContent;
+  ctl.update({ at: 120000, round: { label: 'R1', startedAt: 0, endedAt: null } });
+  assert.equal(label(), 'R1 · 2 min');
+  ctl.update({ at: 120000, round: { label: 'R1', startedAt: 0, endedAt: 90000 } });
+  assert.equal(label(), 'R1 · ended, final standings');
+});
+
 test('module never uses innerHTML', async () => {
   const { readFile } = await import('node:fs/promises');
   const src = await readFile(new URL('../server/admin/round.js', import.meta.url), 'utf8');

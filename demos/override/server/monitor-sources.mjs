@@ -81,15 +81,18 @@ export function createTrafficSampler({ registry, dataDir, now }) {
   };
 }
 
-// The newest round_started record; no file or no record means the round is everything.
+// The newest round_started record, plus a round_ended after it; no file or record means the round is everything.
 export function loadRound(systemFile) {
   let records;
-  try { records = readJsonl(systemFile); } catch { return { label: null, startedAt: 0 }; }
+  const none = { label: null, startedAt: 0, endedAt: null };
+  try { records = readJsonl(systemFile); } catch { return none; }
+  let endedAt = null;
   for (let i = records.length - 1; i >= 0; i--) {
     const r = records[i];
-    if (r?.type === 'round_started') return { label: r.label ?? null, startedAt: Number(r.startedAt) || 0 };
+    if (r?.type === 'round_ended' && endedAt === null && Number.isFinite(Number(r.endedAt))) endedAt = Number(r.endedAt);
+    else if (r?.type === 'round_started') return { label: r.label ?? null, startedAt: Number(r.startedAt) || 0, endedAt };
   }
-  return { label: null, startedAt: 0 };
+  return none;
 }
 
 const timeOf = e => (typeof e.timestamp === 'number' ? e.timestamp : Date.parse(e.timestamp));

@@ -77,8 +77,7 @@ test('actions post the frozen protocol', async () => {
   assert.deepEqual(calls.at(-1), ['/admin/llm/cap', { endpoint: 'b', value: 7 }]);
   await root.button('Cap all')[0].click();
   assert.deepEqual(calls.at(-1), ['/admin/llm/cap', { endpoint: null, value: 7 }]);
-  await root.button('Pause new games')[0].click();
-  assert.deepEqual(calls.at(-1), ['/admin/sessions/pause', { paused: true }]);
+  assert.equal(root.button('Pause new games').length, 0);
 });
 
 test('invalid cap sends nothing; cancelled reason sends nothing', async () => {
@@ -92,15 +91,14 @@ test('invalid cap sends nothing; cancelled reason sends nothing', async () => {
   assert.equal(calls.length, 0);
 });
 
-test('rerender keeps the same button elements and shows unpin / resume', async () => {
+test('rerender keeps the same button elements and shows unpin', async () => {
   const { root, calls, opts } = mk();
   renderControls(root, snap(), opts);
   const probe = root.button('Probe')[0];
   renderControls(root, snap({ router: { active: 'b', pinned: true, inFlight: 0, queued: 0, maxInFlight: 20, endpoints: [ep('a'), ep('b')] }, sessions: { games: 0, waiting: 0, paused: true, byStage: {} } }), opts);
   assert.equal(root.button('Probe')[0], probe);
   assert.equal(root.button('Unpin').length, 1);
-  await root.button('Resume new games')[0].click();
-  assert.deepEqual(calls.at(-1), ['/admin/sessions/pause', { paused: false }]);
+  assert.equal(root.button('Resume new games').length, 0);
   await root.button('Unpin')[0].click();
   assert.deepEqual(calls.at(-1), ['/admin/llm/active', { endpoint: 'b', pinned: false, reason: 'because' }]);
 });
@@ -152,4 +150,10 @@ test('probe_node_stable', () => {
   renderControls(root, snap(), { ...opts, recordsRoot: rec });
   assert.equal(root.button('Probe')[0], probe);
   assert.equal(rec.all(e => e.className.includes('ctl-system'))[0], ul);
+});
+
+test('test_system_lines', () => {
+  assert.equal(systemLine({ type: 'round_ended', timestamp: 1, label: 'R1' }, fmt), '14:02 round "R1" ended');
+  assert.equal(systemLine({ type: 'admin_action', timestamp: 1, action: 'event_reset', teamsCleared: 3 }, fmt), '14:02 event reset (3 teams cleared)');
+  assert.equal(systemLine({ type: 'admin_action', timestamp: 1, action: 'event_reset', teamsCleared: 1 }, fmt), '14:02 event reset (1 team cleared)');
 });

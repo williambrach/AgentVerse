@@ -32,6 +32,7 @@ export function createTeams({ file = null, max = 1000 } = {}) {
         const p = teamName(r.name);
         if (p && !byId.has(r.teamId) && !byKey.has(p.key)) add(r.teamId, p.name);
       }
+      else if (r?.type === 'teams_reset') { byId.clear(); byKey.clear(); }
       else if (r?.type === 'team_session' && byId.has(r.teamId) && typeof r.sessionId === 'string') byId.get(r.teamId).sessionId = r.sessionId;
     }
   }
@@ -70,5 +71,14 @@ export function createTeams({ file = null, max = 1000 } = {}) {
     }
   }
 
-  return { join, find, exists, attach };
+  // Forget every team (a new event). The file keeps a marker so a restart forgets them too.
+  function reset() {
+    const n = byId.size;
+    if (file) appendJsonl(file, { type: 'teams_reset', timestamp: new Date().toISOString() }, 'teams');
+    byId.clear();
+    byKey.clear();
+    return n;
+  }
+
+  return { join, find, exists, attach, reset };
 }
