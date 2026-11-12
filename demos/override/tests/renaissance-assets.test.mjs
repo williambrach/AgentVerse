@@ -16,16 +16,21 @@ function ihdr(file) {
   return { w: b.readUInt32BE(16), h: b.readUInt32BE(20), colour: b[25] };
 }
 
-const talkFrames = { wizard: 1, inventor: 1, noble: 2, guard: 1, apothecary: 1, scout: 1 };
+const talkFrames = { wizard: 2, inventor: 1, noble: 2, guard: 1, apothecary: 1, scout: 1 };
+// Drawn thinking loops (client/worlds.ts loops.think); everyone else thinks in the still pose.
+const thinkFrames = { wizard: 2 };
+const loopNames = s => [...[0, 1, 2, 3].map(n => `idle-${n}`), ...Array.from({ length: talkFrames[s] }, (_, n) => `talk-${n}`),
+  ...Array.from({ length: thinkFrames[s] ?? 0 }, (_, n) => `think-${n}`)];
 
 test('character poses and loops are 132x188 RGBA', () => {
   for (const [s, talk] of Object.entries(talkFrames)) {
-    const names = ['listening', 'speaking', 'thinking', ...[0, 1, 2, 3].map(n => `idle-${n}`), ...Array.from({ length: talk }, (_, n) => `talk-${n}`)];
+    const names = ['listening', 'speaking', 'thinking', ...loopNames(s)];
     for (const p of names) {
       const i = ihdr(path.join(assets, 'characters', `${s}-${p}.png`));
       assert.deepEqual([i.w, i.h, i.colour], [132, 188, 6], `${s}-${p}`);
     }
     assert.equal(fs.existsSync(path.join(assets, 'characters', `${s}-talk-${talk}.png`)), false, `${s} has no extra talk frame`);
+    assert.equal(fs.existsSync(path.join(assets, 'characters', `${s}-think-${thinkFrames[s] ?? 0}.png`)), false, `${s} has no extra think frame`);
   }
   for (let n = 0; n < 4; n++) {
     const i = ihdr(path.join(assets, 'characters', `scout-walk-${n}.png`));
@@ -35,7 +40,7 @@ test('character poses and loops are 132x188 RGBA', () => {
 
 test('frames are registered: feet on one line, head over the centre column', () => {
   for (const s of Object.keys(talkFrames)) {
-    for (const p of ['listening', 'speaking', 'thinking', 'idle-0', 'idle-1', 'idle-2', 'idle-3']) {
+    for (const p of ['listening', 'speaking', 'thinking', ...loopNames(s)]) {
       const { data, width, height } = readPng(path.join(assets, 'characters', `${s}-${p}.png`));
       let bottom = -1;
       for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (data[(y * width + x) * 4 + 3] > 8) bottom = y;

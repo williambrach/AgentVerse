@@ -21,8 +21,10 @@ export interface FigureArt {
   /** The detective's walk as one supplied sprite sheet, drawn as it is (wins over walkFrames). */
   walkSheet?: WalkSheet;
   /** Drawn loops `<sprite>-idle-<i>.png` (every sprite) and `<sprite>-talk-<i>.png` (count by sprite);
-   * absent: the still poses breathe and bob in code. */
-  loops?: { idle: number; talk: Record<string, number> };
+   * absent: the still poses breathe and bob in code. `think`: drawn thinking loops `<sprite>-think-<i>.png` by sprite
+   * (absent: the still thinking pose); `blink`: the idle frame that is a blink, by sprite (shown now and then, never
+   * in the idle ping-pong). */
+  loops?: { idle: number; talk: Record<string, number>; think?: Record<string, number>; blink?: Record<string, number> };
   /** One-shot object gestures by sprite (renaissance apothecary: the vial), drawn as `<sprite>-<name>-<i>.png`.
    * Played once while that sprite answers one of `topics`; never an idle or talk loop. */
   gestures?: Record<string, Gesture>;
@@ -98,16 +100,20 @@ export function walkFrameUrl(art: FigureArt, i: number): string {
   return `${art.base}/${art.detective}-walk-${i}.png`;
 }
 
-export function loopUrl(art: FigureArt, sprite: string, kind: 'idle' | 'talk', i: number): string {
+export function loopUrl(art: FigureArt, sprite: string, kind: 'idle' | 'talk' | 'think', i: number): string {
   return `${art.base}/${sprite}-${kind}-${i}.png`;
 }
 
-/** The drawn frames one sprite has; the walk cycle belongs to the detective alone. */
+/** The drawn frames one sprite has; the walk cycle belongs to the detective alone. A think loop and a blink
+ * frame are named only for the sprites that have them. */
 export function drawnOf(art: FigureArt, sprite: string): Drawn {
+  const think = art.loops?.think?.[sprite], blink = art.loops?.blink?.[sprite];
   return {
     idle: art.loops?.idle ?? 0,
     talk: art.loops?.talk[sprite] ?? 0,
     walk: sprite === art.detective ? art.walkSheet?.frames ?? art.walkFrames ?? 0 : 0,
+    ...(think !== undefined ? { think } : {}),
+    ...(blink !== undefined ? { blink } : {}),
   };
 }
 

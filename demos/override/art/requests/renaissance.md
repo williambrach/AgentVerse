@@ -5,7 +5,7 @@ The four sheets in `/Users/williambrach/Developer/arbiter/assets/renaissance-cha
 - **The walk is one step, not a cycle.** Row 2 of the scout sheet is one contact frame and three near-identical passing frames, so the legs never alternate. R1 asks for a real 8-frame cycle.
 - **The talk frames hold props.** Row 3 is a prop interaction (a map, a letter, a warrant, a clockwork device), so the townsfolk "talk" by reading paper. The conversation sheets ask for open-hand talking and a proper thinking pose.
 
-The wizard, the apothecary and the town square are still placeholders (recolours and a script-drawn square). All character sheets are 1536 x 1024, 4 columns x 2 rows. Save them untouched; the cutter registers every frame on the feet and the head, as it does today.
+Ottavio's sheet (R2) is in the game. All character sheets are 1536 x 1024, 4 columns x 2 rows. Save them untouched; the cutter registers every frame on the feet and the head, as it does today.
 
 ## Scout (player)
 
@@ -53,6 +53,11 @@ Constraints: genuine transparent alpha background. Every part of every figure, i
 ## Ottavio · wizard (new art)
 
 ### R2 · Ottavio · wizard idle, talk and think · P2
+
+> **Status: delivered and in the game (2026-11-12).** The sheet stays untouched in the motion folder (SHA-256 pinned in `tests/wizard-art.test.mjs`); `art/renaissance/cut.py --wizard` cuts its eight frames into `wizard-idle-0..3`, `wizard-talk-0..1` and `wizard-think-0..1` at one pivot and one scale (see `art/renaissance/ARTWORK.md`). It replaces the repaint of Matteo's frames.
+>
+> - **Feet line:** y 489 in every cell, not the requested 472; the cut measures it on the art.
+> - **Blink:** frame 4 is never part of the idle loop; it shows for 160 ms every 4 to 6.5 s.
 
 - **Save as:** `/Users/williambrach/Developer/arbiter/assets/motion-v1/renaissance/wizard-conversation.png`
 - **Canvas:** 1536 x 1024, 4 x 2 cells of 384 x 512

@@ -238,7 +238,9 @@ const renaissance: WorldPack = {
     labelLift: 66,
     walkSheet: scoutWalk,
     chill: true,
-    loops: { idle: 4, talk: { wizard: 1, inventor: 1, noble: 2, guard: 1, apothecary: 1, scout: 1 } },
+    // Ottavio (wizard) is cut from his own conversation sheet (art request R2): idle 0-3 are neutral, breath, neutral,
+    // blink; he talks with an open palm (2 frames) and strokes his beard to think (eyes open, then closed).
+    loops: { idle: 4, talk: { wizard: 2, inventor: 1, noble: 2, guard: 1, apothecary: 1, scout: 1 }, think: { wizard: 2 }, blink: { wizard: 3 } },
     // Agnese takes out her amber vial, inspects it while she answers about her work, then hides it under her shawl.
     // Same in every deal, so it says nothing about who the traveller is.
     gestures: { apothecary: { name: 'vial', frames: 8, hold: 3, frameMs: 220, topics: ['work'] } },

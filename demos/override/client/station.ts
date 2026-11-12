@@ -45,7 +45,7 @@ function artKeys(world: WorldPack): Record<ArtKind, string> {
 }
 const walkKey = (sprite: string, i: number) => `factory-${sprite}-walk-${i}`;
 const walkSheetKey = (sprite: string) => `factory-${sprite}-walk-sheet`;
-const loopKey = (sprite: string, kind: 'idle' | 'talk', i: number) => `factory-${sprite}-${kind}-${i}`;
+const loopKey = (sprite: string, kind: 'idle' | 'talk' | 'think', i: number) => `factory-${sprite}-${kind}-${i}`;
 const gestureKey = (sprite: string, i: number) => `factory-${sprite}-gesture-${i}`;
 const poses: Pose[] = ['listening', 'speaking', 'thinking'];
 const figureKey = (sprite: string, pose: Pose) => `factory-${sprite}-${pose}`;
@@ -227,6 +227,7 @@ export class Station extends Phaser.Scene {
         const drawn = factoryFigures.drawnOf(art, sprite);
         for (let i = 0; i < drawn.idle; i++) this.load.image(loopKey(sprite, 'idle', i), factoryFigures.loopUrl(art, sprite, 'idle', i));
         for (let i = 0; i < drawn.talk; i++) this.load.image(loopKey(sprite, 'talk', i), factoryFigures.loopUrl(art, sprite, 'talk', i));
+        for (let i = 0; i < (drawn.think ?? 0); i++) this.load.image(loopKey(sprite, 'think', i), factoryFigures.loopUrl(art, sprite, 'think', i));
         const g = art.gestures?.[sprite];
         for (let i = 0; g && i < g.frames; i++) this.load.image(gestureKey(sprite, i), factoryFigures.gestureUrl(art, sprite, g, i));
       }

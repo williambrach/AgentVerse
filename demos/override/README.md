@@ -393,7 +393,7 @@ If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:e
 
 **Missing art, stated plainly.** Alex, Nora and Sam have only standing pose drawings; there are no walk cycles and no drawn seated art for them. Alex and Nora show from the waist up behind the table. Sam, in front of it, is seated by a temporary runtime rig (`client/sam-rig.ts`): his standing upper body over the player's seated legs, recoloured to his trousers and shoes. It is not finished replacement art. Ken has no drawn seated thinking pose and keeps his seated idle drawing while thinking. Blinks and closed mouths are painted at runtime, not drawn frames. The fireplace and lamp loops are procedural. A replacement seated atlas could not be generated (image-generation limit); its prompt is `SEATED-REDRAW-PROMPT.txt` in the v2 pack.
 
-**Missing art, Castelvento.** The wizard and the apothecary are recoloured placeholders cut from the inventor and noble sheets, and the town square is a script-drawn placeholder. The prompts for real art and the command to re-run the cut are in `art/renaissance/ARTWORK.md`.
+**Missing art, Castelvento.** Only the scroll, seal and quill icons are still script-drawn (art request R8). Ottavio comes from his own conversation sheet (R2: idle with a blink, talk, think), and the apothecary and the painted town square are delivered art too. The command to re-run the cut is in `art/renaissance/ARTWORK.md`.
 
 The font is Atkinson Hyperlegible Next, bundled in `client/fonts` under the SIL Open Font License, so the game makes no third-party requests and looks the same on a closed network.
 

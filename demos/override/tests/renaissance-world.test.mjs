@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { worldFor } from '../client/worlds.ts';
 import { inWalk } from '../client/hall-layout.ts';
 import { stopPropsOf, drawnOf, loopUrl } from '../client/factory-figures.ts';
-import { walkLook, gestureFrameAt } from '../client/figure-motion.ts';
+import { walkLook, gestureFrameAt, standLook } from '../client/figure-motion.ts';
 import { gestureFor } from '../client/factory-figures.ts';
 
 const w = worldFor('renaissance');
@@ -111,6 +111,28 @@ test('walk_sheet_by_time: the scout walks the R1 sheet, 8 frames at 100 ms of wa
   assert.deepEqual(drawnOf(worldFor('factory').figures, 'detective'), { idle: 0, talk: 0, walk: 8 });
   assert.deepEqual(drawnOf(worldFor('factory').figures, 'worker-01'), { idle: 0, talk: 0, walk: 0 });
   assert.equal(loopUrl(w.figures, 'noble', 'talk', 1), '/assets/renaissance/characters/noble-talk-1.png');
+});
+
+test('ottavio_conversation_loops: R2 frames idle 4 (frame 3 the blink), talk 2, think 2; nobody else blinks or thinks drawn', () => {
+  assert.deepEqual(drawnOf(w.figures, 'wizard'), { idle: 4, talk: 2, walk: 0, think: 2, blink: 3 });
+  assert.equal(loopUrl(w.figures, 'wizard', 'think', 1), '/assets/renaissance/characters/wizard-think-1.png');
+  for (const s of ['inventor', 'noble', 'guard', 'apothecary', 'scout']) {
+    const d = drawnOf(w.figures, s);
+    assert.equal(d.think, undefined, s);
+    assert.equal(d.blink, undefined, s);
+  }
+  const wizard = drawnOf(w.figures, 'wizard');
+  // Listening: the idle ping-pong never shows the blink frame; the blink comes alone, briefly.
+  const idle = new Map();
+  for (let t = 0; t < 30000; t += 20) { const f = standLook('listening', t, .37, t, wizard).texture.frame; idle.set(f, (idle.get(f) ?? 0) + 20); }
+  assert.deepEqual([...idle.keys()].sort(), [0, 1, 2, 3]);
+  assert.ok(idle.get(3) / 30000 < .06, `blinking ${idle.get(3)} ms of 30 s`);
+  // Speaking and thinking start on their first frame (open palm; eyes open) and use only their own frames.
+  assert.deepEqual(standLook('speaking', 5000, .37, 0, wizard).texture, { kind: 'talk', frame: 0 });
+  assert.deepEqual(standLook('thinking', 5000, .37, 0, wizard).texture, { kind: 'think', frame: 0 });
+  const talk = new Set(), think = new Set();
+  for (let s = 0; s < 6000; s += 50) { talk.add(standLook('speaking', s, .37, s, wizard).texture.frame); think.add(standLook('thinking', s, .37, s, wizard).texture.frame); }
+  assert.deepEqual([[...talk].sort(), [...think].sort()], [[0, 1], [0, 1]]);
 });
 
 test('name_tags_do_not_overlap: 7 world px per character plus 10, at labelLift', () => {

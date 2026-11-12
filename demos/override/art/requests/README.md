@@ -24,7 +24,7 @@ You can deliver the sheets in any order and in batches; each one is wired in on 
 | Priority | IDs | What | Why first |
 |---|---|---|---|
 | P1 | F1, D1, R1 | Walk cycles for the three player characters | The walk is what you see most. Today the factory and department detectives hop in a still pose, and the scout repeats one step. |
-| P2 | R2, R3, R7 | Ottavio (wizard), Agnese (apothecary), the town square | These are still placeholders: recoloured sheets and a script-drawn square. |
+| P2 | R2, R3, R7 | Ottavio (wizard), Agnese (apothecary), the town square | R2 is delivered and in the game (2026-11-12). |
 | P3 | F2–F12, D2–D7, R4–R6 | Idle and talk sheets for everyone, and walks for the five factory workers | Real breathing, blinking and talking frames. Any worker can be the one who walks out of the exit door. |
 | P4 | F13, R8 | Factory floor backdrop, Castelvento item icons | Optional polish: the factory floor is flat gray today, and the scroll, seal and quill icons are script-drawn. |
 

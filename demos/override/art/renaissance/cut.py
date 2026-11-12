@@ -3,16 +3,17 @@
 Run from demos/override:
   python3 -I art/renaissance/cut.py --src /Users/williambrach/Developer/arbiter/assets/renaissance-characters-v1 \
       --backdrop /Users/williambrach/Developer/arbiter/assets/renaissance-background-v1/market-square.png
-Optional real art: --wizard SHEET; --characters-only re-cuts the cast alone
+--characters-only re-cuts the cast alone. Ottavio has his own conversation sheet (art request R2) and is cut alone:
+  python3 -I art/renaissance/cut.py --wizard /Users/williambrach/Developer/arbiter/assets/motion-v1/renaissance/wizard-conversation.png
 """
 import argparse, math, os, shutil
 
 
 def _need_pillow():
     """Import Pillow and numpy lazily so the module imports with the standard library only."""
-    global Image, ImageChops, ImageDraw, ImageFilter, np
+    global Image, ImageDraw, np
     try:
-        from PIL import Image, ImageChops, ImageDraw, ImageFilter
+        from PIL import Image, ImageDraw
         import numpy as np
     except ModuleNotFoundError:
         raise SystemExit("cut.py needs Pillow and numpy: pip install Pillow numpy")
@@ -37,8 +38,6 @@ THINKING = (0, 2)
 SCOUT_WALK = [(1, 0), (1, 1), (1, 2), (1, 3)]
 SHEET_FILES = {"inventor": "inventor.png", "noble": "court-noble.png",
                "guard": "city-guard.png", "scout": "hooded-scout.png", "apothecary": "apothecary.png"}
-# the wizard reuses the inventor frames
-TALK["wizard"] = TALK["inventor"]
 
 # The apothecary sheet (1254 x 1254) does not split into equal integer cells, so its cells are explicit
 # source rectangles (x0, y0, x1, y1), each edge in the transparent gutter between two poses. Measured on
@@ -60,6 +59,19 @@ APOTHECARY_VIAL = [(2, 0), (2, 1), (2, 2), (2, 3), (3, 0), (3, 1), (3, 2), (3, 3
 LEFT, RIGHT, TOP, BOTTOM = 110, 110, 308, 5
 OUT_W, OUT_H = 132, 188  # 0.6 of the window; the anchor lands at (66, 185)
 SEARCH = 60  # widest horizontal shift tried, sheet pixels
+ANCHOR = (66, 185)  # the foot point in every game frame (client/worlds.ts figures.anchor)
+
+# Conversation sheets (art request R2, Ottavio): 1536 x 1024, 4 columns x 2 rows of 384 x 512 cells. Frames are
+# numbered 1-8 left to right, then top to bottom: 1-4 idle (neutral, breath, neutral, blink), 5-6 talk (open palm
+# and open mouth, then the hand lower and the mouth closed), 7-8 think (stroking the beard, eyes open, then closed).
+CONV_CELL = (384, 512)
+CONV_IDLE, CONV_TALK, CONV_THINK = [1, 2, 3, 4], [5, 6], [7, 8]
+# The generator drew Ottavio on the same spot in every cell (feet line y 489, not the requested 472; shoes x
+# 141..266; head column x 182), so all eight frames share one pivot measured on frame 1 and one scale; no frame is
+# shifted or resized to its own box. 0.38 frame px per sheet px puts his hat top (y 26) at y 9 like the cast's heads
+# and the staff top (y 14) at y 4. Nearest-neighbour keeps the painted pixels crisp.
+CONV_SCALE = 0.38
+CONV_DRIFT = 2  # largest feet-line or head-column difference from frame 1 a sheet may have, sheet pixels
 
 
 def cell_of(sheet, row, col, rects=None):
@@ -123,46 +135,11 @@ def offsets(cells):
     return out
 
 
-def registered(cell, anchor, shift, fix=None):
-    """The cell moved by shift and cut around anchor, recoloured by fix, at game size."""
+def registered(cell, anchor, shift):
+    """The cell moved by shift and cut around anchor, at game size."""
     (ax, ay), (dx, dy) = anchor, shift
     c = cell.crop((ax - dx - LEFT, ay - dy - TOP, ax - dx + RIGHT, ay - dy + BOTTOM))
-    if fix:
-        c = fix(c)
     return c.resize((OUT_W, OUT_H), Image.LANCZOS)
-
-
-def recolour(sheet, lo, hi, fn, vmin=0, head=0.0, skin=False):
-    """Apply fn(h, s, v) on pixels with hue in [lo,hi] degrees, sat >= 0.3, value >= vmin.
-    head: fraction of the alpha bounding box (from the top) left untouched.
-    skin: also leave skin-like pixels (hue 8-32, sat 0.25-0.65, value 0.30-0.85) alone."""
-    a = sheet.getchannel("A")
-    hsv = sheet.convert("RGB").convert("HSV")
-    h, s, v = hsv.split()
-
-    def band(ch, l, u, k=255):
-        return ch.point(lambda x: 255 if l * k <= x <= u * k else 0)
-    mask = ImageChops.multiply(band(h, lo / 360, hi / 360), band(s, 0.3, 1))
-    mask = ImageChops.multiply(mask, band(v, vmin, 1))
-    if skin:
-        sk = ImageChops.multiply(ImageChops.multiply(band(h, 8 / 360, 26 / 360), band(s, 0.25, 0.60)), band(v, 0.40, 0.85))
-        sk = sk.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))  # close pinholes
-        mask = ImageChops.subtract(mask, sk)
-    box = a.point(lambda x: 255 if x > 8 else 0).getbbox()
-    if head and box:
-        cut = box[1] + int((box[3] - box[1]) * head)
-        ImageDraw.Draw(mask).rectangle((0, 0, sheet.width, cut), fill=0)
-    h2, s2, v2 = fn(h, s, v)
-    h = Image.composite(h2, h, mask)
-    s = Image.composite(s2, s, mask)
-    v = Image.composite(v2, v, mask)
-    out = Image.merge("HSV", (h, s, v)).convert("RGB")
-    out.putalpha(a)
-    return out
-
-
-def ivory(h, s, v):
-    return h, s.point(lambda x: int(0.14 * 255)), v.point(lambda x: min(235, int(x * 0.95 + 60)))
 
 
 def load(path):
@@ -175,20 +152,14 @@ def save(img, *parts):
     img.save(p)
 
 
-def characters(src, wizard):
+def characters(src):
     sheets = {k: load(os.path.join(src, f)) for k, f in SHEET_FILES.items()}
-    fixes = {}
-    if wizard:
-        sheets["wizard"] = load(wizard)
-    else:
-        sheets["wizard"] = sheets["inventor"]
-        fixes["wizard"] = lambda c: recolour(c, 14, 60, ivory, 0.45, head=0.26, skin=True)
     for name, sheet in sheets.items():
         used = IDLE + TALK[name] + [THINKING] + (SCOUT_WALK if name == "scout" else []) + (APOTHECARY_VIAL if name == "apothecary" else [])
         cells = {rc: cell_of(sheet, *rc, RECTS.get(name)) for rc in used}
         shift = offsets(cells)
         anchor = head_column(np.asarray(cells[IDLE[0]]).astype(np.float32))
-        frame = lambda rc: registered(cells[rc], anchor, shift[rc], fixes.get(name))
+        frame = lambda rc: registered(cells[rc], anchor, shift[rc])
         for i, rc in enumerate(IDLE):
             save(frame(rc), "characters", f"{name}-idle-{i}.png")
         for i, rc in enumerate(TALK[name]):
@@ -202,6 +173,65 @@ def characters(src, wizard):
         if name == "scout":
             for i, rc in enumerate(SCOUT_WALK):
                 save(frame(rc), "characters", f"scout-walk-{i}.png")
+
+
+def conversation_cell(sheet, n):
+    """Frame n (1-based) of a conversation sheet as its own image, so a crop never reads a neighbouring cell."""
+    w, h = CONV_CELL
+    if sheet.size != (4 * w, 2 * h):
+        raise SystemExit(f"a conversation sheet is {4 * w} x {2 * h}, this one is {sheet.width} x {sheet.height}")
+    r, c = divmod(n - 1, 4)
+    return sheet.crop((c * w, r * h, (c + 1) * w, (r + 1) * h))
+
+
+def conversation_pivot(cell):
+    """(head column, feet line) of one cell: the feet line is the row under the lowest solid pixel (alpha > 128)."""
+    a = np.asarray(cell).astype(np.float32)
+    feet = int(np.where((a[..., 3] > 128).any(1))[0][-1]) + 1
+    return head_column(a)[0], feet
+
+
+def conversation_frame(cell, pivot, scale):
+    """The cell cut around pivot at one fixed scale, nearest-neighbour, the pivot landing on ANCHOR.
+    Specks under alpha 9 (the generator's faint halo) are cleared, and nothing under alpha 0 keeps a colour."""
+    (px, py), (ax, ay) = pivot, ANCHOR
+    box = (px - ax / scale, py - ay / scale, px + (OUT_W - ax) / scale, py + (OUT_H - ay) / scale)
+    if box[0] < 0 or box[1] < 0 or box[2] > cell.width or box[3] > cell.height:
+        raise SystemExit(f"the frame window {tuple(round(v, 1) for v in box)} leaves the {cell.width} x {cell.height} cell")
+    a = np.asarray(cell.resize((OUT_W, OUT_H), Image.NEAREST, box=box)).copy()
+    a[a[..., 3] <= 8] = 0
+    edge = np.concatenate([a[0, :, 3], a[:, 0, 3], a[:, -1, 3]])
+    if (edge > 8).any():
+        raise SystemExit("the figure touches the frame's top or side edge: lower CONV_SCALE")
+    return Image.fromarray(a, "RGBA")
+
+
+def conversation(name, path, scale, check=False):
+    """Cut one conversation sheet into <name>-idle-0..3, -talk-0..1, -think-0..1 and the still poses
+    (listening = frame 1, speaking = frame 5, thinking = frame 7). check: write nothing, and exit 1 unless every
+    shipped file has exactly the pixels a fresh cut gives."""
+    sheet = load(path)
+    cells = {n: conversation_cell(sheet, n) for n in range(1, 9)}
+    pivot = conversation_pivot(cells[1])
+    for n, cell in cells.items():
+        hx, feet = conversation_pivot(cell)
+        if abs(hx - pivot[0]) > CONV_DRIFT or abs(feet - pivot[1]) > CONV_DRIFT:
+            raise SystemExit(f"frame {n} stands at {(hx, feet)}, frame 1 at {pivot}: the sheet is not registered")
+    files = {f"{name}-{kind}-{i}.png": n for kind, frames in (("idle", CONV_IDLE), ("talk", CONV_TALK), ("think", CONV_THINK))
+             for i, n in enumerate(frames)}
+    files.update({f"{name}-listening.png": CONV_IDLE[0], f"{name}-speaking.png": CONV_TALK[0], f"{name}-thinking.png": CONV_THINK[0]})
+    stale = []
+    for file, n in files.items():
+        img = conversation_frame(cells[n], pivot, scale)
+        if not check:
+            save(img, "characters", file)
+            continue
+        shipped = os.path.join(OUT, "characters", file)
+        if not os.path.exists(shipped) or not np.array_equal(np.asarray(load(shipped)), np.asarray(img)):
+            stale.append(file)
+    if stale:
+        raise SystemExit(f"not a fresh cut of {path}: {', '.join(stale)}")
+    print(f"{name}: {len(files)} frames {'match the sheet' if check else 'cut'}; pivot {pivot} in every cell, scale {scale}")
 
 
 def icon_scroll():
@@ -242,13 +272,22 @@ def icon_quill():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--src", required=True)
-    ap.add_argument("--wizard")
+    ap.add_argument("--src", help="the cast's 4 x 4 character sheets (inventor, noble, guard, scout, apothecary)")
+    ap.add_argument("--wizard", help="Ottavio's 1536 x 1024 conversation sheet (art request R2); cut alone")
     ap.add_argument("--backdrop", help="the painted market square, 1536 x 1024; copied byte for byte")
     ap.add_argument("--characters-only", action="store_true", help="leave the square and the prop icons as they are")
+    ap.add_argument("--check", action="store_true", help="with --wizard alone: write nothing, exit 1 unless the shipped frames are a fresh cut")
     a = ap.parse_args()
+    if not a.src and not a.wizard:
+        raise SystemExit("give --src (the cast), --wizard (Ottavio) or both")
+    if a.check and a.src:
+        raise SystemExit("--check verifies the --wizard cut only; leave out --src")
     _need_pillow()
-    characters(a.src, a.wizard)
+    if a.wizard:
+        conversation("wizard", a.wizard, CONV_SCALE, check=a.check)
+    if not a.src:
+        return
+    characters(a.src)
     if a.characters_only:
         return
     if not a.backdrop:

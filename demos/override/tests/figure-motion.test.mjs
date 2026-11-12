@@ -23,6 +23,50 @@ test('idle loop ping-pongs so no frame jumps back to the start', () => {
   assert.equal(m.idleFrameAt(4, NaN), 0);
 });
 
+test('idle loop with a blink frame: the ping-pong skips it (0 1 2 1 0), other frames keep their index', () => {
+  const at = t => m.idleFrameAt(4, t, m.IDLE_HOLD_MS, 3);
+  assert.deepEqual([0, 520, 1040, 1560, 2080, 2600].map(at), [0, 1, 2, 1, 0, 1]);
+  assert.deepEqual([0, 520, 1040, 1560].map(t => m.idleFrameAt(4, t, m.IDLE_HOLD_MS, 1)), [0, 2, 3, 2]);
+  assert.equal(m.idleFrameAt(2, 99999, m.IDLE_HOLD_MS, 0), 1, 'one frame left besides the blink');
+  assert.equal(m.idleFrameAt(1, 99999, m.IDLE_HOLD_MS, 0), 0, 'a single frame is frame 0 even when named the blink');
+  assert.deepEqual([0, 520, 1040].map(t => m.idleFrameAt(4, t, m.IDLE_HOLD_MS, 9)), [0, 1, 2], 'an out-of-range blink changes nothing');
+});
+
+test('blinks are brief and occasional, never right after a pose change, and not in step', () => {
+  for (const seed of [0, .37, .99]) {
+    let on = 0, starts = 0, prev = false;
+    for (let t = 0; t < 60000; t += 10) {
+      const b = m.blinkAt(t, seed);
+      if (b) on += 10;
+      if (b && !prev) starts++;
+      prev = b;
+    }
+    assert.ok(starts >= 9 && starts <= 15, `seed ${seed}: ${starts} blinks a minute`);
+    assert.equal(on, starts * m.BLINK_MS, `seed ${seed}: each blink lasts ${m.BLINK_MS} ms`);
+    assert.equal(m.blinkAt(0, seed) || m.blinkAt(3000, seed), false, 'no blink in the first 3 s');
+  }
+  assert.notEqual(m.blinkAt(4000 - 100, 0), m.blinkAt(4000 - 100, .99));
+  assert.equal(m.blinkAt(NaN, .5), false);
+  assert.equal(m.blinkAt(-1, .5), false);
+});
+
+test('drawn talk and think loops restart on their first frame at every pose change', () => {
+  const d = { idle: 4, talk: 2, walk: 0, think: 2, blink: 3 };
+  for (const t of [0, 777, 123456]) {
+    assert.deepEqual(m.standLook('speaking', t, .3, 0, d).texture, { kind: 'talk', frame: 0 }, `talk at ${t}`);
+    assert.deepEqual(m.standLook('thinking', t, .3, 0, d).texture, { kind: 'think', frame: 0 }, `think at ${t}`);
+  }
+  assert.deepEqual([0, 419, 420, 839, 840].map(s => m.standLook('speaking', 5000, .3, s, d).texture.frame), [0, 0, 1, 1, 0]);
+  assert.deepEqual([0, 1299, 1300, 2599, 2600].map(s => m.thinkFrameAt(2, s)), [0, 0, 1, 1, 0]);
+  assert.equal(m.thinkFrameAt(1, 5000), 0);
+  // Thinking keeps its sway and breath with drawn frames too.
+  const lean = new Set();
+  for (let t = 0; t < 3000; t += 50) lean.add(m.standLook('thinking', t, .3, 9999, d).lean);
+  assert.ok(lean.size > 1);
+  // Idle after a pose change shows a breathing frame, not the blink.
+  assert.notEqual(m.standLook('listening', 5000, .3, 0, d).texture.frame, 3);
+});
+
 test('breathing is whole pixels, 0 to 2, and reaches both ends', () => {
   const values = new Set();
   for (let t = 0; t < 4000; t += 20) values.add(m.breath(t, .3));
@@ -56,7 +100,7 @@ test('standLook: static art breathes in its pose, drawn art cycles its loops', (
   assert.equal(idle.texture.kind, 'idle');
   assert.equal(idle.stretch, 0, 'drawn idle frames breathe on their own');
   const frames = new Set();
-  for (let t = 0; t < 2000; t += 50) frames.add(m.standLook('speaking', t, .2, 9999, drawn).texture.frame);
+  for (let t = 0; t < 2000; t += 50) frames.add(m.standLook('speaking', t, .2, t, drawn).texture.frame);
   assert.deepEqual([...frames].sort(), [0, 1]);
   assert.deepEqual(m.standLook('speaking', 0, .2, 9999, { idle: 4, talk: 1, walk: 0 }).texture, { kind: 'pose', pose: 'speaking' });
   assert.deepEqual(m.standLook('thinking', 0, .2, 9999, drawn).texture, { kind: 'pose', pose: 'thinking' });

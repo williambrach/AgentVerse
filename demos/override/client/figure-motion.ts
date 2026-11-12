@@ -5,7 +5,7 @@ import type { Pose } from './factory-figures';
 
 /** What a figure shows this frame: a pose image or a drawn loop frame, plus whole-pixel offsets. */
 export type Look = {
-  texture: { kind: 'pose'; pose: Pose } | { kind: 'idle' | 'talk' | 'walk' | 'gesture'; frame: number };
+  texture: { kind: 'pose'; pose: Pose } | { kind: 'idle' | 'talk' | 'think' | 'walk' | 'gesture'; frame: number };
   /** Height change in canvas pixels, about the feet: negative squashes, positive stretches. */
   stretch: number;
   /** Lift off the ground in canvas pixels. */
@@ -14,8 +14,9 @@ export type Look = {
   lean: number;
 };
 
-/** Drawn frame counts for one sprite: idle loop, talk loop, walk cycle (0: none drawn). */
-export type Drawn = { idle: number; talk: number; walk: number };
+/** Drawn frame counts for one sprite: idle loop, talk loop, walk cycle (0: none drawn). `think`: a drawn thinking
+ * loop (absent: the still thinking pose); `blink`: the idle frame that is a blink (absent: no blink frame). */
+export type Drawn = { idle: number; talk: number; walk: number; think?: number; blink?: number };
 export const NO_DRAWN: Drawn = { idle: 0, talk: 0, walk: 0 };
 
 /** A stable 0..1 per figure id, so neighbours never breathe or blink in step. */
@@ -34,13 +35,40 @@ export function popStretch(sinceMs: number): number {
   return sinceMs < 80 ? -3 : sinceMs < 160 ? 3 : 1;
 }
 
-/** Idle loop: ping-pong over the drawn frames (0 1 2 3 2 1), each held `holdMs`. */
+/** Idle loop: ping-pong over the drawn frames (0 1 2 3 2 1), each held `holdMs`. A blink frame (index `blink`)
+ * is left out of the ping-pong; blinkAt shows it now and then instead. */
 export const IDLE_HOLD_MS = 520;
-export function idleFrameAt(frames: number, t: number, holdMs = IDLE_HOLD_MS): number {
-  if (frames <= 1 || !Number.isFinite(t)) return 0;
-  const cycle = 2 * frames - 2;
-  const step = Math.floor(Math.max(0, t) / holdMs) % cycle;
-  return step < frames ? step : cycle - step;
+export function idleFrameAt(frames: number, t: number, holdMs = IDLE_HOLD_MS, blink = -1): number {
+  if (frames <= 1) return 0;
+  const skip = blink >= 0 && blink < frames;
+  const n = skip ? frames - 1 : frames;
+  const k = n <= 1 || !Number.isFinite(t) ? 0 : pingPong(n, Math.floor(Math.max(0, t) / holdMs));
+  return skip && k >= blink ? k + 1 : k;
+}
+
+function pingPong(n: number, step: number): number {
+  const cycle = 2 * n - 2;
+  const s = step % cycle;
+  return s < n ? s : cycle - s;
+}
+
+/** A drawn blink: shown for BLINK_MS once every 4 to 6.5 s (by seed), counted from the pose change, so a figure
+ * never blinks the moment it goes back to standing and neighbours never blink together. */
+export const BLINK_MS = 160;
+export function blinkAt(since: number, seed: number): boolean {
+  if (!Number.isFinite(since) || since < 0) return false;
+  const period = 4000 + 2500 * seed;
+  return since % period >= period - BLINK_MS;
+}
+
+/** A drawn talk loop: each frame held TALK_FRAME_MS from the pose change, so a line starts on frame 0. */
+export const TALK_FRAME_MS = 420;
+/** A drawn thinking loop: each frame held THINK_HOLD_MS from the pose change (eyes open, then closed), so one
+ * open-and-closed cycle lasts as long as one think sway (2.6 s). */
+export const THINK_HOLD_MS = 1300;
+export function thinkFrameAt(frames: number, since: number): number {
+  if (frames <= 1 || !Number.isFinite(since)) return 0;
+  return Math.floor(Math.max(0, since) / THINK_HOLD_MS) % frames;
 }
 
 /** Breathing for static art: 0, 1 or 2 canvas pixels taller, one breath every 2.8 to 3.6 s. */
@@ -67,16 +95,24 @@ export function stillLook(pose: Pose): Look {
   return { texture: { kind: 'pose', pose }, stretch: 0, lift: 0, lean: 0 };
 }
 
-/** A standing figure at time `t`, `sincePose` ms after its pose last changed. */
+/** A standing figure at time `t`, `sincePose` ms after its pose last changed. Drawn loops count from the pose
+ * change: talk and think start on their frame 0; the idle loop starts at a phase seeded per figure, so neighbours
+ * standing since the start never breathe in step. */
 export function standLook(pose: Pose, t: number, seed: number, sincePose: number, drawn: Drawn = NO_DRAWN): Look {
   const pop = popStretch(sincePose);
-  const local = t + seed * 10000;
+  const since = Number.isFinite(sincePose) ? Math.max(0, sincePose) : 0;
   if (pose === 'speaking') {
-    const texture: Look['texture'] = drawn.talk > 1 ? { kind: 'talk', frame: Math.floor(local / 420) % drawn.talk } : { kind: 'pose', pose };
+    const texture: Look['texture'] = drawn.talk > 1 ? { kind: 'talk', frame: Math.floor(since / TALK_FRAME_MS) % drawn.talk } : { kind: 'pose', pose };
     return { texture, stretch: pop || talkBob(t, seed), lift: 0, lean: 0 };
   }
-  if (pose === 'thinking') return { texture: { kind: 'pose', pose }, stretch: pop || breath(t * .7, seed), lift: 0, lean: thinkLean(t, seed) };
-  if (drawn.idle > 1) return { texture: { kind: 'idle', frame: idleFrameAt(drawn.idle, local) }, stretch: pop, lift: 0, lean: 0 };
+  if (pose === 'thinking') {
+    const texture: Look['texture'] = (drawn.think ?? 0) > 1 ? { kind: 'think', frame: thinkFrameAt(drawn.think!, since) } : { kind: 'pose', pose };
+    return { texture, stretch: pop || breath(t * .7, seed), lift: 0, lean: thinkLean(t, seed) };
+  }
+  if (drawn.idle > 1) {
+    const frame = drawn.blink !== undefined && blinkAt(since, seed) ? drawn.blink : idleFrameAt(drawn.idle, since + seed * 10000, IDLE_HOLD_MS, drawn.blink);
+    return { texture: { kind: 'idle', frame }, stretch: pop, lift: 0, lean: 0 };
+  }
   return { texture: { kind: 'pose', pose }, stretch: pop || breath(t, seed), lift: 0, lean: 0 };
 }
 

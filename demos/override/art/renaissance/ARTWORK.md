@@ -2,22 +2,22 @@
 
 ## Provenance
 Character sheets (1254x1254, 4x4 cells, generated with built-in imagegen) come from
-`/Users/williambrach/Developer/arbiter/assets/renaissance-characters-v1/` (hooded-scout, inventor, court-noble, city-guard, plus `prompts.json`).
+`/Users/williambrach/Developer/arbiter/assets/renaissance-characters-v1/` (hooded-scout, inventor, court-noble, city-guard, apothecary, plus `prompts.json`).
+Ottavio (sprite `wizard`) has his own conversation sheet, art request R2:
+`/Users/williambrach/Developer/arbiter/assets/motion-v1/renaissance/wizard-conversation.png` (1536x1024, 4x2 cells of 384x512).
 The backdrop prompt is `/Users/williambrach/Developer/arbiter/assets/renaissance-background-v1/prompt.txt`.
 
 ## Placeholders (stated plainly)
-- **wizard** is NOT real art: the inventor sheet with ochre tones recoloured to ivory (hue 14-60 deg, saturation >= 0.3, value >= 0.45; the ruling's 32-60 missed the ochre, which measures 10-30 deg). The burgundy mantle stays; the head (top 26% of each frame) and skin-like pixels (hue 8-26, sat 0.25-0.6, value 0.4-0.85) are left untouched, so a few brown cloth patches remain on the tunic.
-- **apothecary** is NOT real art: the court-noble sheet with plum (hue 270-350 deg) recoloured to sage.
-- **town-square.png** is NOT the painted plate: a drawn placeholder with the layout contract below.
-- **props/scroll.png, props/seal.png, props/quill.png** are drawn icons (quill: the Quotes button).
-Replace with `--wizard SHEET`, `--apothecary SHEET`, `--backdrop PNG` once real art exists.
+- **props/scroll.png, props/seal.png, props/quill.png** are drawn icons (quill: the Quotes button); art request R8 would replace them.
+Ottavio, the apothecary and the town square are delivered art: R2, the apothecary sheet, and the painted market square (`--backdrop`).
 
 ## Frame map (row, col; 1-indexed; row 1 idle, row 2 right-walk, row 3 interaction)
 Row 4 (suspicious action) is never used, and no glowing frame is used.
 | sprite | idle loop | thinking | talk loop (speaking = its first frame) |
 |---|---|---|---|
-| inventor (and wizard) | r1c1..r1c4 | r1c3 | r3c1 |
-| noble (and apothecary) | r1c1..r1c4 | r1c3 | r3c3, r3c2 |
+| inventor | r1c1..r1c4 | r1c3 | r3c1 |
+| noble | r1c1..r1c4 | r1c3 | r3c3, r3c2 |
+| apothecary | r1c1..r1c4 | r1c3 | r1c2 (r3 and r4 are the vial gesture, never talk) |
 | guard | r1c1..r1c4 | r1c3 | r3c4 |
 | scout | r1c1..r1c4 | r1c3 | r3c2 |
 `listening` = the first idle frame. Scout walk: the game plays the R1 walk sheet (`scout-walk.png`, see art/requests/renaissance.md). `scout-walk-0..3` = r2c1..r2c4 are still cut but no longer loaded.
@@ -29,12 +29,32 @@ median centre of the widest opaque run per row in the top 22%. Cut at that ancho
 5 down (sheet px), scaled to 132x188 with LANCZOS: foot anchor (66, 185), head at the frame's centre so a flipped figure
 turns on the spot. The game cycles the idle frames 0 1 2 3 2 1 at 520 ms each and alternates talk frames every 420 ms.
 
+## Ottavio (R2 conversation sheet)
+Frames 1-8, left to right, then top to bottom: 1-4 idle (neutral, breath, neutral, blink), 5-6 talk (open palm with the
+mouth open, then the hand lower and the mouth closed), 7-8 think (stroking the beard, eyes open, then closed).
+| file | frames |
+|---|---|
+| `wizard-idle-0..3` | 1, 2, 3, 4 |
+| `wizard-talk-0..1` | 5, 6 |
+| `wizard-think-0..1` | 7, 8 |
+| `wizard-listening` / `-speaking` / `-thinking` | 1 / 5 / 7 |
+
+The generator drew him on the same spot in every cell: feet line y 489 (the prompt asked for 472), shoes x 141..266, head
+column x 182. All eight frames share that one pivot (measured on frame 1; the cut stops if any frame drifts over 2 px) and
+one scale, 0.38 (`CONV_SCALE`: his beret top lands at y 9 like the cast's heads, the staff top at y 4), nearest-neighbour,
+so no pose is resized to its own box. Each cell is cut on its own, so no neighbour bleeds in; alpha under 9 (the faint halo)
+is cleared. In the game the idle ping-pong skips the blink (0 1 2 1); the blink shows for 160 ms every 4 to 6.5 s. Talk
+alternates every 420 ms and think every 1300 ms, both from frame 0 when the pose begins. The face badge crops the 45 px
+window at (40, 4) of the listening frame (`client/renaissance.css`).
+
 ## Backdrop layout contract (1536x1024)
 Buildings only in y 0..330: apothecary (door x 120..240), clockmaker (door x 380..480), palazzo arches x 600..940 (sundial line on steps), guarded gateway x 1220..1360. Cobbles y 330..1024. Well only x 40..200, y 520..700. Bench and two crates only x 1300..1500, y 560..740.
 
 ## Re-run
 From `demos/override`: `python3 -I art/renaissance/cut.py --src /Users/williambrach/Developer/arbiter/assets/renaissance-characters-v1`
 (needs Pillow and numpy; `--characters-only` leaves the square and the prop icons alone).
+Ottavio alone: `python3 -I art/renaissance/cut.py --wizard /Users/williambrach/Developer/arbiter/assets/motion-v1/renaissance/wizard-conversation.png`;
+add `--check` to verify the shipped frames are a fresh cut without writing anything (`tests/wizard-art.test.mjs` runs it).
 
 ## Prompts
 ### Wizard sheet
