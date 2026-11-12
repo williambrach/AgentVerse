@@ -36,7 +36,9 @@ test('walks_every_case', () => {
       return q;
     });
     const shared = raw.talk ? raw.parts[0].knowledge.length : 0;
-    assert.equal(fieldLeaves(fields), leaves({ ...raw, parts, world: undefined }) + shared, k.id);
+    // A third: the case's rules, when every part has rules of its own.
+    const ownRules = raw.parts.every(p => typeof p.rules === 'string');
+    assert.equal(fieldLeaves(fields), leaves({ ...raw, parts, world: undefined, ...(ownRules ? { rules: undefined } : {}) }) + shared, k.id);
     const paths = fields.map(f => f.path);
     assert.equal(new Set(paths).size, paths.length, `${k.id} paths unique`);
     for (const p of paths) assert.doesNotMatch(p, /(^|\.)(id|color|role|when|version)$/, p);

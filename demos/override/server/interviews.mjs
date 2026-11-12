@@ -103,12 +103,13 @@ export function systemPrompt(kase, session, characterId) {
   const character = kase.characters.find(c => c.id === characterId);
   const part = partOf(kase, session.cast, characterId);
   const say = text => resolve(kase, session.cast, text);
-  return renderTemplate(kase.rules, {
+  // A part with its own rules uses them instead of the case's.
+  return renderTemplate(part.rules === undefined ? kase.rules : say(part.rules), {
     name: character.name, label: say(character.label ?? part.label), version: kase.version,
     promptVersion: kase.prompts?.interviewVersion ?? promptVersion, frame: kase.world.frame, frameFirst: kase.world.frame.split('. ')[0],
     persona: kase.world.persona, memory: kase.world.memory,
     // A character's secret for the dealt part sits between its own story and the part's knowledge.
-    knowledge: [...(character.knowledge ?? []), ...(character.secrets?.[part.id] ? [character.secrets[part.id]] : []), ...part.knowledge].map(say).join('\n'),
+    knowledge: [...(character.knowledge ?? []), ...(character.secrets?.[part.id] ? [character.secrets[part.id]] : []), ...(part.knowledge ?? [])].map(say).join('\n'),
   });
 }
 

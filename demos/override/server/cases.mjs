@@ -135,8 +135,17 @@ export function defineCase(data, { worlds = liveWorlds, prompts } = {}) {
     const at = `parts[${i}]`;
     if (!roleIds.includes(p.role)) fail(`${at}.role`, `must be one of ${roleIds.join(', ')}`);
     for (const k of ['label', 'introduction', 'quickQuestion']) text(p[k], `${at}.${k}`);
-    if (!Array.isArray(p.knowledge) || !p.knowledge.length) fail(`${at}.knowledge`, 'must be a non-empty array of non-empty strings');
-    p.knowledge.forEach((k, n) => text(k, `${at}.knowledge[${n}]`));
+    // `rules` (optional): this part's own rules, used instead of the case's for whoever is dealt it. Its text can then
+    // live in those rules, so `knowledge` becomes optional.
+    if (p.rules !== undefined) {
+      text(p.rules, `${at}.rules`);
+      const problem = checkTemplate('interview', p.rules);
+      if (problem) fail(`${at}.rules`, problem);
+    }
+    if (p.knowledge !== undefined || p.rules === undefined) {
+      if (!Array.isArray(p.knowledge) || !p.knowledge.length) fail(`${at}.knowledge`, 'must be a non-empty array of non-empty strings');
+      p.knowledge.forEach((k, n) => text(k, `${at}.knowledge[${n}]`));
+    }
     text(p.finding?.classification, `${at}.finding.classification`);
     text(p.finding?.explanation, `${at}.finding.explanation`);
   });
@@ -163,6 +172,7 @@ export function defineCase(data, { worlds = liveWorlds, prompts } = {}) {
   }
   // `guard`: model lines from these roles may not hold a modern word (server/anachronism.mjs) the question did not.
   // One retry, then `deflect` (an interview) or `quiet` (a thread line) is said instead.
+  // `words` (optional): this case's own modern words, checked on top of the lexicon.
   if (data.guard !== undefined) {
     const g = data.guard;
     if (!g || typeof g !== 'object' || Array.isArray(g)) fail('guard', 'must be an object');
@@ -170,6 +180,7 @@ export function defineCase(data, { worlds = liveWorlds, prompts } = {}) {
     if (!Array.isArray(g.roles) || !g.roles.length || !g.roles.every(r => roleIds.includes(r))) fail('guard.roles', `must list roles from ${roleIds.join(', ')}`);
     text(g.deflect, 'guard.deflect');
     text(g.quiet, 'guard.quiet');
+    if (g.words !== undefined && (!Array.isArray(g.words) || !g.words.length || !g.words.every(w => typeof w === 'string' && w.trim()))) fail('guard.words', 'must be a non-empty list of words');
   }
   if (data.talk !== undefined) {
     try { checkTalk(data); } catch (e) { throw new Error(`case ${id}: ${e.message}`); }

@@ -9,6 +9,8 @@ import { ROLES } from './roles.mjs';
 import { worlds as liveWorlds } from './worlds.mjs';
 
 const MAX_TEXT = 2000;
+// The rules hold the whole shared prompt, facts everyone knows included, so they get more room.
+const MAX_RULES = 4000;
 const GAME = 'game';
 
 export class ContentError extends Error {
@@ -111,7 +113,8 @@ export function createContentStore({ cases, dataDir, contentDir, uiDefaults = {}
 
   const textCheck = (value, path) => {
     if (typeof value !== 'string') throw new ContentError(400, 'Must be text.', path);
-    if (value.length > MAX_TEXT) throw new ContentError(400, `Must be at most ${MAX_TEXT} characters.`, path);
+    const max = path === 'rules' || /^parts\.[^.]+\.rules$/.test(path) ? MAX_RULES : MAX_TEXT;
+    if (value.length > max) throw new ContentError(400, `Must be at most ${max} characters.`, path);
   };
 
   // Case edits: known fields only, caps, no-ops dropped, then defineCase decides.

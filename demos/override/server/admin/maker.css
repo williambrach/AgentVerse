@@ -169,3 +169,4 @@ pre.result { max-height: none; padding: 12px 14px; border: 1px solid var(--borde
 .big-box { width: 100%; min-width: 0; min-height: 320px; field-sizing: content; resize: vertical; font: inherit; font-size: var(--fs-lg); line-height: 1.7; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
 .big-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .big-box.unsaved { border-color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); }
+.field-input.secret-box { min-height: 160px; line-height: 1.6; }

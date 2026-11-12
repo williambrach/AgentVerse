@@ -60,7 +60,7 @@ test('answerThread: rehearsal uses the case chatter or a fallback, live passes m
 });
 
 test('interview prompt and promptVersion are pinned', () => {
-  const expected = { 'banana-mystery': 'a6d40cd3194b0fa7', 'friends-roundtable': 'a6d45b214c71bbca', 'factory-escape': '2c169fae774442e5', 'department-murder': '0fd9f1360a385eb2', 'renaissance-traveler': '976477ceb6377a79' };
+  const expected = { 'banana-mystery': 'a6d40cd3194b0fa7', 'friends-roundtable': 'a6d45b214c71bbca', 'factory-escape': '2c169fae774442e5', 'department-murder': '0fd9f1360a385eb2', 'renaissance-traveler': '0990ba26e787c4c9' };
   assert.equal(promptVersion, 'interview-v6');
   for (const k of cases) {
     const id = k.characters[0].id;
@@ -91,12 +91,16 @@ test('thread_shuffled_cast: the prompt holds the speaker part only, names follow
     for (const c of k.characters) {
       const sys = buildThreadMessages(k, s, c.id)[0].content;
       const own = k.parts.find(p => p.id === cast[c.id]);
-      const known = [...(c.knowledge ?? []), ...own.knowledge].map(line => resolve(k, cast, line));
-      assert.ok(sys.startsWith(`You play ${c.name} (${resolve(k, cast, c.label ?? own.label)}) (`), `${k.id} ${c.id}`);
+      const known = [...(c.knowledge ?? []), ...(own.knowledge ?? [])].map(line => resolve(k, cast, line));
+      assert.ok(sys.startsWith(`You play ${c.name} (${resolve(k, cast, c.label ?? own.label)})`), `${k.id} ${c.id}`);
+      // A part with its own rules: its section after the character's text is there; another part's is not.
+      const tail = p => (p.rules ? p.rules.split('[[knowledge]]')[1].trim() : '');
+      if (tail(own)) assert.ok(sys.includes(resolve(k, cast, tail(own))), `${k.id} ${c.id} misses its part rules`);
+      for (const p of k.parts.filter(x => tail(x) && tail(x) !== tail(own))) assert.ok(!sys.includes(resolve(k, cast, tail(p))), `${k.id} ${c.id} holds ${p.id} rules`);
       for (const line of known) assert.ok(sys.includes(line), `${k.id} ${c.id} misses its knowledge`);
       for (const p of k.parts.filter(x => x.id !== own.id)) {
         if (resolve(k, cast, p.label) !== resolve(k, cast, c.label ?? own.label)) assert.ok(!sys.includes(`(${resolve(k, cast, p.label)})`), `${k.id} ${c.id} names part ${p.id}`);
-        for (const line of p.knowledge.map(x => resolve(k, cast, x))) if (!known.includes(line)) assert.ok(!sys.includes(line), `${k.id} ${c.id} holds ${p.id} knowledge`);
+        for (const line of (p.knowledge ?? []).map(x => resolve(k, cast, x))) if (!known.includes(line)) assert.ok(!sys.includes(line), `${k.id} ${c.id} holds ${p.id} knowledge`);
       }
       assert.ok(!/\{[a-z][a-z0-9]*\}/.test(sys), `${k.id} ${c.id} has an unresolved placeholder`);
       for (const role of ROLE_IDS) if (!known.some(line => new RegExp(`\\b${role}\\b`, 'i').test(line))) assert.ok(!new RegExp(`\\b${role}\\b`, 'i').test(sys), `${k.id} ${c.id} names role ${role}`);

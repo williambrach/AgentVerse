@@ -85,7 +85,8 @@ test('renaissance_chat: a typed question, no topic chips, only the traveller sli
     await expect(page.locator('#interview-form .ask-button')).toBeEnabled();
   }
   const lines = (await state(page)).session.interviews;
-  for (const id of IDS) expect(modernWords(lines[id].at(-1).answer).length > 0, id).toBe(id === traveler);
+  // The traveller slips quietly, with a word from home in the case's guard list (Federico's words) rather than the shared lexicon.
+  for (const id of IDS) expect(modernWords(lines[id].at(-1).answer, kase.guard.words).length > 0, id).toBe(id === traveler);
   await expect(page.locator('.talk-line, .quote-button, [data-pick]')).toHaveCount(0);
   await shot(page, '02-chat');
 });

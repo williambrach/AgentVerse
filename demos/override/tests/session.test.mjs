@@ -561,7 +561,7 @@ test('every case keeps its answer, parts and roles off the wire before the verdi
     const id = (await act(undefined, 'start', { caseId: k.id })).session.id;
     await talkToAll(act, id, k);
     const wire = JSON.stringify(games.view(id));
-    const secrets = [...k.parts.flatMap(p => p.knowledge), ...k.parts.map(p => p.finding.explanation), ...k.parts.map(p => p.finding.classification),
+    const secrets = [...k.parts.flatMap(p => p.knowledge ?? []), ...k.parts.map(p => p.finding.explanation), ...k.parts.map(p => p.finding.classification),
       k.debrief.title, k.debrief.summary, k.debrief.lesson, k.answer.feedback.correct, k.answer.feedback.other];
     for (const secret of secrets) assert.equal(wire.includes(JSON.stringify(secret).slice(1, -1)), false, `${k.id} leaked: ${secret}`);
     const hidden = new Set(['boss', 'helper', 'bystander', 'minder', 'scout', ...k.parts.map(p => p.id)]);

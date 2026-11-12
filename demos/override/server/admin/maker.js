@@ -35,6 +35,12 @@ export function templateProblem(kind, text) {
   return null;
 }
 
+/** Whether every character has its own label, so the game gets a page per character (its people). */
+function hasPeoplePages(detail) {
+  const chars = detail.structure?.characters ?? [];
+  return chars.length > 0 && chars.every((c) => Object.hasOwn(detail.authored ?? {}, `characters.${idOf(c)}.label`));
+}
+
 /**
  * The pages that hold a prompt. Names are dealt to parts at random each game, so a page is never "a name with a part":
  * - where the parts carry the story identity (their own label), one page per part, and the name is whoever gets it;
@@ -47,9 +53,18 @@ export function actorsOf(detail) {
   const chars = detail.structure?.characters ?? [];
   const path = (p) => (has(p) ? p : null);
   const shared = path('partsKnowledge');
-  const byCharacter = chars.length > 0 && chars.every((c) => has(`characters.${idOf(c)}.label`));
+  const byCharacter = hasPeoplePages(detail);
+  const partPage = (part, i, { knowledge, id = part.id }) => {
+    const own = (key) => path(`parts.${part.id}.${key}`);
+    const player = chars[i] ?? chars[0] ?? null; // who plays this part in the test chat
+    return {
+      id, kind: 'part', chatId: idOf(player) ?? null, partId: part.id, role: part.role ?? null, fallbackName: player?.name || '', nameShown: null,
+      label: own('label'), introduction: own('introduction'), quickQuestion: own('quickQuestion'),
+      ownKnowledge: null, partKnowledge: knowledge, debrief: [], extra: [],
+    };
+  };
   if (byCharacter) {
-    return chars.map((c) => {
+    const people = chars.map((c) => {
       const id = idOf(c);
       const own = (key) => path(`characters.${id}.${key}`);
       return {
@@ -58,20 +73,49 @@ export function actorsOf(detail) {
         ownKnowledge: own('knowledge'), partKnowledge: null, debrief: [], extra: [],
       };
     });
+    // The dealt parts get actor pages too, after the people. A part id that is also a character id gets a page id of its own.
+    // A part with rules of its own is shown on a rules page instead (see rulePagesOf).
+    const taken = new Set(people.map((p) => p.id));
+    return [...people, ...parts.map((part, i) => ({ part, i })).filter(({ part }) => !has(`parts.${part.id}.rules`)).map(({ part, i }) => partPage(part, i, {
+      knowledge: path(`parts.${part.id}.knowledge`), id: taken.has(part.id) ? `part-${part.id}` : part.id,
+    }))];
   }
-  return parts.map((part, i) => {
-    const own = (key) => path(`parts.${part.id}.${key}`);
-    const player = chars[i] ?? chars[0] ?? null; // who plays this part in the test chat
-    return {
-      id: part.id, kind: 'part', chatId: idOf(player) ?? null, partId: part.id, role: part.role ?? null, fallbackName: player?.name || '', nameShown: null,
-      label: own('label'), introduction: own('introduction'), quickQuestion: own('quickQuestion'),
-      ownKnowledge: null, partKnowledge: own('knowledge') ?? shared, debrief: [], extra: [],
-    };
-  });
+  return parts.map((part, i) => partPage(part, i, { knowledge: path(`parts.${part.id}.knowledge`) ?? shared }));
 }
 
 const promptPaths = (a) => [a.label, a.ownKnowledge, a.partKnowledge, a.introduction, a.quickQuestion].filter(Boolean);
 const actorPaths = (a) => [...promptPaths(a), ...a.debrief, ...a.extra];
+// The section key routeOf gives this actor's own paths (a part page's id may differ from its part id).
+const routeKey = (a) => (a.kind === 'part' ? `part:${a.partId}` : `character:${a.id}`);
+// After the actors and the rules, the pages in the order the monkey game shows them; the rest keep their place.
+const GROUP_RANK = { prompt: 0, evidence: 1, topics: 2, debrief: 3, roles: 4 };
+const rankOf = (g) => GROUP_RANK[g.key] ?? 5;
+/** A character's secret for a dealt part: shown as its own box on the character page. */
+export const secretPart = (path) => /^characters\.[^.]+\.secrets\.([^.]+)$/.exec(path)?.[1] ?? null;
+
+const RULE_FIELDS = ['rules', 'knowledge', 'finding.classification', 'finding.explanation'];
+/**
+ * Parts with rules of their own (a game with people pages): one page per role, whose fields write to every part of
+ * that role at once. Parts of one role whose texts differ keep a page each.
+ */
+export function rulePagesOf(detail) {
+  const has = (p) => Object.hasOwn(detail.authored ?? {}, p);
+  if (!hasPeoplePages(detail)) return [];
+  const ruled = (detail.structure?.parts ?? []).filter((p) => has(`parts.${p.id}.rules`));
+  const pages = [];
+  for (const part of ruled) {
+    const fields = RULE_FIELDS.map((f) => `parts.${part.id}.${f}`).filter(has);
+    const values = JSON.stringify(fields.map((p) => (detail.current ?? detail.authored)[p]));
+    const page = pages.find((g) => g.role === (part.role ?? null) && g.values === values);
+    if (page) { page.partIds.push(part.id); page.fields.forEach((f) => f.paths.push(`parts.${part.id}.${f.name}`)); continue; }
+    pages.push({
+      key: `rules:${part.id}`, role: part.role ?? null, partIds: [part.id], values,
+      fields: fields.map((p) => ({ name: p.slice(`parts.${part.id}.`.length), paths: [p] })),
+    });
+  }
+  return pages.map(({ values, ...page }) => page); // eslint-disable-line no-unused-vars
+}
+const rulePaths = (page) => page.fields.flatMap((f) => f.paths);
 
 /**
  * Every editable path placed exactly once: the story, the names, one actor page (all the text about it),
@@ -82,13 +126,14 @@ export function layoutOf(detail) {
   const actors = actorsOf(detail);
   const names = order.filter((p) => /^characters\.[^.]+\.name$/.test(p));
   const rules = order.includes('rules') ? 'rules' : null;
-  const taken = new Set([...names, ...actors.flatMap(promptPaths), ...(rules ? [rules] : [])]);
+  const ruled = rulePagesOf(detail);
+  const taken = new Set([...names, ...actors.flatMap(promptPaths), ...(rules ? [rules] : []), ...ruled.flatMap(rulePaths)]);
   const story = order.filter((p) => p === 'title' || p.startsWith('copy.'));
   const groups = []; // { key, title, paths, role? }
   for (const p of order) {
     if (taken.has(p) || story.includes(p)) continue;
     const r = routeOf(p, detail.structure);
-    const owner = actors.find((a) => r.key === `${a.kind}:${a.id}`);
+    const owner = actors.find((a) => r.key === routeKey(a));
     if (owner) { (/^parts\.[^.]+\.finding\./.test(p) ? owner.debrief : owner.extra).push(p); continue; }
     let g = groups.find((x) => x.key === r.key);
     if (!g) {
@@ -97,7 +142,8 @@ export function layoutOf(detail) {
     }
     g.paths.push(p);
   }
-  return { story, names, rules, actors, groups };
+  groups.sort((a, b) => rankOf(a) - rankOf(b)); // stable: equal ranks keep the document order
+  return { story, names, rules, ruled, actors, groups };
 }
 
 export function mountMaker(doc, { api, caseId = null, confirm = (m) => window.confirm(m) } = {}) {
@@ -146,12 +192,13 @@ export function mountMaker(doc, { api, caseId = null, confirm = (m) => window.co
     node.classList.toggle('unsaved', !same(get(path), detail.current[path]));
   };
   /** kind: 'text' | 'lines' (one item per line). */
-  function bind(node, path, kind = Array.isArray(detail.authored[path]) ? 'lines' : 'text') {
+  function bind(node, path, kind = Array.isArray(detail.authored[path]) ? 'lines' : 'text', also = []) {
     node.dataset.path = path;
     node.value = text(path);
     mark(node, path);
     node.addEventListener('input', () => {
-      model.set(path, kind === 'lines' ? knowledgeLines(node.value) : node.value);
+      const value = kind === 'lines' ? knowledgeLines(node.value) : node.value;
+      for (const p of [path, ...also]) model.set(p, value); // `also`: paths that always hold the same text
       mark(node, path);
       const b = bound.get(path);
       if (b?.error) { b.error.textContent = ''; b.error.hidden = true; }
@@ -168,17 +215,17 @@ export function mountMaker(doc, { api, caseId = null, confirm = (m) => window.co
   }
 
   /** A labelled textarea, as in the story section. */
-  function field(parent, path, { label, hint, kind } = {}) {
+  function field(parent, path, { label, hint, kind, also = [] } = {}) {
     const copy = fieldCopy(path);
     const wrap = el(doc, 'div', 'field', { parent });
     const lab = el(doc, 'label', 'field-label', { text: label ?? copy.label, parent: wrap });
     lab.title = path;
     const h = hint ?? copy.hint;
     if (h) el(doc, 'p', 'field-hint', { text: h, parent: wrap });
-    const area = bind(el(doc, 'textarea', 'field-input', { parent: wrap }), path, kind);
+    const area = bind(el(doc, 'textarea', 'field-input', { parent: wrap }), path, kind, also);
     const error = el(doc, 'div', 'field-error', { parent: wrap });
     error.hidden = true;
-    bound.set(path, { node: area, error });
+    for (const p of [path, ...also]) bound.set(p, { node: area, error });
     return wrap;
   }
 
@@ -221,6 +268,7 @@ export function mountMaker(doc, { api, caseId = null, confirm = (m) => window.co
     };
     if (hasStory()) item('story', 'Story', { dirty: isDirty([...layout.story, ...layout.names]) });
     for (const a of layout.actors) item(`actor:${a.id}`, titleOf(a), { role: a.role, dirty: isDirty(actorPaths(a)) });
+    for (const r of layout.ruled) item(r.key, rulesTitle(r), { dirty: isDirty(rulePaths(r)) });
     if (layout.rules) item('rules', 'Rules for all actors', { dirty: isDirty([layout.rules]) });
     for (const g of layout.groups) item(g.key, g.title, { role: g.role, dirty: isDirty(g.paths) });
     item('history', 'History');
@@ -231,7 +279,7 @@ export function mountMaker(doc, { api, caseId = null, confirm = (m) => window.co
   const firstSection = () => (hasStory() ? 'story' : layout.groups[0]?.key ?? 'history');
 
   function selectSection(key) {
-    const known = (key === 'story' && hasStory()) || key === 'history' || (key === 'rules' && layout.rules) || layout.groups.some((g) => g.key === key) || layout.actors.some((a) => `actor:${a.id}` === key);
+    const known = (key === 'story' && hasStory()) || key === 'history' || (key === 'rules' && layout.rules) || layout.ruled.some((r) => r.key === key) || layout.groups.some((g) => g.key === key) || layout.actors.some((a) => `actor:${a.id}` === key);
     section = known ? key : firstSection();
     const root = $('section');
     clear(root);
@@ -252,6 +300,7 @@ export function mountMaker(doc, { api, caseId = null, confirm = (m) => window.co
         chat.hidePrompt();
       }
     } else if (section === 'rules') renderRules(root);
+    else if (layout.ruled.some((r) => r.key === section)) renderRulePage(root, layout.ruled.find((r) => r.key === section));
     else if (section === 'history') renderHistory(root);
     else {
       const g = layout.groups.find((x) => x.key === section);
@@ -267,11 +316,22 @@ export function mountMaker(doc, { api, caseId = null, confirm = (m) => window.co
   const nameOf = (a) => (a.chatId ? characterName(a.chatId) : '') || a.fallbackName;
   const partOf = (a) => (a.label ? text(a.label) : '') || a.partId || '';
   // Parts that share a label (five "Friend"s) are told apart by their id.
+  // A part next to people pages (its label is hidden) reads "Part: killer".
+  const besidePeople = (a) => a.kind === 'part' && !a.label && layout.actors.some((o) => o.kind === 'character');
   const titleOf = (a) => {
     if (a.kind !== 'part') return `${nameOf(a)}${partOf(a) ? ' · ' + partOf(a) : ''}`;
+    if (besidePeople(a)) return `Part: ${a.partId}`;
     const twin = layout.actors.some((o) => o !== a && partOf(o) === partOf(a));
     return twin && a.partId !== partOf(a) ? `${partOf(a)} · ${a.partId}` : partOf(a);
   };
+  // "Rules for the time traveller", "Rules for every townsperson": the role's label, as the admin last typed it.
+  const roleLabel = (role) => text(`roles.${role}.label`) || role || 'part';
+  const rulesTitle = (r) => {
+    const label = roleLabel(r.role).toLowerCase();
+    const split = layout.ruled.filter((o) => o.role === r.role).length > 1; // one role whose parts' texts differ
+    return `Rules for ${r.partIds.length > 1 ? 'every' : 'the'} ${label}${split ? ` (${r.partIds.join(', ')})` : ''}`;
+  };
+  const partRole = (pid) => (detail.structure?.parts ?? []).find((p) => idOf(p) === pid)?.role ?? pid;
   const liveText = (key) => {
     const a = actor();
     if (!a) return '';
@@ -328,13 +388,30 @@ export function mountMaker(doc, { api, caseId = null, confirm = (m) => window.co
     if (facts) {
       const tags = (detail.structure?.placeholders ?? []).join(' ');
       const who = a.kind === 'part' ? 'whoever is dealt this part' : nameOf(a);
-      const area = bigBox(root, `Who this actor is and what they know. It is told to ${who}, in the one-to-one chat and in the group thread alike. One fact per line.${tags ? ` Name tags: ${tags}.` : ''}`);
+      const what = besidePeople(a)
+        ? 'What the character dealt this part knows. It comes after that character\'s own text, in the one-to-one chat and in the group thread alike.'
+        : `Who this actor is and what they know. It is told to ${who}, in the one-to-one chat and in the group thread alike.`;
+      const area = bigBox(root, `${what} One fact per line.${tags && a.kind === 'part' ? ` Name tags: ${tags}.` : ''}`);
       bind(area, facts, 'lines');
       area.title = facts;
       bound.set(facts, { node: area, error });
     }
     root.appendChild(error);
-    if (a.kind === 'character') el(doc, 'p', 'field-hint', { parent: root, text: 'In a game the facts of the part this character is dealt are added. They are on the Part pages in the side panel.' });
+    if (a.kind === 'character') {
+      el(doc, 'p', 'field-hint', {
+        parent: root,
+        text: layout.ruled.length
+          ? 'In a game this text goes into the rules of the part this character is dealt. They are on the Rules pages in the side panel.'
+          : 'In a game the facts of the part this character is dealt are added. They are on the Part pages in the side panel.',
+      });
+    }
+    // A secret is prompt text too: it shows as a box, not under "More text".
+    for (const p of a.extra.filter((x) => secretPart(x))) {
+      field(root, p, {
+        label: `If ${nameOf(a)} is the ${roleLabel(partRole(secretPart(p))).toLowerCase()}`,
+        hint: `Added after the text above only in a game where ${nameOf(a)} is dealt this part. One fact per line.`,
+      }).querySelector('textarea')?.classList.add('secret-box');
+    }
     const sub = (title, paths) => {
       if (!paths.length) return;
       el(doc, 'h3', 'sub-title', { text: title, parent: root });
@@ -342,11 +419,35 @@ export function mountMaker(doc, { api, caseId = null, confirm = (m) => window.co
     };
     sub('Shown to the player, not part of the prompt', [a.introduction, a.quickQuestion].filter(Boolean));
     sub('In the debrief', a.debrief);
-    if (a.extra.length) {
+    const rest = a.extra.filter((x) => !secretPart(x));
+    if (rest.length) {
       const more = el(doc, 'details', 'more-group', { parent: root });
       const sum = el(doc, 'summary', null, { text: 'More text for this actor', parent: more });
-      el(doc, 'span', 'muted', { text: ` · ${a.extra.length}`, parent: sum });
-      for (const p of a.extra) field(more, p);
+      el(doc, 'span', 'muted', { text: ` · ${rest.length}`, parent: sum });
+      for (const p of rest) field(more, p);
+    }
+  }
+
+  // ---- the rules of one kind of part (a game whose parts carry their own rules) -------------------
+  function renderRulePage(root, r) {
+    heading(root, rulesTitle(r));
+    const n = r.partIds.length;
+    const field$ = (name) => r.fields.find((f) => f.name === name);
+    const rules = field$('rules');
+    const area = bigBox(root, `Everything a character dealt ${n > 1 ? `one of these ${n} parts` : 'this part'} gets, in the one-to-one chat and in the group thread alike.${n > 1 ? ` One text for all ${n}.` : ''} [[name]] becomes the character's name, [[label]] their job, and [[knowledge]] their own text (with their secret, when they have one for this part); [[knowledge]] must stay, once.`);
+    bind(area, rules.paths[0], 'text', rules.paths.slice(1));
+    area.spellcheck = false;
+    const error = el(doc, 'div', 'field-error', { parent: root });
+    for (const p of rules.paths) bound.set(p, { node: area, error });
+    const check = () => { const p = templateProblem('interview', area.value); error.textContent = p ?? ''; error.hidden = !p; };
+    check();
+    area.addEventListener('input', check);
+    const knowledge = field$('knowledge');
+    if (knowledge) field(root, knowledge.paths[0], { label: 'More facts', hint: 'Added after the character\'s own text. One fact per line.', also: knowledge.paths.slice(1) });
+    const debrief = ['finding.classification', 'finding.explanation'].map(field$).filter(Boolean);
+    if (debrief.length) {
+      el(doc, 'h3', 'sub-title', { text: 'In the debrief', parent: root });
+      for (const f of debrief) field(root, f.paths[0], { also: f.paths.slice(1) });
     }
   }
 
@@ -402,7 +503,8 @@ export function mountMaker(doc, { api, caseId = null, confirm = (m) => window.co
   function fieldError(path, message) {
     const owner = layout?.actors.find((a) => actorPaths(a).includes(path));
     const group = layout?.groups.find((g) => g.paths.includes(path));
-    const want = owner ? `actor:${owner.id}` : group ? group.key : path === layout?.rules ? 'rules' : layout?.story.includes(path) || layout?.names.includes(path) ? 'story' : null;
+    const ruled = layout?.ruled.find((r) => rulePaths(r).includes(path));
+    const want = owner ? `actor:${owner.id}` : ruled ? ruled.key : group ? group.key : path === layout?.rules ? 'rules' : layout?.story.includes(path) || layout?.names.includes(path) ? 'story' : null;
     if (want && want !== section) selectSection(want);
     const b = bound.get(path);
     if (!b) { $('publish-note').textContent = `${path}: ${message}`; return; }

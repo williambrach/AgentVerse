@@ -649,7 +649,7 @@ export class Investigation {
     };
     if (!this.guarded(cid)) return { result: await ask(), hidden: null };
     const said = this.heard(cid, question);
-    const dirty = r => guardHits(r.answer ?? '').some(w => !said.has(w));
+    const dirty = r => this.guardWords(r.answer).some(w => !said.has(w));
     let result = await ask();
     let guard = 'ok';
     if (dirty(result)) {
@@ -661,7 +661,7 @@ export class Investigation {
       }
     }
     // Inspect shows reasoning: a guarded line keeps none that holds a new modern word.
-    if (guardHits(result.reasoning ?? '').some(w => !said.has(w))) result = { ...result, reasoning: null };
+    if (this.guardWords(result.reasoning).some(w => !said.has(w))) result = { ...result, reasoning: null };
     return { result, hidden: { guard } };
   }
 
@@ -669,7 +669,12 @@ export class Investigation {
   heard(cid, question = '') {
     const s = this.session;
     const texts = [question, ...s.interviews[cid].map(t => t.question), ...s.thread.map(l => l.text)];
-    return new Set(texts.flatMap(t => guardHits(t)));
+    return new Set(texts.flatMap(t => this.guardWords(t)));
+  }
+
+  // Modern words in a line for the case's guard: the lexicon plus the case's own `guard.words`.
+  guardWords(text) {
+    return guardHits(text ?? '', this.kase.guard?.words ?? []);
   }
 
   // Whether this character's model lines go through the case's guard: live mode, and its dealt part's role is guarded.
@@ -825,7 +830,7 @@ export class Investigation {
         // A guarded role gets one retry on a modern word, then says the case's quiet line.
         if (this.guarded(speaker.id)) {
           const said = this.heard(speaker.id);
-          const fresh = t => guardHits(t ?? '').some(w => !said.has(w));
+          const fresh = t => this.guardWords(t).some(w => !said.has(w));
           guard = 'ok';
           if (fresh(text)) {
             guard = 'retried';

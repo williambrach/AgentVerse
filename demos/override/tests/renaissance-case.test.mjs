@@ -10,7 +10,7 @@ import { modernWords } from '../server/anachronism.mjs';
 import { editablePaths } from '../server/content.mjs';
 import { Investigations } from '../server/session.mjs';
 
-// Castelvento v2: no talk mode. The traveller's model knows its secret and slips; locals are held to 1489 by the guard.
+// Castelvento v2: no talk mode. The traveller's model knows its secret and slips quietly; locals are held to 1489 by the guard.
 const kase = cases.find(c => c.id === 'renaissance-traveler');
 const CIDS = kase.characters.map(c => c.id);
 const PARTS = ['traveler', 'locala', 'localb', 'localc', 'locald'];
@@ -24,7 +24,7 @@ test('registry: Castelvento v2 is a standard case with reasoning and talk on', (
   assert.equal(cases.length, 5);
   assert.equal(cases[4], kase);
   assert.equal(kase.order, 3);
-  assert.equal(kase.version, 'renaissance-traveler-v2.0.0');
+  assert.equal(kase.version, 'renaissance-traveler-v2.1.0');
   assert.equal(kase.talk, undefined);
   assert.equal(kase.tools, undefined);
   assert.deepEqual(kase.parts.map(p => p.id), PARTS);
@@ -59,6 +59,32 @@ test('traveller_prompt: only the dealt traveller gets its own 2026 secret and th
   assert.ok(thread.includes(kase.characters.find(c => c.id === 'matteo').secrets.traveler));
 });
 
+// Federico's quiet slips (2026-11-12): five words from home per character, said plainly, never corrected, explained away.
+const WORDS_FROM_HOME = {
+  ottavio: ['psychology', 'tourist', 'newspaper', "Saturn's rings", 'pandemonium'],
+  matteo: ['pendulum', 'ran out of steam', 'network', 'automatic', 'slow motion'],
+  beatrice: ['deadline', 'homesick', 'envelope', 'poker face', 'Machiavellian'],
+  bruno: ['bottleneck', 'kilometres', 'red tape', 'jackpot', 'okay'],
+  agnese: ['allergic', 'weekend', 'sunflower', 'tea', 'germs'],
+};
+
+test('quiet_slips: each secret names its words from home, the traveller never corrects one, and the guard knows them all', () => {
+  for (const c of kase.characters) {
+    const secret = c.secrets.traveler;
+    for (const w of WORDS_FROM_HOME[c.id]) {
+      assert.ok(secret.includes(`${w} (`), `${c.id}: ${w}`);
+      assert.ok(modernWords(w, kase.guard.words).length > 0, `guard misses ${w}`);
+    }
+    assert.match(secret, /Asked about one, you pass it off as/, c.id);
+  }
+  const sys = systemOf(castWith('ottavio'), 'ottavio');
+  assert.match(sys, /do not correct yourself/);
+  assert.match(sys, /If they ask about the same word again, refuse politely/);
+  assert.doesNotMatch(sys, /I mean/);
+  // Words a local may say plainly stay out of the guard list.
+  for (const w of ['rings', 'steam', 'poker']) assert.equal(kase.guard.words.includes(w), false, w);
+});
+
 test('public_view_no_secrets: no secret, part or 2026 ever reaches the client', () => {
   for (const traveller of CIDS) {
     const json = JSON.stringify(publicView(kase, castWith(traveller), { hideParts: true }));
@@ -66,19 +92,22 @@ test('public_view_no_secrets: no secret, part or 2026 ever reaches the client', 
   }
 });
 
-test('rehearsal: traveller lines always slip, local lines never do', () => {
+test('rehearsal: traveller lines always slip quietly, local lines never do', () => {
   const qs = ['a', 'ab', 'abc', 'What is your work?']; // lengths cover every scripted line
+  const words = t => modernWords(t, kase.guard.words);
   for (const q of qs) {
-    assert.ok(modernWords(kase.rehearsal('traveler', q)).length > 0, `traveller: ${q}`);
-    for (const p of PARTS.slice(1)) assert.deepEqual(modernWords(kase.rehearsal(p, q)), [], `${p}: ${q}`);
+    assert.ok(words(kase.rehearsal('traveler', q)).length > 0, `traveller: ${q}`);
+    assert.doesNotMatch(kase.rehearsal('traveler', q), /I mean/);
+    for (const p of PARTS.slice(1)) assert.deepEqual(words(kase.rehearsal(p, q)), [], `${p}: ${q}`);
   }
   for (let n = 0; n < 3; n++) {
-    assert.ok(modernWords(kase.rehearsalChatter('traveler', n)).length > 0, `traveller chatter ${n}`);
-    for (const p of PARTS.slice(1)) assert.deepEqual(modernWords(kase.rehearsalChatter(p, n)), [], `${p} chatter ${n}`);
+    assert.ok(words(kase.rehearsalChatter('traveler', n)).length > 0, `traveller chatter ${n}`);
+    assert.doesNotMatch(kase.rehearsalChatter('traveler', n), /I mean/);
+    for (const p of PARTS.slice(1)) assert.deepEqual(words(kase.rehearsalChatter(p, n)), [], `${p} chatter ${n}`);
   }
-  assert.deepEqual(modernWords(kase.rehearsalReasoning('locala')), []);
-  assert.deepEqual(modernWords(kase.guard.deflect), []);
-  assert.deepEqual(modernWords(kase.guard.quiet), []);
+  assert.deepEqual(words(kase.rehearsalReasoning('locala')), []);
+  assert.deepEqual(words(kase.guard.deflect), []);
+  assert.deepEqual(words(kase.guard.quiet), []);
 });
 
 test('schema: secrets, role counts and the guard are checked', () => {
@@ -93,12 +122,15 @@ test('schema: secrets, role counts and the guard are checked', () => {
   assert.throws(bad({ roles: [{ ...kase.roles[0], count: 0 }, kase.roles[1]] }), /roles\[0\].count: must be a positive integer/);
   assert.throws(bad({ guard: { ...kase.guard, roles: ['nobody'] } }), /guard.roles/);
   assert.throws(bad({ guard: { ...kase.guard, quiet: '' } }), /guard.quiet/);
+  for (const words of [[], 'tea', ['tea', ''], ['tea', 3]]) assert.throws(bad({ guard: { ...kase.guard, words } }), /guard.words/, JSON.stringify(words));
+  const { words, ...noWords } = kase.guard; // eslint-disable-line no-unused-vars
+  assert.doesNotThrow(bad({ guard: noWords }));
 });
 
 test('editor: secrets and guard lines are editable, guard roles are not', () => {
   const paths = editablePaths(kase);
   for (const cid of CIDS) assert.ok(paths.includes(`characters.${cid}.secrets.traveler`), cid);
-  assert.ok(paths.includes('guard.deflect') && paths.includes('guard.quiet'));
+  assert.ok(paths.includes('guard.deflect') && paths.includes('guard.quiet') && paths.includes('guard.words'));
   assert.equal(paths.includes('guard.roles'), false);
 });
 
@@ -161,6 +193,14 @@ test('guard: a local modern word gets one retry, then the deflect line; the trav
   assert.equal(last(await act('interview', { character: local, question: 'Do you have a phone?' }), local), 'A phone? I never heard the word.');
   replies.push('My spreadsheet— my ledger, I mean.');
   assert.equal(last(await act('interview', { character: traveller, question: 'Work?' }), traveller), 'My spreadsheet— my ledger, I mean.');
+  // The case's own words (guard.words): a local's "tourist" is retried, then deflected; echoing the question's word passes.
+  replies.push('Half the town are tourists this week.', 'A tourist, they call it.');
+  assert.equal(last(await act('interview', { character: local, question: 'Busy?' }), local), kase.guard.deflect);
+  replies.push('A tourist? I never heard the word.');
+  assert.equal(last(await act('interview', { character: local, question: 'What is a tourist?' }), local), 'A tourist? I never heard the word.');
+  // The traveller is never guarded: a quiet slip goes through as said.
+  replies.push('A horoscope is half stars and half psychology, signora.');
+  assert.equal(last(await act('interview', { character: traveller, question: 'Work?' }), traveller), 'A horoscope is half stars and half psychology, signora.');
   assert.equal(replies.length, 0);
 
   // Thread lines: the round opens with the first speaker in order; guard each line by its speaker's part.

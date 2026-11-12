@@ -44,8 +44,11 @@ export function fieldsOf(raw) {
     }
   };
   walk(raw, '', '');
-  // A part field that every character overrides never shows, so it is not editable.
+  // A part field that every character overrides never shows, so it is not editable. The same for the case's rules
+  // when every part has rules of its own.
+  const ownRules = Array.isArray(raw.parts) && raw.parts.length > 0 && raw.parts.every(p => typeof p?.rules === 'string');
   const hidden = path => {
+    if (path === 'rules') return ownRules;
     const m = /^parts\.[^.]+\.(label|introduction|quickQuestion)$/.exec(path);
     return !!m && Array.isArray(raw.characters) && raw.characters.length > 0 && raw.characters.every(c => c?.[m[1]] !== undefined);
   };
