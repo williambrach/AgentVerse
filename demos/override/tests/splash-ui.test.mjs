@@ -20,8 +20,8 @@ test('the big screen never plays it', () => {
   assert.equal(wantSplash(q('?view=board&splash=1'), false), false);
 });
 
-test('three sponsors in order, each with a shipped file and alt text', () => {
-  assert.deepEqual(SPONSORS.map(s => s.id), ['dfm', 'sdu', 'ucloud']);
+test('four sponsors in order, each with a shipped file and alt text', () => {
+  assert.deepEqual(SPONSORS.map(s => s.id), ['sdu-cml', 'dfm', 'sdu', 'ucloud']);
   for (const s of SPONSORS) {
     const file = new URL(`../public${s.src}`, import.meta.url);
     assert.ok(existsSync(file), `${s.src} ships in public/`);
@@ -33,11 +33,12 @@ test('three sponsors in order, each with a shipped file and alt text', () => {
 test('markup: logos in order, title card, skip button, names escaped', () => {
   const html = splashMarkup();
   const order = [...html.matchAll(/data-sponsor="([^"]+)"/g)].map(m => m[1]);
-  assert.deepEqual(order, ['dfm', 'sdu', 'ucloud']);
+  assert.deepEqual(order, ['sdu-cml', 'dfm', 'sdu', 'ucloud']);
+  assert.match(html, /alt="SDU Centre for Machine Learning"/);
   assert.match(html, /alt="Danish Foundation Models"/);
   assert.match(html, /<h1>Arbiter<span class="splash-dot">\.<\/span><\/h1>/);
-  assert.equal((html.match(/class="splash-pip"/g) || []).length, 3, 'one pip per sponsor');
-  assert.match(html, /<b>01<\/b> \/ 03/);
+  assert.equal((html.match(/class="splash-pip"/g) || []).length, 4, 'one pip per sponsor');
+  assert.match(html, /<b>01<\/b> \/ 04/);
   assert.doesNotMatch(html, /splash-face|splash-palm|splash-cast/, 'no cast row or palms');
   assert.match(html, /Press any key to start/);
   assert.match(html, /id="splash-skip"/);

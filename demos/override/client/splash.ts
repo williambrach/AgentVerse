@@ -1,7 +1,7 @@
 import { escape } from './html.ts';
 import { plain, t } from './text.ts';
 
-/** The sponsor intro: each logo in turn on a white stage, then the title card. It plays once per browser before the access code or the team check-in. */
+/** The sponsor intro: each logo in turn on the parchment card, then the title card. It plays once per browser before the access code or the team check-in. */
 
 export const SPLASH_KEY = 'override.splash';
 
@@ -9,6 +9,7 @@ export interface Sponsor { id: string; name: string; src: string; label?: string
 
 /** Shown in this order. Swap a logo by replacing its file in public/sponsors/. `label` sets a name beside a logo that is only a mark. */
 export const SPONSORS: Sponsor[] = [
+  { id: 'sdu-cml', get name() { return plain('splash.sponsor.sdu-cml'); }, src: '/sponsors/sdu-cml.png' },
   { id: 'dfm', get name() { return plain('splash.sponsor.dfm'); }, src: '/sponsors/dfm.png' },
   { id: 'sdu', get name() { return plain('splash.sponsor.sdu'); }, src: '/sponsors/sdu.svg' },
   { id: 'ucloud', get name() { return plain('splash.sponsor.ucloud'); }, src: '/sponsors/ucloud.svg', get label() { return plain('splash.sponsor.ucloud.label'); } },

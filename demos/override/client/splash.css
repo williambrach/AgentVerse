@@ -13,6 +13,8 @@
 .splash-logo { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; gap: clamp(12px, 2.2vw, 24px); margin: 0; opacity: 0; transform: translateY(6px); transition: opacity .4s ease, transform .5s ease-out; }
 .splash-logo.is-on { opacity: 1; transform: none; }
 .splash-logo img { display: block; max-width: 100%; height: auto; object-fit: contain; }
+/* SDU Centre for Machine Learning: a tall emblem with its name under it (black text, so it needs the light card). */
+.splash-logo[data-sponsor="sdu-cml"] img { width: auto; height: min(240px, 26vh, 52vw); }
 .splash-logo[data-sponsor="dfm"] img { width: min(420px, 68vw); max-height: 26vh; }
 .splash-logo[data-sponsor="sdu"] img { width: min(320px, 56vw); max-height: 20vh; }
 .splash-logo[data-sponsor="ucloud"] img { width: auto; height: min(110px, 15vh, 17vw); }

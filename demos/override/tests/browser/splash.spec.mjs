@@ -7,14 +7,14 @@ test('first_open_plays_each_logo_then_the_title_then_the_check_in', async ({ pag
   await page.goto('/');
   const splash = page.locator('#splash');
   await expect(splash).toBeVisible();
-  for (const [at, id] of ['dfm', 'sdu', 'ucloud'].entries()) {
+  for (const [at, id] of ['sdu-cml', 'dfm', 'sdu', 'ucloud'].entries()) {
     await expect(splash).toHaveAttribute('data-sponsor', id, { timeout: 4000 });
     await expect(page.locator(`.splash-logo[data-sponsor="${id}"]`)).toHaveClass(/is-on/);
     await expect(page.locator('.splash-count b')).toHaveText(`0${at + 1}`);
     await expect(page.locator('.splash-pip').nth(at)).toHaveClass(/is-on/);
   }
   const loaded = await page.locator('.splash-logo img').evaluateAll(imgs => imgs.map(img => img.complete && img.naturalWidth > 0));
-  expect(loaded).toEqual([true, true, true]);
+  expect(loaded).toEqual([true, true, true, true]);
   await expect(splash).toHaveAttribute('data-step', 'title', { timeout: 4000 });
   await expect(page.locator('.splash-title h1')).toHaveText('Arbiter.');
   await page.waitForTimeout(400);
@@ -30,7 +30,7 @@ test('first_open_plays_each_logo_then_the_title_then_the_check_in', async ({ pag
 test('a_key_jumps_to_the_title_and_a_click_starts', async ({ page }) => {
   await page.goto('/');
   const splash = page.locator('#splash');
-  await expect(splash).toHaveAttribute('data-sponsor', 'dfm');
+  await expect(splash).toHaveAttribute('data-sponsor', 'sdu-cml');
   await page.keyboard.press('Space');
   await expect(splash).toHaveAttribute('data-step', 'title', { timeout: 1000 });
   await page.waitForTimeout(400);
@@ -55,7 +55,7 @@ test('a_key_while_the_logos_still_load_skips', async ({ page }) => {
 test('tab_reaches_the_skip_button_without_skipping', async ({ page }) => {
   await page.goto('/');
   const splash = page.locator('#splash');
-  await expect(splash).toHaveAttribute('data-sponsor', 'dfm');
+  await expect(splash).toHaveAttribute('data-sponsor', 'sdu-cml');
   await page.keyboard.press('Tab');
   await expect(page.locator('#splash-skip')).toBeFocused();
   await expect(splash).toHaveAttribute('data-step', 'logos');
@@ -79,7 +79,7 @@ test('phone_width_has_no_sideways_scroll', async ({ browser, baseURL }) => {
   const context = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] }, viewport: { width: 375, height: 740 } });
   const page = await context.newPage();
   await page.goto('/');
-  await expect(page.locator('#splash')).toHaveAttribute('data-sponsor', 'dfm');
+  await expect(page.locator('#splash')).toHaveAttribute('data-sponsor', 'sdu-cml');
   for (const step of ['logos', 'title']) {
     if (step === 'title') await page.keyboard.press('Enter');
     await expect(page.locator('#splash')).toHaveAttribute('data-step', step);
