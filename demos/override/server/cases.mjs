@@ -38,6 +38,8 @@ const rolesCheck = (roles, fail) => {
     if (seen.includes(r.id)) fail(`roles[${i}].id`, `duplicate role id ${r.id}`);
     seen.push(r.id);
     for (const k of ['label', 'hint']) if (typeof r[k] !== 'string' || !r[k]) fail(`roles[${i}].${k}`, 'must be a non-empty string');
+    // `count`: how many characters a verdict must give this role.
+    if (r.count !== undefined && (!Number.isInteger(r.count) || r.count < 1)) fail(`roles[${i}].count`, 'must be a positive integer');
   });
 };
 
@@ -101,6 +103,19 @@ export function defineCase(data, { worlds = liveWorlds, prompts } = {}) {
     if (partIds.includes(p.id)) fail(`parts[${i}].id`, `duplicate part id ${p.id}`);
     partIds.push(p.id);
   });
+  (data.roles ?? []).forEach((r, i) => {
+    if (r.count !== undefined && r.count !== data.parts.filter(p => p.role === r.id).length) fail(`roles[${i}].count`, `must equal the number of ${r.id} parts`);
+  });
+  // `secrets`: what a character also knows when dealt a given part, keyed by part id. Server-only, never on the rail.
+  data.characters.forEach((c, i) => {
+    if (c.secrets === undefined) return;
+    if (!c.secrets || typeof c.secrets !== 'object' || Array.isArray(c.secrets)) fail(`characters[${i}].secrets`, 'must be an object keyed by part id');
+    for (const [pid, v] of Object.entries(c.secrets)) {
+      if (!partIds.includes(pid)) fail(`characters[${i}].secrets.${pid}`, 'must name a part');
+      str(v, `characters[${i}].secrets.${pid}`);
+      if (v.includes('{')) fail(`characters[${i}].secrets.${pid}`, 'must not contain a placeholder');
+    }
+  });
   const placeholders = (text, path) => {
     for (const m of text.matchAll(/\{([^{}]*)\}/g)) if (!partIds.includes(m[1])) fail(path, `unknown placeholder {${m[1]}}`);
   };
@@ -145,6 +160,16 @@ export function defineCase(data, { worlds = liveWorlds, prompts } = {}) {
       if (!['inspect', 'talk'].includes(k)) fail(`tools.${k}`, 'must be inspect or talk');
       if (typeof v !== 'boolean') fail(`tools.${k}`, 'must be a boolean');
     }
+  }
+  // `guard`: model lines from these roles may not hold a modern word (server/anachronism.mjs) the question did not.
+  // One retry, then `deflect` (an interview) or `quiet` (a thread line) is said instead.
+  if (data.guard !== undefined) {
+    const g = data.guard;
+    if (!g || typeof g !== 'object' || Array.isArray(g)) fail('guard', 'must be an object');
+    if (data.talk !== undefined) fail('guard', 'a talk case has its own guard');
+    if (!Array.isArray(g.roles) || !g.roles.length || !g.roles.every(r => roleIds.includes(r))) fail('guard.roles', `must list roles from ${roleIds.join(', ')}`);
+    text(g.deflect, 'guard.deflect');
+    text(g.quiet, 'guard.quiet');
   }
   if (data.talk !== undefined) {
     try { checkTalk(data); } catch (e) { throw new Error(`case ${id}: ${e.message}`); }

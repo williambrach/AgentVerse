@@ -107,7 +107,8 @@ export function systemPrompt(kase, session, characterId) {
     name: character.name, label: say(character.label ?? part.label), version: kase.version,
     promptVersion: kase.prompts?.interviewVersion ?? promptVersion, frame: kase.world.frame, frameFirst: kase.world.frame.split('. ')[0],
     persona: kase.world.persona, memory: kase.world.memory,
-    knowledge: [...(character.knowledge ?? []), ...part.knowledge].map(say).join('\n'),
+    // A character's secret for the dealt part sits between its own story and the part's knowledge.
+    knowledge: [...(character.knowledge ?? []), ...(character.secrets?.[part.id] ? [character.secrets[part.id]] : []), ...part.knowledge].map(say).join('\n'),
   });
 }
 

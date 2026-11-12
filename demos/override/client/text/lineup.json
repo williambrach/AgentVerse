@@ -21,5 +21,6 @@
   "lineup.roleFor": "Role for {name}",
   "lineup.notPicked": "Not picked yet",
   "lineup.honest": "Honest",
-  "lineup.villain": "Villain"
+  "lineup.villain": "Villain",
+  "lineup.exactly": "Mark exactly {count} as {role}"
 }

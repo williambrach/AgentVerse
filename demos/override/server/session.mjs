@@ -536,12 +536,12 @@ export class Investigation {
       let hidden = null;
       let result;
       if (talk) ({ result, hidden } = await this.talkAnswer(talk, character.id, question, context));
-      else result = await this.answer(this.config, this.kase, structuredClone(s), character.id, question, context);
+      else ({ result, hidden } = await this.guardedAnswer(character.id, question, context));
       const answer = typeof result === 'string' ? result : result.answer;
       const provenance = typeof result === 'string' ? null : result.provenance ?? null;
       const reasoning = typeof result === 'string' ? null : result.reasoning ?? null;
       const paid = spend(s.economy, tools);
-      const answered = this.log('interview_answer', { character: character.id, question, answer, questionEventId: asked.eventId, provenance, spend: paid, ...(talk ? { kind: talk.kind, topic: talk.topic, about: talk.about, hidden } : {}) });
+      const answered = this.log('interview_answer', { character: character.id, question, answer, questionEventId: asked.eventId, provenance, spend: paid, ...(talk ? { kind: talk.kind, topic: talk.topic, about: talk.about, hidden } : hidden ? { hidden } : {}) });
       answeredLogged = true;
       this.remember(character.id, answered.eventId, reasoning);
       if (talk) {
@@ -638,6 +638,44 @@ export class Investigation {
       }
     }
     return { result, hidden: { slip: null, followUp: null, guard } };
+  }
+
+  // A live answer from a guarded role (the case's `guard`): a modern word the question did not hold gets one retry, then the deflect line.
+  async guardedAnswer(cid, question, context) {
+    const { kase } = this;
+    const ask = async () => {
+      const r = await this.answer(this.config, kase, structuredClone(this.session), cid, question, context);
+      return typeof r === 'string' ? { answer: r, provenance: null, reasoning: null } : r;
+    };
+    if (!this.guarded(cid)) return { result: await ask(), hidden: null };
+    const said = this.heard(cid, question);
+    const dirty = r => guardHits(r.answer ?? '').some(w => !said.has(w));
+    let result = await ask();
+    let guard = 'ok';
+    if (dirty(result)) {
+      guard = 'retried';
+      result = await ask();
+      if (dirty(result)) {
+        guard = 'deflected';
+        result = { ...result, answer: resolveText(kase, this.session.cast, kase.guard.deflect), reasoning: null };
+      }
+    }
+    // Inspect shows reasoning: a guarded line keeps none that holds a new modern word.
+    if (guardHits(result.reasoning ?? '').some(w => !said.has(w))) result = { ...result, reasoning: null };
+    return { result, hidden: { guard } };
+  }
+
+  // Modern words a guarded character may echo: those in the question, its own earlier chat questions and the thread so far.
+  heard(cid, question = '') {
+    const s = this.session;
+    const texts = [question, ...s.interviews[cid].map(t => t.question), ...s.thread.map(l => l.text)];
+    return new Set(texts.flatMap(t => guardHits(t)));
+  }
+
+  // Whether this character's model lines go through the case's guard: live mode, and its dealt part's role is guarded.
+  guarded(cid) {
+    const roles = this.kase.guard?.roles;
+    return this.config.mode === 'live' && Array.isArray(roles) && roles.includes(partOf(this.kase, this.session.cast, cid).role);
   }
 
   // Save words from an answer to the notebook. Free.
@@ -770,16 +808,32 @@ export class Investigation {
     let text;
     let reasoning = null;
     let provenance = null;
+    let guard = null;
     if (this.config.mode === 'live') {
       try {
-        const result = await this.thread(this.config, this.kase, structuredClone(s), speaker.id, {
-          sessionId: s.id, lineEventId: null,
-          onAttempt: diagnostics => { this.log('chatter_provider_response', { character: speaker.id, round, ...diagnostics }); },
-        });
-        text = typeof result === 'string' ? result : result.text;
-        reasoning = typeof result === 'string' ? null : result.reasoning ?? null;
-        provenance = typeof result === 'string' ? null : result.provenance ?? null;
-        if (typeof text !== 'string' || !text.trim()) throw new Error('empty thread line');
+        const post = async () => {
+          const result = await this.thread(this.config, this.kase, structuredClone(s), speaker.id, {
+            sessionId: s.id, lineEventId: null,
+            onAttempt: diagnostics => { this.log('chatter_provider_response', { character: speaker.id, round, ...diagnostics }); },
+          });
+          text = typeof result === 'string' ? result : result.text;
+          reasoning = typeof result === 'string' ? null : result.reasoning ?? null;
+          provenance = typeof result === 'string' ? null : result.provenance ?? null;
+          if (typeof text !== 'string' || !text.trim()) throw new Error('empty thread line');
+        };
+        await post();
+        // A guarded role gets one retry on a modern word, then says the case's quiet line.
+        if (this.guarded(speaker.id)) {
+          const said = this.heard(speaker.id);
+          const fresh = t => guardHits(t ?? '').some(w => !said.has(w));
+          guard = 'ok';
+          if (fresh(text)) {
+            guard = 'retried';
+            await post();
+            if (fresh(text)) { guard = 'deflected'; text = resolveText(this.kase, s.cast, this.kase.guard.quiet); reasoning = null; }
+          }
+          if (fresh(reasoning)) reasoning = null;
+        }
       } catch (error) {
         const providerError = error?.name === 'InterviewProviderError';
         this.log('chatter_failed', { character: speaker.id, round, reason: providerError ? error.code : 'provider_or_storage_error', provenance: error?.provenance ?? null });
@@ -792,7 +846,7 @@ export class Investigation {
       if (typeof text !== 'string' || !text) text = `${speaker.name} has nothing to add.`;
     }
     const paid = starting ? spend(s.economy, ['continue']) : null;
-    const event = this.log('chatter_line', { character: speaker.id, text, round, line, roundLines, order, provenance, threadPromptVersion: this.kase.prompts?.threadVersion ?? threadPromptVersion, spend: paid });
+    const event = this.log('chatter_line', { character: speaker.id, text, round, line, roundLines, order, provenance, threadPromptVersion: this.kase.prompts?.threadVersion ?? threadPromptVersion, spend: paid, ...(guard ? { hidden: { guard } } : {}) });
     this.remember(speaker.id, event.eventId, reasoning);
     s.thread.push({ character: speaker.id, text, round, timestamp: event.timestamp });
     s.chatter = { round, pending: roundLines - line, order };
@@ -808,6 +862,8 @@ export class Investigation {
     const pickedOk = picks && typeof picks === 'object' && !Array.isArray(picks)
       && Object.keys(picks).length === ids.length && ids.every(id => Object.hasOwn(picks, id) && roleIds.includes(picks[id]));
     if (!pickedOk) throw new RequestError(400, `Pick a role for each ${this.kase.world.cast.one.replace(/^an? /, '')}.`);
+    const counted = rolesOf(this.kase).find(r => r.count !== undefined && ids.filter(id => picks[id] === r.id).length !== r.count);
+    if (counted) throw new RequestError(400, `Choose exactly ${counted.count} ${counted.label}.`);
     if (!Number.isInteger(input.confidence) || input.confidence < 0 || input.confidence > 100) throw new RequestError(400, 'Confidence must be between 0 and 100.');
     const explanation = input.explanation ?? '';
     if (typeof explanation !== 'string' || explanation.length > 500) throw new RequestError(400, 'Keep your explanation under 500 characters.');

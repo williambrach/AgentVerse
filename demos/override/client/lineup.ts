@@ -44,12 +44,26 @@ function card(m: LineupMember, roles: Role[], picks: Record<string, string>) {
     <div class="scale-ends" aria-hidden="true"><span>${t('lineup.honest')}</span><span>${t('lineup.villain')}</span></div></fieldset>`;
 }
 
+/** The first role whose `count` the picks miss once everyone is picked, else null. */
+export function countOff(roles: Role[], picks: Record<string, string>, ids: string[]): Role | null {
+  if (!ids.every(id => picks[id])) return null;
+  return roles.find(r => r.count !== undefined && ids.filter(id => picks[id] === r.id).length !== r.count) ?? null;
+}
+
+/** The small line under the lock-in label: the pick count while picks are missing, else a missed role count. */
+export function lockCount(roles: Role[], picks: Record<string, string>, ids: string[]): string {
+  const picked = ids.filter(id => picks[id]).length;
+  if (picked < ids.length) return `<small class="lock-count">${t('lineup.picked', { picked, total: ids.length })}</small>`;
+  const off = countOff(roles, picks, ids);
+  return off ? `<small class="lock-count">${t('lineup.exactly', { count: off.count!, role: off.label })}</small>` : '';
+}
+
 export function lineupPanel(v: LineupView): string {
   const choice = isChoice(v.roles);
   const roles = choice ? v.roles : ordered(v.roles);
   const picked = v.cast.filter(m => v.picks[m.id]).length;
   const submit = v.busy ? t('lineup.busy')
-    : `${t('lineup.lock')}${v.hint && picked < v.cast.length ? `<small class="lock-count">${t('lineup.picked', { picked, total: v.cast.length })}</small>` : ''}`;
+    : `${t('lineup.lock')}${v.hint ? lockCount(v.roles, v.picks, v.cast.map(m => m.id)) : ''}`;
   const disabled = v.busy || v.hint;
   return `<form id="report-form" class="lineup-board${choice ? ' lineup-choice' : ''}">
   <header class="lineup-head">

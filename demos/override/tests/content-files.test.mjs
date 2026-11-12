@@ -9,7 +9,7 @@ import { rawOf } from '../server/content-paths.mjs';
 
 const uiDefaults = { 'tools.talk': 'Let them talk', 'tools.coins': '{n} coins' };
 const banana = cases.find(c => c.id === 'banana-mystery');
-const renaissance = cases.find(c => c.id === 'renaissance-traveler');
+import renaissance from './fixtures/renaissance-talk.mjs'; // the talk-mode Castelvento v1
 const first = banana.characters[0].id;
 const make = (dirs = { data: mkdtempSync(join(tmpdir(), 'cf-data-')), content: mkdtempSync(join(tmpdir(), 'cf-content-')) }) => ({
   ...dirs, store: createContentStore({ cases, dataDir: dirs.data, contentDir: dirs.content, uiDefaults }),
@@ -144,7 +144,7 @@ test('locked_400', () => {
 });
 
 test('define_error_maps', () => {
-  const { store } = make();
+  const store = createContentStore({ cases: [banana, renaissance], dataDir: mkdtempSync(join(tmpdir(), 'cf-data-')), contentDir: mkdtempSync(join(tmpdir(), 'cf-content-')), uiDefaults });
   const cid = renaissance.characters[0].id;
   const slip = renaissance.talk.slips[cid][0];
   const raw = rawOf(renaissance);

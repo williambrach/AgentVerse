@@ -50,7 +50,6 @@
   "main.free": "free",
   "main.readThread": "Read thread",
   "main.lockIn": "Lock in verdict",
-  "main.lockCount": "{picked} of {total} picked",
   "main.reset.eyebrow": "RESET SESSION",
   "main.reset.title": "Start {title} over?",
   "main.reset.body": "Your chats with the {many} and your guess are cleared, and the case starts again from the briefing. The old session’s records stay on the server.",

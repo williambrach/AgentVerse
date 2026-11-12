@@ -29,7 +29,7 @@ import { worldFor } from './worlds';
 import { hudShell, castCard } from './hud.ts';
 import { interviewPanel, briefingPanel, evidencePanel } from './dialogue.ts';
 import { evidenceIdOf } from './hall-layout.ts';
-import { lineupPanel } from './lineup.ts';
+import { lineupPanel, countOff, lockCount } from './lineup.ts';
 import { wantSplash, splashSeen, markSplashSeen, playSplash } from './splash.ts';
 import type { Alarm, CaseState, Character, LocationId, Pick, Pose } from './types';
 
@@ -569,7 +569,9 @@ function interviewMarkup(characterId: string) {
 /** Empty when every character has a role, else the disabled submit text. */
 function submitHint(): string {
   const missing = state.characters.find(c => !reportDraft.roles[c.id]);
-  return missing ? plain('main.pickRole', { name: missing.name }) : '';
+  if (missing) return plain('main.pickRole', { name: missing.name });
+  const off = countOff(state.roles, reportDraft.roles, ids());
+  return off ? plain('lineup.exactly', { count: off.count!, role: off.label }) : '';
 }
 
 /** The turn with this id in a character's chat. */
@@ -789,9 +791,8 @@ function bindForms() {
       const hint = submitHint();
       const button = document.querySelector<HTMLButtonElement>('#lock-in')!;
       button.disabled = busy || !!hint;
-      // Same markup lineupPanel renders: the label, plus the count while picks are missing. The hint text never goes in the button.
-      const picked = state.characters.filter(c => reportDraft.roles[c.id]).length;
-      button.innerHTML = `${t('main.lockIn')}${hint ? `<small class="lock-count">${t('main.lockCount', { picked, total: state.characters.length })}</small>` : ''}`;
+      // Same markup lineupPanel renders: the label, plus the pick count or a missed role count. The hint text never goes in the button.
+      button.innerHTML = `${t('main.lockIn')}${hint ? lockCount(state.roles, reportDraft.roles, ids()) : ''}`;
     }));
     document.querySelectorAll<HTMLInputElement>('input[name="confidence"]').forEach(input => input.addEventListener('change', () => { reportDraft.confidence = Number(input.value); }));
     document.querySelector('#explanation')!.addEventListener('input', event => { reportDraft.explanation = (event.target as HTMLTextAreaElement).value; });

@@ -2,7 +2,7 @@ import { rolesOf } from './cases.mjs';
 
 // Locked keys at any depth (spec D4): structure the editor never changes.
 const LOCKED = new Set(['id', 'version', 'world', 'status', 'order', 'color', 'role', 'cipher', 'when', 'tools']);
-const LOCKED_PATHS = new Set(['deadline.escapeAt', 'deadline.warnAt']);
+const LOCKED_PATHS = new Set(['deadline.escapeAt', 'deadline.warnAt', 'guard.roles']);
 // Arrays of objects that are addressed by `id` (D5). Every other array of objects is addressed by index.
 const ID_ARRAYS = new Set(['characters', 'parts', 'evidence', 'roles', 'talk.topics']);
 

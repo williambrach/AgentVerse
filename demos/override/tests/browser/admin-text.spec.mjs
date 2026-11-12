@@ -70,17 +70,18 @@ test('text_rename_character_and_publish', async ({ page, request }) => {
   expect(existsSync(file)).toBe(false);
 });
 
-test('text_renaissance_slip_line_field_error', async ({ page }) => {
+test('text_renaissance_secret_field_error', async ({ page }) => {
   await signIn(page, '/admin/maker.html?case=renaissance-traveler');
   const detail = await (await page.request.get(`${ADMIN}/admin/content/renaissance-traveler`, authed)).json();
   const paths = detail.order;
-  expect(paths.some(p => p.startsWith('talk.lines.'))).toBe(true);
-  const slip = paths.find(p => /^talk\.slips\.[a-z]+\.0\.line$/.test(p));
-  expect(slip).toBeTruthy();
-  const area = await openField(page, slip);
-  await area.fill('A plain line with nothing in it.');
+  // Castelvento v2: no talk fields; each character's traveller secret is an editable field.
+  expect(paths.some(p => p.startsWith('talk.'))).toBe(false);
+  const secret = paths.find(p => /^characters\.[a-z]+\.secrets\.traveler$/.test(p));
+  expect(secret).toBeTruthy();
+  const area = await openField(page, secret);
+  await area.fill('You came from {locala}.');
   await page.click('#publish');
-  const err = page.locator('.field').filter({ has: page.locator(`textarea[data-path="${slip}"]`) }).locator('.field-error');
+  const err = page.locator('.field').filter({ has: page.locator(`textarea[data-path="${secret}"]`) }).locator('.field-error');
   await expect(err).toBeVisible({ timeout: 5000 });
   await expect(err).not.toHaveText('');
 });

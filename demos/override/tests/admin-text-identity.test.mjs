@@ -17,7 +17,8 @@ const PINS = {
   'friends-roundtable': { contentHash: '640561c63616', view: 'ea0305de1cb0', interview: '87b9a6b80d7c', thread: '205e4fc54de1' },
   'factory-escape': { contentHash: '3c549c8bb2f9', view: 'e6f5b8e91c13', interview: 'c879fd6e80e6', thread: '612f762dbdc3' },
   'department-murder': { contentHash: 'a73b50757e8f', view: '141114d8179a', interview: 'cd724c0169ea', thread: '6097f5e2149a' },
-  'renaissance-traveler': { contentHash: '76034aa1c3cd', view: '7ba244f03568', interview: 'c4591f1294f2', thread: 'da30440e987f' },
+  // Castelvento v2.0.0 (talk mode dropped): re-pinned on purpose.
+  'renaissance-traveler': { contentHash: 'b073ce3e7f96', view: '3e545220dd97', interview: '6d73e315d35c', thread: '2fe4c2378c00' },
 };
 
 test('all five cases are pinned', () => {

@@ -1,151 +1,233 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { cases } from '../server/cases/index.mjs';
-import { publicView, defineCase } from '../server/cases.mjs';
-import { buildMessages } from '../server/interviews.mjs';
-import { checkTalk, newTalkState, topicAnswer, typedRoute, supports } from '../server/talk.mjs';
+import { publicView, defineCase, rolesOf } from '../server/cases.mjs';
+import { buildMessages, buildThreadMessages, modelConfig } from '../server/interviews.mjs';
 import { modernWords } from '../server/anachronism.mjs';
+import { editablePaths } from '../server/content.mjs';
+import { Investigations } from '../server/session.mjs';
 
+// Castelvento v2: no talk mode. The traveller's model knows its secret and slips; locals are held to 1489 by the guard.
 const kase = cases.find(c => c.id === 'renaissance-traveler');
 const CIDS = kase.characters.map(c => c.id);
 const PARTS = ['traveler', 'locala', 'localb', 'localc', 'locald'];
-const TOPICS = kase.talk.topics.map(t => t.id);
 const castWith = traveller => {
   const locals = PARTS.slice(1);
   return Object.fromEntries(CIDS.map(cid => [cid, cid === traveller ? 'traveler' : locals.shift()]));
 };
+const systemOf = (cast, cid) => buildMessages(kase, { cast, interviews: { [cid]: [] } }, cid, 'Hi')[0].content;
 
-test('registry_five: the case is fifth, after After Hours, and the others keep their places', () => {
+test('registry: Castelvento v2 is a standard case with reasoning and talk on', () => {
   assert.equal(cases.length, 5);
   assert.equal(cases[4], kase);
   assert.equal(kase.order, 3);
-  assert.equal(kase.status, 'ready');
-  assert.equal(kase.version, 'renaissance-traveler-v1.0.0');
-  assert.equal(cases[0].id, 'banana-mystery');
-  assert.equal(cases[3].id, 'department-murder');
-  assert.equal(kase.world.id, 'renaissance');
-  assert.deepEqual(kase.talk.topics.map(t => t.id), ['work', 'travel', 'letters', 'pastimes', 'square']);
-  assert.deepEqual(kase.tools, { inspect: false, talk: false });
+  assert.equal(kase.version, 'renaissance-traveler-v2.0.0');
+  assert.equal(kase.talk, undefined);
+  assert.equal(kase.tools, undefined);
   assert.deepEqual(kase.parts.map(p => p.id), PARTS);
-  assert.deepEqual(kase.roles.map(r => r.id), ['traveler', 'local']);
-});
-
-test('prompt_identical_across_deals: every character, every part, byte-identical', () => {
-  for (const cid of CIDS) {
-    const seen = new Set();
-    for (const traveller of CIDS) {
-      const cast = castWith(traveller);
-      seen.add(JSON.stringify(buildMessages(kase, { cast, interviews: { [cid]: [] } }, cid, 'Hi')));
-    }
-    assert.equal(seen.size, 1, `${cid} prompt differs between deals`);
-    // and across all five parts of the same character
-    const all = new Set();
-    for (const pid of PARTS) {
-      const others = PARTS.filter(p => p !== pid);
-      const filled = Object.fromEntries(CIDS.map(c => [c, c === cid ? pid : others.shift()]));
-      all.add(JSON.stringify(buildMessages(kase, { cast: filled, interviews: { [cid]: [] } }, cid, 'Hi')));
-    }
-    assert.equal(all.size, 1, `${cid} prompt differs between parts`);
-  }
-});
-
-test('fairness_all_travellers: any 3 topics give a slip, all 5 give at least 3', () => {
-  const run = (traveller, order) => {
-    const cast = castWith(traveller);
-    const state = newTalkState(kase);
-    let slips = 0;
-    order.forEach((topic, n) => {
-      const out = topicAnswer(kase, cast, state, traveller, topic);
-      if (out.slip) { slips += 1; state.delivered[out.slip] = `ev${n}`; }
-      state.asked[traveller].push(topic);
-    });
-    return slips;
-  };
-  const perms = (xs, k) => (k === 0 ? [[]] : xs.flatMap((x, i) => perms([...xs.slice(0, i), ...xs.slice(i + 1)], k - 1).map(p => [x, ...p])));
-  for (const traveller of CIDS) {
-    for (const order of perms(TOPICS, 3)) assert.ok(run(traveller, order) >= 1, `${traveller}: ${order} gave no slip`);
-    for (const order of perms(TOPICS, 5)) assert.ok(run(traveller, order) >= 3, `${traveller}: ${order} gave fewer than 3 slips`);
-  }
-});
-
-test('locals never slip', () => {
-  for (const traveller of CIDS) {
-    const cast = castWith(traveller);
-    for (const cid of CIDS.filter(c => c !== traveller)) for (const topic of TOPICS) {
-      assert.deepEqual(topicAnswer(kase, cast, newTalkState(kase), cid, topic), { text: kase.talk.lines[cid][topic], slip: null });
-    }
-  }
-});
-
-test('no_modern_in_local_text: checkTalk passes and plain lines hold no modern word', () => {
-  assert.doesNotThrow(() => checkTalk(kase));
-  for (const cid of CIDS) for (const topic of TOPICS) assert.deepEqual(modernWords(kase.talk.lines[cid][topic]), [], `${cid}.${topic}`);
-  for (const cid of CIDS) assert.equal(kase.talk.slips[cid].length, 5);
-  for (const cid of CIDS) assert.equal(kase.talk.slips[cid].filter(s => s.when === 'always').length, 3);
-});
-
-test('public_view_no_secrets', () => {
-  const view = publicView(kase, castWith('agnese'));
-  assert.deepEqual(view.talk, { topics: kase.talk.topics });
-  assert.deepEqual(view.tools, { inspect: false, talk: false });
-  const json = JSON.stringify(view);
-  for (const key of ['slips', 'reveal', 'parts', 'lines', 'followUps', 'clean']) assert.equal(json.includes(`"${key}"`), false, key);
-  for (const word of ['"traveler"', '"locala"', 'spreadsheet', 'Wi-Fi']) assert.equal(json.includes(word), false, word);
-  assert.deepEqual(view.characters.map(c => c.role), ['Astrologer', 'Clockmaker', 'Noblewoman', 'Sergeant of the watch', 'Apothecary']);
-});
-
-test('other cases keep their public view keys', () => {
-  for (const k of cases.slice(0, 4)) {
+  assert.deepEqual(rolesOf(kase).map(r => [r.id, r.count]), [['traveler', 1], ['local', undefined]]);
+  for (const k of cases) {
     const v = publicView(k, Object.fromEntries(k.characters.map((c, i) => [c.id, k.parts[i].id])));
-    assert.equal('talk' in v, false);
-    assert.equal('tools' in v, false);
+    assert.equal('talk' in v, false, k.id);
+    assert.equal('tools' in v, false, k.id);
   }
 });
 
-test('schema: tools must be booleans, reveal a placeholder-free string, talk is checked', () => {
-  const raw = { ...kase, rehearsal: kase.rehearsal, world: 'renaissance' };
+test('traveller_prompt: only the dealt traveller gets its own 2026 secret and the slip rule', () => {
+  for (const traveller of CIDS) {
+    const cast = castWith(traveller);
+    for (const cid of CIDS) {
+      const sys = systemOf(cast, cid);
+      const own = kase.characters.find(c => c.id === cid).secrets.traveler;
+      if (cid === traveller) {
+        assert.ok(sys.includes(own), `${cid} misses its secret`);
+        assert.match(sys, /YOUR SECRET/);
+        assert.doesNotMatch(sys, /never use a modern word/);
+      } else {
+        assert.doesNotMatch(sys, /2026|YOUR SECRET/, `${cid} as a local`);
+        assert.match(sys, /never use a modern word/);
+      }
+      for (const other of kase.characters.filter(c => c.id !== cid)) assert.equal(sys.includes(other.secrets.traveler), false, `${cid} holds ${other.id}'s secret`);
+    }
+  }
+  // The thread prompt carries the same instructions.
+  const cast = castWith('matteo');
+  const thread = buildThreadMessages(kase, { cast, interviews: { matteo: [] }, thread: [] }, 'matteo')[0].content;
+  assert.ok(thread.includes(kase.characters.find(c => c.id === 'matteo').secrets.traveler));
+});
+
+test('public_view_no_secrets: no secret, part or 2026 ever reaches the client', () => {
+  for (const traveller of CIDS) {
+    const json = JSON.stringify(publicView(kase, castWith(traveller), { hideParts: true }));
+    for (const word of ['secrets', '2026', '"traveler":', 'locala', 'YOUR SECRET', 'guard']) assert.equal(json.includes(word), false, word);
+  }
+});
+
+test('rehearsal: traveller lines always slip, local lines never do', () => {
+  const qs = ['a', 'ab', 'abc', 'What is your work?']; // lengths cover every scripted line
+  for (const q of qs) {
+    assert.ok(modernWords(kase.rehearsal('traveler', q)).length > 0, `traveller: ${q}`);
+    for (const p of PARTS.slice(1)) assert.deepEqual(modernWords(kase.rehearsal(p, q)), [], `${p}: ${q}`);
+  }
+  for (let n = 0; n < 3; n++) {
+    assert.ok(modernWords(kase.rehearsalChatter('traveler', n)).length > 0, `traveller chatter ${n}`);
+    for (const p of PARTS.slice(1)) assert.deepEqual(modernWords(kase.rehearsalChatter(p, n)), [], `${p} chatter ${n}`);
+  }
+  assert.deepEqual(modernWords(kase.rehearsalReasoning('locala')), []);
+  assert.deepEqual(modernWords(kase.guard.deflect), []);
+  assert.deepEqual(modernWords(kase.guard.quiet), []);
+});
+
+test('schema: secrets, role counts and the guard are checked', () => {
+  const raw = { ...kase, rehearsal: kase.rehearsal, rehearsalReasoning: kase.rehearsalReasoning, rehearsalChatter: kase.rehearsalChatter, world: 'renaissance' };
   const bad = patch => () => defineCase({ ...raw, ...patch });
   assert.doesNotThrow(bad({}));
-  assert.throws(bad({ tools: { inspect: 'no' } }), /tools.inspect: must be a boolean/);
-  assert.throws(bad({ tools: { fly: true } }), /tools.fly/);
-  assert.throws(bad({ characters: kase.characters.map((c, i) => (i ? c : { ...c, reveal: 'I am {traveler}' })) }), /reveal: must not contain a placeholder/);
-  assert.throws(bad({ talk: { ...kase.talk, lines: { ...kase.talk.lines, ottavio: { ...kase.talk.lines.ottavio, work: 'Use my smartphone.' } } } }), /uses a modern word \(smartphone\)/);
+  const withSecret = s => kase.characters.map((c, i) => (i ? c : { ...c, secrets: s }));
+  assert.throws(bad({ characters: withSecret({ nobody: 'x' }) }), /secrets.nobody: must name a part/);
+  assert.throws(bad({ characters: withSecret({ traveler: 'I am {locala}' }) }), /secrets.traveler: must not contain a placeholder/);
+  assert.throws(bad({ characters: withSecret(['x']) }), /secrets: must be an object/);
+  assert.throws(bad({ roles: [{ ...kase.roles[0], count: 2 }, kase.roles[1]] }), /roles\[0\].count: must equal the number of traveler parts/);
+  assert.throws(bad({ roles: [{ ...kase.roles[0], count: 0 }, kase.roles[1]] }), /roles\[0\].count: must be a positive integer/);
+  assert.throws(bad({ guard: { ...kase.guard, roles: ['nobody'] } }), /guard.roles/);
+  assert.throws(bad({ guard: { ...kase.guard, quiet: '' } }), /guard.quiet/);
 });
 
-test('maker_cannot_split_part_knowledge: no part knowledge path is offered or accepted', async () => {
-  const { editablePaths, createContentStore, ContentError } = await import('../server/content.mjs');
-  const { worlds } = await import('../server/worlds.mjs');
-  const { mkdtempSync } = await import('node:fs');
-  const { tmpdir } = await import('node:os');
-  const { join } = await import('node:path');
+test('editor: secrets and guard lines are editable, guard roles are not', () => {
   const paths = editablePaths(kase);
-  assert.deepEqual(paths.filter(p => p.startsWith('parts.') && p.endsWith('.knowledge')), []);
-  assert.ok(paths.some(p => p.endsWith('.introduction') || p.endsWith('.finding.explanation')), 'other part fields stay editable');
-  for (const other of cases.filter(c => !c.talk)) assert.ok(editablePaths(other).some(p => p.endsWith('.knowledge')) || !other.parts.some(p => p.knowledge), other.id);
-  const store = createContentStore({ cases: [kase], dataDir: mkdtempSync(join(tmpdir(), 'ren-')), worlds });
-  const path = `parts.${kase.parts[0].id}.knowledge`;
-  assert.throws(() => store.preview(kase.id, { [path]: ['A different fact.'] }), e => e instanceof ContentError && e.status === 400 && e.path === path);
+  for (const cid of CIDS) assert.ok(paths.includes(`characters.${cid}.secrets.traveler`), cid);
+  assert.ok(paths.includes('guard.deflect') && paths.includes('guard.quiet'));
+  assert.equal(paths.includes('guard.roles'), false);
 });
 
-test('plain words of a multi-word slip term are not a challenge or proof (call, game, mail, lag...)', () => {
-  const plain = [];
-  for (const cid of CIDS) {
-    const state = newTalkState(kase);
-    for (const s of kase.talk.slips[cid]) state.delivered[s.id] = `line-${s.id}`;
-    for (const s of kase.talk.slips[cid]) {
-      for (const t of [s.term, ...s.aliases].filter(t => /[\s-]/.test(t))) {
-        for (const w of t.split(/[\s-]+/).filter(w => w.length >= 3 && !modernWords(w).length)) {
-          plain.push(w);
-          assert.equal(typedRoute(kase, state, cid, `Tell me, what of the ${w} here?`).kind, 'model', `${cid}: "${w}" of "${t}"`);
-          assert.equal(supports(kase, castWith(cid), state, cid, [{ character: cid, line: state.delivered[s.id], text: w }]), false, `${cid}: proof "${w}"`);
-        }
-      }
-    }
+const setup = (t, opts = {}) => {
+  const dir = mkdtempSync(join(tmpdir(), 'override-ren2-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const make = () => new Investigations({ dataDir: dir, config: modelConfig({}), shuffle: ids => [...ids], ...opts });
+  return { dir, make };
+};
+const open = async live => {
+  const started = await live.mutate(null, 'start', { caseId: 'renaissance-traveler' });
+  const id = started.session.id;
+  const game = live.find(id);
+  const act = (action, input = {}) => live.mutate(id, action, { sessionId: id, revision: game.session.revision, ...input });
+  return { id, game, act };
+};
+
+test('replay: interviews, reasoning, the town talk and an exactly-one verdict survive a restart', async t => {
+  const { make } = setup(t);
+  const { id, game, act } = await open(make());
+  const traveller = Object.entries(game.session.cast).find(([, p]) => p === 'traveler')[0];
+  for (const cid of CIDS) await act('interview', { character: cid, question: 'What is your work?' });
+  const inspected = await act('inspect', { character: traveller });
+  assert.match(inspected.session.inspections.at(-1).reasoning, /2026/);
+  const talked = await act('continue');
+  assert.equal(talked.session.thread.length, 1);
+  const all = role => Object.fromEntries(CIDS.map(c => [c, role(c)]));
+  await assert.rejects(act('verdict', { roles: all(() => 'local'), confidence: 70 }), /exactly 1 Time traveller/);
+  await assert.rejects(act('verdict', { roles: all(() => 'traveler'), confidence: 70 }), /exactly 1 Time traveller/);
+  const done = await act('verdict', { roles: all(c => (c === traveller ? 'traveler' : 'local')), confidence: 70 });
+  assert.equal(done.session.status, 'closed');
+  assert.equal(done.debrief.score, 5);
+  assert.equal(done.debrief.title, `The traveller was ${kase.characters.find(c => c.id === traveller).name}.`);
+  const again = make().find(id);
+  assert.deepEqual(again.session, game.session);
+  assert.deepEqual(again.view(), game.view());
+});
+
+test('guard: a local modern word gets one retry, then the deflect line; the traveller and echoed words pass', async t => {
+  const replies = [];
+  const answer = async (_c, _k, s, cid, question) => {
+    const next = replies.shift();
+    return { answer: typeof next === 'function' ? next(cid, question) : next, provenance: null, reasoning: 'thinking' };
+  };
+  const posts = [];
+  const thread = async () => ({ text: posts.shift(), reasoning: 'r', provenance: null });
+  const { make } = setup(t, { config: { ...modelConfig({}), mode: 'live', model: 'fake' }, answer, thread });
+  const { game, act } = await open(make());
+  const traveller = Object.entries(game.session.cast).find(([, p]) => p === 'traveler')[0];
+  const local = CIDS.find(c => c !== traveller);
+  const last = (v, cid) => v.session.interviews[cid].at(-1).answer;
+
+  replies.push('Okay, I sell herbs.', 'I sell herbs.');
+  assert.equal(last(await act('interview', { character: local, question: 'Work?' }), local), 'I sell herbs.');
+  replies.push('Okay.', 'Okay then.');
+  assert.equal(last(await act('interview', { character: local, question: 'Work?' }), local), kase.guard.deflect);
+  // The deflected answer keeps no reasoning to inspect.
+  await assert.rejects(act('inspect', { character: local }), /did not think/);
+  replies.push('A phone? I never heard the word.');
+  assert.equal(last(await act('interview', { character: local, question: 'Do you have a phone?' }), local), 'A phone? I never heard the word.');
+  replies.push('My spreadsheet— my ledger, I mean.');
+  assert.equal(last(await act('interview', { character: traveller, question: 'Work?' }), traveller), 'My spreadsheet— my ledger, I mean.');
+  assert.equal(replies.length, 0);
+
+  // Thread lines: the round opens with the first speaker in order; guard each line by its speaker's part.
+  const order = () => game.session.chatter.order ?? [];
+  posts.push('The bear is on my roof, okay?', 'The bear is on my roof again.', 'x', 'x', 'x', 'x');
+  await act('continue');
+  const first = order()[0];
+  const line = game.session.thread.at(-1).text;
+  assert.equal(line, first === traveller ? 'The bear is on my roof, okay?' : 'The bear is on my roof again.');
+
+  const events = make().find(game.session.id).export();
+  assert.equal(events.includes('"guard"'), false, 'the guard result stays hidden while the game is open');
+});
+
+test('guard_echo_and_reasoning: earlier chat and thread words may be echoed; a new modern word in reasoning is dropped', async t => {
+  const replies = [];
+  const answer = async () => replies.shift();
+  // Thread fake: the traveller slips "video"; a local echoes it, or says "okay" twice (then the quiet line).
+  let localTurns = 0;
+  const thread = async (_c, _k, s, cid) => {
+    if (s.cast[cid] === 'traveler') return { text: 'I should post a video— a sketch, I mean.', reasoning: 'Careful. 2026.', provenance: null };
+    localTurns += 1;
+    return localTurns <= 1
+      ? { text: 'A video? What word is that?', reasoning: 'Strange word.', provenance: null }
+      : { text: 'Okay, the bear again.', reasoning: 'okay', provenance: null };
+  };
+  const { make } = setup(t, { config: { ...modelConfig({}), mode: 'live', model: 'fake' }, answer, thread });
+  const { game, act } = await open(make());
+  const traveller = Object.entries(game.session.cast).find(([, p]) => p === 'traveler')[0];
+  const local = CIDS.find(c => c !== traveller);
+  const last = (v, cid) => v.session.interviews[cid].at(-1).answer;
+
+  replies.push({ answer: 'I know no such thing.', reasoning: 'plain', provenance: null });
+  await act('interview', { character: local, question: 'Do you own a phone?' });
+  replies.push({ answer: 'As I said, I know no phone.', reasoning: 'plain', provenance: null });
+  assert.equal(last(await act('interview', { character: local, question: 'Really?' }), local), 'As I said, I know no phone.');
+  replies.push({ answer: 'I sell herbs.', reasoning: 'Okay, keep it short.', provenance: null });
+  assert.equal(last(await act('interview', { character: local, question: 'Work?' }), local), 'I sell herbs.');
+  await assert.rejects(act('inspect', { character: local }), /did not think/);
+  assert.equal(replies.length, 0);
+
+  // One full round: the traveller speaks first or later; the locals' lines are judged against the thread so far.
+  for (let i = 0; i < CIDS.length; i++) await act('continue');
+  const lines = game.session.thread;
+  const said = cid => lines.find(l => l.character === cid)?.text;
+  assert.equal(said(traveller), 'I should post a video— a sketch, I mean.');
+  const tIndex = lines.findIndex(l => l.character === traveller);
+  for (const [i, l] of lines.entries()) {
+    if (l.character === traveller) continue;
+    // A local speaking after the traveller may echo "video"; "okay" is new, so it ends as the quiet line.
+    assert.ok([kase.guard.quiet, 'A video? What word is that?'].includes(l.text), l.text);
+    if (l.text === 'A video? What word is that?') assert.ok(i > tIndex, 'an echo only after the slip');
   }
-  for (const w of ['call', 'game', 'mail', 'lag', 'security', 'message']) assert.ok(plain.includes(w), w);
-  const state = newTalkState(kase);
-  state.delivered['agnese-letters'] = 'L1';
-  assert.equal(typedRoute(kase, state, 'agnese', 'Do you call on your sister often?').kind, 'model');
-  assert.equal(typedRoute(kase, state, 'agnese', 'What is a video call?').kind, 'followUp');
-  assert.equal(supports(kase, castWith('agnese'), state, 'agnese', [{ character: 'agnese', line: 'L1', text: 'video' }]), true);
+  assert.ok(lines.some(l => l.text === kase.guard.quiet));
+  const view = JSON.stringify(game.view());
+  assert.equal(view.includes('"hidden"'), false);
+  assert.equal(game.export().includes('"guard"'), false);
+
+  // Closed, the export keeps hidden.guard, and a restart replays the same session.
+  for (const c of CIDS.filter(c => c !== local)) {
+    replies.push({ answer: 'Feast week.', reasoning: null, provenance: null });
+    await act('interview', { character: c, question: 'News?' });
+  }
+  const roles = Object.fromEntries(CIDS.map(c => [c, c === traveller ? 'traveler' : 'local']));
+  await act('verdict', { roles, confidence: 70 });
+  const again = make().find(game.session.id);
+  assert.deepEqual(again.session, game.session);
+  const closed = again.export();
+  for (const g of ['"guard":"ok"', '"guard":"deflected"']) assert.ok(closed.includes(g), g);
 });

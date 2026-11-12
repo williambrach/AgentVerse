@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { cases } from '../server/cases/index.mjs';
 import { ROLES } from '../server/roles.mjs';
 import { rawOf, fieldsOf, getPath, setPath, editPathOf } from '../server/content-paths.mjs';
+import talkCase from './fixtures/renaissance-talk.mjs'; // the talk-mode Castelvento v1
 
 const byId = id => cases.find(c => c.id === id);
 const LOCKED = new Set(['id', 'version', 'world', 'status', 'order', 'color', 'role', 'cipher', 'when', 'tools']);
@@ -15,7 +16,7 @@ const leaves = (v, key = null, schema = '') => {
   if (v && typeof v === 'object') {
     return Object.entries(v).reduce((n, [k, x]) => {
       const child = schema ? `${schema}.${k}` : k;
-      return LOCKED.has(k) || child === 'deadline.escapeAt' || child === 'deadline.warnAt' ? n : n + leaves(x, k, child);
+      return LOCKED.has(k) || child === 'deadline.escapeAt' || child === 'deadline.warnAt' || child === 'guard.roles' ? n : n + leaves(x, k, child);
     }, 0);
   }
   return 0;
@@ -55,7 +56,7 @@ test('roles_default_materialized', () => {
 });
 
 test('index_for_idless', () => {
-  const raw = rawOf(byId('renaissance-traveler'));
+  const raw = rawOf(talkCase);
   const f = Object.fromEntries(fieldsOf(raw).map(x => [x.path, x]));
   assert.equal(f['talk.glossary.0.text'].kind, 'text');
   const cid = raw.characters[0].id;
@@ -104,7 +105,7 @@ test('edit_path_maps_define_case_paths', () => {
 });
 
 test('dot_index_error', () => {
-  const raw = rawOf(byId('renaissance-traveler'));
+  const raw = rawOf(talkCase);
   const cid = raw.characters[0].id;
   assert.equal(editPathOf(raw, `talk.slips.${cid}.0.line`), `talk.slips.${cid}.0.line`);
   assert.equal(editPathOf(raw, `talk.rehearsal.${cid}`), `talk.rehearsal.${cid}`);
@@ -121,7 +122,7 @@ test('hidden_part_fields: a part field every character overrides is not a field'
 });
 
 test('talk_shared_knowledge: talk cases offer only partsKnowledge', () => {
-  const raw = rawOf(byId('renaissance-traveler'));
+  const raw = rawOf(talkCase);
   const fields = fieldsOf(raw);
   assert.equal(fields.filter(f => /^parts\.[^.]+\.knowledge$/.test(f.path)).length, 0);
   assert.equal(fields.find(f => f.path === 'partsKnowledge').kind, 'list');

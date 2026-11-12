@@ -226,9 +226,8 @@ test('structure_lists_locked_facts', () => {
 
 const rdir = () => mkdtempSync(join(tmpdir(), 'content-ren-'));
 const renStore = async dir => {
-  const { cases } = await import('../server/cases/index.mjs');
+  const { default: kase } = await import('./fixtures/renaissance-talk.mjs'); // the talk-mode Castelvento v1
   const { worlds: liveWorlds } = await import('../server/worlds.mjs');
-  const kase = cases.find(c => c.id === 'renaissance-traveler');
   return { kase, store: createContentStore({ cases: [kase], dataDir: dir, contentDir: join(dir, 'tracked'), uiDefaults: {}, worlds: liveWorlds }) };
 };
 

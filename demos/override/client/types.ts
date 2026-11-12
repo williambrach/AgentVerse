@@ -8,7 +8,8 @@ export interface Accusation { id: string; character: CharacterId; quotes: string
 export interface TalkSession { asked: Record<CharacterId, string[]>; quotes: Quote[]; accusations: Accusation[] }
 /** The word range picked in one chat line; a and b are null until a word is clicked. */
 export interface Pick { line: string; a: number | null; b: number | null }
-export interface Role { id: string; label: string; hint: string }
+/** `count`: how many characters a verdict must give this role (absent: any number). */
+export interface Role { id: string; label: string; hint: string; count?: number }
 export interface Verdict { roles: Record<CharacterId, string>; truth: Record<CharacterId, string>; results: Record<CharacterId, boolean>; score: number; total: number; confidence: number; explanation: string; evidenceIds: string[]; submittedAt: string; outcome?: 'escaped' }
 export interface CaseCopy {
   headline: string;
