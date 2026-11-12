@@ -7,7 +7,6 @@
 .intro-card .intro-stamp { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 2px dashed var(--rule, #D9C796); font-size: 12px; font-weight: 600; letter-spacing: 1.2px; color: #3B4A52; }
 .intro-card .intro-stamp > span { font-size: 11px; letter-spacing: 1px; color: #55646B; }
 .intro-card .monkey-line { justify-content: center; margin: 0 0 14px; }
-.intro-card .eyebrow { color: #4A5D66; }
 .intro-card h2 { margin: 6px 0 12px; font-size: 34px; font-weight: 700; line-height: 1.1; letter-spacing: 0; color: var(--text, #18252D); }
 .intro-card h2 > span { color: #C98F1E; }
 .intro-card .intro-lead { margin: 0; font-size: 18px; line-height: 1.5; color: var(--text, #18252D); }

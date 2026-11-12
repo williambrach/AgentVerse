@@ -530,7 +530,7 @@ function casePreview(id: 'intro' | 'case-switch') {
   const note = active && (id === 'case-switch' || !loaded) ? t(loaded ? 'main.preview.noteRestarting' : 'main.preview.noteStarting') : '';
   return `<div class="intro-stamp">${t('main.case')} ${caseNumber(row ? row.order : state.order)}</div>
     <div class="monkey-line" data-world="${escape(row?.world || state.world?.id || 'grove')}" aria-hidden="true">${cast.map((c, i) => `<i class="monkey-face ${escape(c.id)} slot-${i}"></i>`).join('')}</div>
-    <span class="eyebrow">${t('main.preview.eyebrow')}</span><h2 id="intro-title">${escape(title).replace(/ (\S+)$/, '<br>$1')}<span>.</span></h2>
+    <h2 id="intro-title">${escape(title).replace(/ (\S+)$/, '<br>$1')}<span>.</span></h2>
     <p class="intro-lead">${escape(row ? row.lead : state.copy.intro.lead).replace(/\n/g, '<br>')}</p>
     <p id="intro-body" ${loaded ? '' : 'hidden'}>${escape(state.copy.intro.body)}</p>
     <div class="intro-flow"><span>01 <b>${t('main.preview.flowAsk', { n: cast.length, many: pw.text.many })}</b></span><span>02 <b>${t('main.preview.flowChoose')}</b></span></div>

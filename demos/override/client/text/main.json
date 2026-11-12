@@ -28,7 +28,6 @@
   "main.preview.restart": "Restart this case",
   "main.preview.again": "Play again",
   "main.preview.keep": "Keep investigating",
-  "main.preview.eyebrow": "A 2–3 MINUTE MYSTERY",
   "main.preview.flowAsk": "Ask {n} {many}",
   "main.preview.flowChoose": "Choose",
   "main.preview.noteRestarting": "Restarting ends the case you’re in. Its records stay on the server.",
