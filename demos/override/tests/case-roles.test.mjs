@@ -121,7 +121,7 @@ test('content_overlay_keeps_case_roles', async () => {
     store.publish(friends.id, { 'copy.intro.lead': 'Edited lead' }, { by: 'alice', baseRev: 0 });
     const cur = store.current(friends.id);
     assert.equal(cur.copy.intro.lead, 'Edited lead');
-    assert.deepEqual(rolesOf(cur).map(r => r.id), ['birds', 'reptile', 'bermuda', 'aliens', 'moonbase', 'haarp', 'none']);
+    assert.deepEqual(rolesOf(cur).map(r => r.id), ['conspiracist', 'none']);
     assert.equal(cur.world.id, 'friends');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

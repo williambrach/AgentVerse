@@ -2,7 +2,7 @@
   "dialogue.briefing.kicker": "THE CASE / 2–3 MINUTES",
   "dialogue.briefing.question": "YOUR QUESTION",
   "dialogue.briefing.ask.title": "Ask {cast} {many}",
-  "dialogue.briefing.ask.body": "One quick question each.",
+  "dialogue.briefing.ask.body": "Ask each one as many questions as you like. Follow up on their answers to keep them talking.",
   "dialogue.briefing.tools.title": "Use your Arbiter tools",
   "dialogue.briefing.tools.body": "Optional. They cost coins and sit in the left rail.",
   "dialogue.briefing.verdict.title": "Make your verdict",

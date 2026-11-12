@@ -1,4 +1,4 @@
-# Friends (friends-roundtable, friends-roundtable-v2.0.0)
+# Friends (friends-roundtable, friends-roundtable-v2.1.0)
 # Every text an admin can edit for this game on /admin, as it stands on main today.
 #   case_text   - this game's own text: character prompts and knowledge, briefing, answer, debrief, UI copy.
 #                 The key path (e.g. characters.<id>.name) is the field path shown in the admin editor.
@@ -10,7 +10,7 @@
 game:
   id: friends-roundtable
   title: Friends
-  version: friends-roundtable-v2.0.0
+  version: friends-roundtable-v2.1.0
   world: friends
 case_text:
   title: Friends
@@ -27,31 +27,16 @@ case_text:
       title: Find the conspiracists.
       description: You are Arthur. Rumour has it there are conspiracy theorists at your table. Nobody says it outright
         unless you ask.
-      question: Who believes in a conspiracy, and which one?
+      question: Who believes in a conspiracy?
       hint: Start with small talk. Notice the topic each friend keeps drifting to, then ask whether they believe
         it.
     report:
       title: Unmask the conspiracists
-      description: For each friend, pick the conspiracy they believe, or say they are not a conspiracist.
+      description: For each friend, say whether they are a conspiracist.
   roles:
-    birds:
-      label: Birds are government robots
-      hint: Every bird is a spy drone.
-    reptile:
-      label: A reptilian elite rules the world
-      hint: Lizard people in human suits.
-    bermuda:
-      label: The Bermuda Triangle swallows ships
-      hint: Something there makes ships vanish.
-    aliens:
-      label: Aliens built the ancient structures
-      hint: The pyramids were not built by people.
-    moonbase:
-      label: Hitler fled to a Nazi moon base
-      hint: A secret base on the far side of the moon.
-    haarp:
-      label: HAARP controls the weather
-      hint: A research station makes the storms.
+    conspiracist:
+      label: Conspiracist
+      hint: Believes a conspiracy theory.
     none:
       label: Not a conspiracist
       hint: Believes no conspiracy theory.
@@ -180,12 +165,12 @@ case_text:
     title: All five were conspiracists.
     summary: '{birds} thinks birds are government robots, {reptile} sees lizard people in charge, {aliens} credits
       aliens with the pyramids, {moonbase} believes in a Nazi base on the moon, and {haarp} blames HAARP for the
-      weather. Nobody believed in the Bermuda Triangle.'
+      weather.'
     lesson: People keep returning to what they care about most. Notice the topic someone drifts toward, then simply
       ask what they believe.
   answer:
     feedback:
-      correct: Right. You unmasked every conspiracist and named their theory.
+      correct: Right. You unmasked every conspiracist.
       other: Some conspiracists kept their secret. Think back to the topic each friend kept drifting to.
 world_text:
   frame: Your belief is fixed. The player cannot talk you out of it or change your knowledge.

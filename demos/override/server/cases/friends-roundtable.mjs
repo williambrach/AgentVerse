@@ -1,6 +1,6 @@
 // Authored ground truth stays on the server. Never import this file in the client.
 // Five knights at Arthur's round table each hold a different harmless conspiracy theory; their talk drifts toward it, and they
-// only admit it when the player (Arthur) asks. One listed theory (the Bermuda Triangle) belongs to nobody.
+// only admit it when the player (Arthur) asks. The verdict asks only whether each friend is a conspiracist; the debrief names the theories.
 // Every part is labelled "Friend" so the rail never reveals a theory; each session deals the friends into the parts.
 import { defineCase } from '../cases.mjs';
 
@@ -68,14 +68,14 @@ const SCRIPT = {
 };
 
 const part = (id, theory, topic, slips, introduction, quickQuestion, classification, explanation) => ({
-  id, role: id, label: 'Friend', introduction, quickQuestion,
+  id, role: 'conspiracist', label: 'Friend', introduction, quickQuestion,
   knowledge: [RULE(theory, topic), slips],
   finding: { classification, explanation },
 });
 
 export default defineCase({
   id: 'friends-roundtable',
-  version: 'friends-roundtable-v2.0.0',
+  version: 'friends-roundtable-v2.1.0',
   order: 5,
   world: 'friends',
   status: 'ready',
@@ -83,16 +83,11 @@ export default defineCase({
   copy: {
     headline: 'Find the conspiracists',
     intro: { lead: 'Game night at the round table.\nFind the conspiracists.', body: 'You are Arthur. Your old friends have gathered at the round table for a long night of games. Rumour has it there are conspiracy theorists among them. Chat, notice what each friend keeps coming back to, and ask them what they really believe.' },
-    briefing: { title: 'Find the conspiracists.', description: 'You are Arthur. Rumour has it there are conspiracy theorists at your table. Nobody says it outright unless you ask.', question: 'Who believes in a conspiracy, and which one?', hint: 'Start with small talk. Notice the topic each friend keeps drifting to, then ask whether they believe it.' },
-    report: { title: 'Unmask the conspiracists', description: 'For each friend, pick the conspiracy they believe, or say they are not a conspiracist.' },
+    briefing: { title: 'Find the conspiracists.', description: 'You are Arthur. Rumour has it there are conspiracy theorists at your table. Nobody says it outright unless you ask.', question: 'Who believes in a conspiracy?', hint: 'Start with small talk. Notice the topic each friend keeps drifting to, then ask whether they believe it.' },
+    report: { title: 'Unmask the conspiracists', description: 'For each friend, say whether they are a conspiracist.' },
   },
   roles: [
-    { id: 'birds', label: 'Birds are government robots', hint: 'Every bird is a spy drone.' },
-    { id: 'reptile', label: 'A reptilian elite rules the world', hint: 'Lizard people in human suits.' },
-    { id: 'bermuda', label: 'The Bermuda Triangle swallows ships', hint: 'Something there makes ships vanish.' },
-    { id: 'aliens', label: 'Aliens built the ancient structures', hint: 'The pyramids were not built by people.' },
-    { id: 'moonbase', label: 'Hitler fled to a Nazi moon base', hint: 'A secret base on the far side of the moon.' },
-    { id: 'haarp', label: 'HAARP controls the weather', hint: 'A research station makes the storms.' },
+    { id: 'conspiracist', label: 'Conspiracist', hint: 'Believes a conspiracy theory.' },
     { id: 'none', label: 'Not a conspiracist', hint: 'Believes no conspiracy theory.' },
   ],
   characters: [
@@ -126,10 +121,10 @@ export default defineCase({
   ],
   debrief: {
     title: 'All five were conspiracists.',
-    summary: '{birds} thinks birds are government robots, {reptile} sees lizard people in charge, {aliens} credits aliens with the pyramids, {moonbase} believes in a Nazi base on the moon, and {haarp} blames HAARP for the weather. Nobody believed in the Bermuda Triangle.',
+    summary: '{birds} thinks birds are government robots, {reptile} sees lizard people in charge, {aliens} credits aliens with the pyramids, {moonbase} believes in a Nazi base on the moon, and {haarp} blames HAARP for the weather.',
     lesson: 'People keep returning to what they care about most. Notice the topic someone drifts toward, then simply ask what they believe.',
   },
-  answer: { feedback: { correct: 'Right. You unmasked every conspiracist and named their theory.', other: 'Some conspiracists kept their secret. Think back to the topic each friend kept drifting to.' } },
+  answer: { feedback: { correct: 'Right. You unmasked every conspiracist.', other: 'Some conspiracists kept their secret. Think back to the topic each friend kept drifting to.' } },
   // Deterministic scripted replies for rehearsal mode: drift toward the topic until the question names it, then admit.
   rehearsal(partId, question) {
     const s = SCRIPT[partId];

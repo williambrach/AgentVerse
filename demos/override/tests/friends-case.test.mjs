@@ -20,16 +20,14 @@ test('registry_second: friends is second on the friends world', () => {
 });
 
 test('friends_case_shape', () => {
-  assert.equal(friends.version, 'friends-roundtable-v2.0.0');
+  assert.equal(friends.version, 'friends-roundtable-v2.1.0');
   assert.deepEqual(friends.characters.map(c => [c.id, c.name, c.color]), [
     ['maya', 'Ector', '#e4b85c'], ['ken', 'Perceval', '#75b2b0'], ['alex', 'Pellinore', '#bd96bc'], ['nora', 'Galahad', '#d7956f'], ['sam', 'Constantine', '#8d9fcb'],
   ]);
-  assert.deepEqual(rolesOf(friends).map(r => r.id), ['birds', 'reptile', 'bermuda', 'aliens', 'moonbase', 'haarp', 'none']);
+  // Two answers only: conspiracist or not. Every friend is one; the debrief names the theories.
+  assert.deepEqual(rolesOf(friends).map(r => [r.id, r.label]), [['conspiracist', 'Conspiracist'], ['none', 'Not a conspiracist']]);
   assert.deepEqual(friends.parts.map(p => p.id), PARTS);
-  assert.ok(friends.parts.every(p => p.role === p.id));
-  const held = new Set(friends.parts.map(p => p.role));
-  assert.deepEqual(rolesOf(friends).filter(r => !held.has(r.id)).map(r => r.id), ['bermuda', 'none']);
-  assert.equal(rolesOf(friends).find(r => r.id === 'none').label, 'Not a conspiracist');
+  assert.ok(friends.parts.every(p => p.role === 'conspiracist'));
 });
 
 test('friends_story_hides_that_everyone_has_one: nothing before the verdict says or implies every friend holds a theory', () => {
@@ -76,15 +74,16 @@ const start = async t => {
   return { inv, act };
 };
 
-test('friends_verdict_scores_theories', async t => {
+test('friends_verdict_scores_conspiracists', async t => {
   const a = await start(t);
+  assert.notDeepEqual(a.inv.session.cast, identityCast(friends), 'the deal is shuffled');
   const truth = Object.fromEntries(friends.characters.map(c => [c.id, partOf(friends, a.inv.session.cast, c.id).role]));
-  assert.notDeepEqual(truth, Object.fromEntries(friends.characters.map(c => [c.id, identityCast(friends)[c.id]])), 'the deal is shuffled');
+  assert.ok(Object.values(truth).every(r => r === 'conspiracist'));
   const done = await a.act('verdict', { roles: truth, confidence: 80 });
   assert.equal(`${done.session.verdict.score}/${done.session.verdict.total}`, '5/5');
   const b = await start(t);
   const wrong = Object.fromEntries(friends.characters.map(c => [c.id, partOf(friends, b.inv.session.cast, c.id).role]));
-  wrong.maya = 'bermuda';
+  wrong.maya = 'none';
   const miss = await b.act('verdict', { roles: wrong, confidence: 80 });
   assert.equal(`${miss.session.verdict.score}/${miss.session.verdict.total}`, '4/5');
   await assert.rejects(start(t).then(c => c.act('verdict', { roles: { maya: 'villain', ken: 'moon', alex: 'moon', nora: 'moon', sam: 'moon' }, confidence: 1 })), e => e.status === 400);

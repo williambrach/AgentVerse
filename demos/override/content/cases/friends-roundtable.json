@@ -1,6 +1,6 @@
 {
   "id": "friends-roundtable",
-  "version": "friends-roundtable-v2.0.0",
+  "version": "friends-roundtable-v2.1.0",
   "edits": {
     "parts.aliens.knowledge": [
       "You are {aliens}.",

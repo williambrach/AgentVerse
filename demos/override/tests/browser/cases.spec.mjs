@@ -1,5 +1,5 @@
 import { test, expect } from './team.mjs';
-import { castOf, sessionIdOf, lockIn, interviewAll } from './cast.mjs';
+import { lockIn, interviewAll } from './cast.mjs';
 
 const radio = (page, id) => page.locator(`.case-option input[name="case"][value="${id}"]`);
 
@@ -45,11 +45,8 @@ async function castSize(page) {
   return (await read()).characters.length;
 }
 
-// Friends: a part id is the theory it holds, so the true role of each friend is their dealt part.
-const lockPerfect = async (page, ids) => {
-  const cast = castOf(await sessionIdOf(page));
-  await lockIn(page, Object.fromEntries(ids.map(id => [id, cast[id]])));
-};
+// Friends: every friend is a conspiracist, so the perfect verdict picks that answer for each one.
+const lockPerfect = (page, ids) => lockIn(page, Object.fromEntries(ids.map(id => [id, 'conspiracist'])));
 
 test('reset switches case', async ({ page }) => {
   await page.goto('/');

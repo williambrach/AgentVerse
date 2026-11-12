@@ -1,5 +1,5 @@
 import { test, expect } from './team.mjs';
-import { castOf, sessionIdOf, lockIn, pickConfidence, interviewAll } from './cast.mjs';
+import { lockIn, pickConfidence, interviewAll } from './cast.mjs';
 import { mkdirSync } from 'node:fs';
 
 // Capture every Phaser.Game from the test environment (the walking station and the roundtable are two games).
@@ -268,18 +268,18 @@ test('friends_choice_lineup_and_debrief', async ({ page }, testInfo) => {
   await start(page);
   await ready(page);
   await interviewAll(page);
-  const cast = castOf(await sessionIdOf(page));
   await page.locator('.verdict-button').click();
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
   await expect(page.locator('#panel h1')).toHaveText('Unmask the conspiracists', { timeout: 12_000 });
   await expect(page.locator('fieldset.role-row')).toHaveCount(5);
-  await expect(page.locator('fieldset.role-row').first().locator('.role-chip input')).toHaveCount(7);
+  await expect(page.locator('fieldset.role-row').first().locator('.role-chip input')).toHaveCount(2);
   await expect(page.locator('.scale-ends')).toHaveCount(0);
   await expect(page.locator('.role-choice .choice-label').first()).toBeVisible();
   await shot(page, testInfo, 'lineup');
   await pickConfidence(page, 95);
-  // A part id is the theory it holds, so the truth for each friend is their dealt part.
-  await lockIn(page, Object.fromEntries(FRIENDS.map(id => [id, cast[id]])));
+  // Two answers only; every friend is a conspiracist.
+  await expect(page.locator('.role-legend li')).toHaveText([/Conspiracist/, /Not a conspiracist/]);
+  await lockIn(page, Object.fromEntries(FRIENDS.map(id => [id, 'conspiracist'])));
   await expect(page.locator('#panel .debrief-head')).toBeVisible();
   await expect(page.locator('.verdict-summary')).toContainText('5 / 5');
   await shot(page, testInfo, 'debrief');

@@ -19,13 +19,14 @@ const BASE = {
     "thread": "54afee9951ded86d",
     "contentHash": "8826bc512257"
   },
+  // Friends v2.1.0 (two answers: conspiracist or not): re-pinned on purpose; prompts differ only by the version string.
   "friends-roundtable": {
-    "view": "ea0305de1cb08a7b",
+    "view": "e7210defe4157083",
     "chars": "a649ab932c68ee4f",
-    "roles": "da52c5588cfffe9a",
-    "msgs": "58042191891073e5",
-    "thread": "771d486ccb15296f",
-    "contentHash": "640561c63616"
+    "roles": "01ce7b8d7918725c",
+    "msgs": "3ed2b7240e34265e",
+    "thread": "05fe88b6f493fcb2",
+    "contentHash": "4759ebe192a4"
   },
   "factory-escape": {
     "view": "e6f5b8e91c1310a3",

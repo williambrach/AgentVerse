@@ -166,7 +166,7 @@ test('briefing: stock steps are byte-identical, and a steps option replaces only
   const v = bv();
   const stock = briefingPanel(v);
   const list = stock.match(/<ol class="task-list">[\s\S]*?<\/ol>/)[0];
-  assert.ok(list.includes('One quick question each.') && list.includes('Use your Arbiter tools') && list.includes('Make your verdict'));
+  assert.ok(list.includes('Ask each one as many questions as you like.') && list.includes('Use your Arbiter tools') && list.includes('Make your verdict'));
   assert.equal(briefingPanel({ ...v, steps: undefined }), stock);
   const custom = '<ol class="task-list"><li><b>X</b></li></ol>';
   assert.equal(briefingPanel({ ...v, steps: custom }), stock.replace(list, custom));
