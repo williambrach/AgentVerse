@@ -274,6 +274,24 @@ node scripts/admin-demo.mjs --players 60 --ramp 60000 --think 4000-20000 --burst
 
 This starts the real server in live mode over two mock endpoints, plus simulated players who play whole games and send heartbeats. Every `--burst-every` seconds (0 turns it off), endpoint `a` fails for 30 s, so you can watch failover. Defaults are shown above; `--think` is a range in ms. The password is `OVERRIDE_ADMIN_PASSWORD` (or the old `OVERRIDE_ADMIN_TOKEN`), else `demo`. Ctrl-C stops everything.
 
+To measure the command centre during an event, rather than just watch it, run the rehearsal:
+
+```sh
+node scripts/rehearse.mjs --players 25 --seconds 600 --out run.json                     # mock LLM, one failover burst midway
+node --env-file=.env scripts/rehearse.mjs --players 25 --seconds 300 --real --no-burst  # real endpoints, spends quota
+```
+
+The same simulated teams play whole games and end each one with a verdict that obeys the case's role counts (Castelvento: exactly one traveller). Meanwhile a probe uses the admin port the way an operator would. Every 2 s it reads health, the leaderboard, `/metrics`, the content list and one session's drill-down. It keeps `/admin/stream` open the whole time and starts a new round midway. At the end it prints p50/p95/max for every player route and admin route, plus the stream event lag and tick gap, the event-loop delay, peak RSS and what the command centre showed. It ends with PASS or FAIL against these thresholds:
+
+- admin p95 `--admin-p95` 300 ms;
+- stream lag p95 `--lag-p95` 1000 ms;
+- event loop p99 `--loop-p99` 100 ms;
+- no non-LLM 5xx;
+- every team finishes a game;
+- the online count and the leaderboard agree with the driver.
+
+Ports default to free ones (`--port`, `--admin-port`). `--real` takes `OVERRIDE_ENDPOINTS` or `OVERRIDE_LLM_*` from the environment.
+
 ## Load test and preflight
 
 The load test drives simulated players against the real server and mock endpoints with injected faults:

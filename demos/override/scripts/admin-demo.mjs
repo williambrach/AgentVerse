@@ -13,13 +13,23 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BURST_MS = 30_000;
 const BEAT_MS = 30_000;
 
-// Random verdict picks come from the case's own role ids (view.roles), else the standard four.
+// Random verdict picks come from the case's own roles (view.roles), else the standard four.
+// A role with a `count` (Castelvento: exactly one traveller) goes to exactly that many random characters.
 export const pickRoles = (view) => {
-  const ids = Array.isArray(view?.roles) && view.roles.length ? view.roles.map((r) => r.id) : ROLE_IDS;
-  return Object.fromEntries((view?.characters ?? []).map((c) => [c.id, ids[Math.floor(Math.random() * ids.length)]]));
+  const roles = Array.isArray(view?.roles) && view.roles.length ? view.roles : ROLE_IDS.map((id) => ({ id }));
+  const free = roles.filter((r) => r.count === undefined).map((r) => r.id);
+  const chars = [...(view?.characters ?? [])].map((c) => c.id).sort(() => Math.random() - 0.5);
+  const picks = {};
+  for (const r of roles) if (r.count !== undefined) for (const id of chars.splice(0, r.count)) picks[id] = r.id;
+  const rest = free.length ? free : roles.map((r) => r.id);
+  for (const id of chars) picks[id] = rest[Math.floor(Math.random() * rest.length)];
+  // Keys follow the case's character order, whatever the shuffle did.
+  return Object.fromEntries((view?.characters ?? []).map((c) => [c.id, picks[c.id]]));
 };
 
-export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw = [4000, 20_000], burstEvery = 120, port = 3001, adminPort = 3002, token = 'demo', seconds = 0, publicDir } = {}) {
+// `llmEnv` replaces the two mock endpoints with real ones (OVERRIDE_ENDPOINTS or OVERRIDE_LLM_* variables).
+// `onCall(route, status, ms)` and `onFinish(index)` let a caller time player requests and count finished games.
+export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw = [4000, 20_000], burstEvery = 120, port = 3001, adminPort = 3002, token = 'demo', seconds = 0, publicDir, llmEnv = null, onCall = () => {}, onFinish = () => {} } = {}) {
   const thinkMs = Array.isArray(thinkRaw) && thinkRaw.length === 2 && thinkRaw.every(Number.isFinite) ? thinkRaw : [4000, 20_000];
   const dir = mkdtempSync(join(tmpdir(), 'override-demo-'));
   const timers = new Set();
@@ -50,17 +60,21 @@ export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw
   const loops = [];
 
   try {
-    for (const l of ['a', 'b']) mocks[l] = await startMockLlm({ mode: 'ok', delayMs: [300, 2500] });
-    const endpoints = join(dir, 'endpoints.json');
-    writeFileSync(endpoints, JSON.stringify(['a', 'b'].map((l) => ({ name: l, baseUrl: mocks[l].url, model: `mock-${l}`, keyEnv: `OVERRIDE_ENDPOINT_${l.toUpperCase()}_KEY`, maxInFlight: 200 }))));
+    let llm = llmEnv;
+    if (!llm) {
+      for (const l of ['a', 'b']) mocks[l] = await startMockLlm({ mode: 'ok', delayMs: [300, 2500] });
+      const endpoints = join(dir, 'endpoints.json');
+      writeFileSync(endpoints, JSON.stringify(['a', 'b'].map((l) => ({ name: l, baseUrl: mocks[l].url, model: `mock-${l}`, keyEnv: `OVERRIDE_ENDPOINT_${l.toUpperCase()}_KEY`, maxInFlight: 200 }))));
+      llm = { OVERRIDE_ENDPOINTS: endpoints, OVERRIDE_ENDPOINT_A_KEY: 'demo-key-a', OVERRIDE_ENDPOINT_B_KEY: 'demo-key-b' };
+    }
     const dist = resolve(root, 'dist');
     running = await startServer({
       PORT: String(port), OVERRIDE_ADMIN_PORT: String(adminPort), OVERRIDE_ENV: 'demo', OVERRIDE_APP_COMMIT: process.env.OVERRIDE_APP_COMMIT || 'demo', OVERRIDE_DATA_DIR: join(dir, 'data'), OVERRIDE_SECRET: 'demo-secret',
-      OVERRIDE_ADMIN_PASSWORD: token, OVERRIDE_CONTENT_DIR: join(dir, 'content'), OVERRIDE_ENDPOINTS: endpoints, OVERRIDE_ENDPOINT_A_KEY: 'demo-key-a', OVERRIDE_ENDPOINT_B_KEY: 'demo-key-b',
+      OVERRIDE_ADMIN_PASSWORD: token, OVERRIDE_CONTENT_DIR: join(dir, 'content'), ...llm,
     }, { publicDir: publicDir !== undefined ? publicDir : existsSync(join(dist, 'index.html')) ? dist : null });
   } catch (error) { await close(); throw error; }
 
-  if (burstEvery > 0) {
+  if (burstEvery > 0 && mocks.a) {
     every(burstEvery * 1000, () => {
       mocks.a.setMode('error500');
       const id = setTimeout(() => { timers.delete(id); mocks.a.setMode('ok'); }, BURST_MS);
@@ -74,12 +88,16 @@ export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw
     const jar = new Map();
     let view = null;
     const call = async (method, path, body) => {
+      const t0 = performance.now();
+      let status = 0;
       try {
         const res = await fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json', ...(jar.size ? { Cookie: [...jar].map(([k, v]) => `${k}=${v}`).join('; ') } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: ctl.signal });
+        status = res.status;
         for (const set of res.headers.getSetCookie()) { const [pair] = set.split(';'); const eq = pair.indexOf('='); jar.set(pair.slice(0, eq).trim(), pair.slice(eq + 1)); }
         const data = res.status === 204 ? null : await res.json().catch(() => null);
         return { status: res.status, data };
       } catch { return { status: 0, data: null }; }
+      finally { if (!ctl.signal.aborted) { try { onCall(`${method} ${path}`, status, performance.now() - t0); } catch { /* a report hook never stops a player */ } } }
     };
     const act = async (action, extra = {}) => {
       for (let tries = 0; tries < 8 && !ctl.signal.aborted; tries++) {
@@ -115,15 +133,15 @@ export async function runDemo({ players = 60, rampMs = 60_000, thinkMs: thinkRaw
       }
       if (ctl.signal.aborted) break;
       await think();
-      const roles = pickRoles(view);
-      await act('verdict', { roles, confidence: Math.round(between(30, 100)) });
+      const closed = await act('verdict', { roles: pickRoles(view), confidence: Math.round(between(30, 100)) });
+      if (closed?.status === 200 && view?.session?.status === 'closed') { try { onFinish(index); } catch { /* ignore */ } }
       await think();
       if (Math.random() < 0.5) await sleep(between(2000, 8000));
     }
   };
   for (let i = 0; i < players; i++) loops.push(play(i).catch(() => {}));
   if (seconds > 0) { const id = setTimeout(() => { close().catch(() => {}); }, seconds * 1000); timers.add(id); }
-  return { url: running.url, adminUrl: running.adminUrl, close };
+  return { url: running.url, adminUrl: running.adminUrl, close, running, mocks };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
