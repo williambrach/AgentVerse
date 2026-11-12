@@ -40,6 +40,8 @@ let worldKey = '';
 const blankDrafts = (): Record<string, string> => Object.fromEntries(state.characters.map(c => [c.id, '']));
 let state: CaseState;
 let station: Stage;
+/** The walking scene once made: it alone takes the open chat's character, for its name tags. */
+let walkingScene: { setActive(id: string | null): void } | undefined;
 let panel: LocationId = 'briefing';
 /** The evidence card to show open on the Evidence page; null when the page was opened without one. */
 let evidenceFocus: string | null = null;
@@ -227,7 +229,7 @@ async function shell() {
   const { createRoundtable } = await import('./roundtable');
   const hint = (text: string) => { document.querySelector('#movement-hint')!.textContent = text; };
   station = createStage({
-    station: () => createStation(location => void visit(location), hint, () => { if (!dialogueOpen) return; dialogueOpen = false; render(); }),
+    station: () => (walkingScene = createStation(location => void visit(location), hint, () => { if (!dialogueOpen) return; dialogueOpen = false; render(); })),
     roundtable: () => createRoundtable(id => void visit(id), hint),
     show(which) {
       document.querySelector<HTMLElement>('#station')!.hidden = which !== 'station';
@@ -469,6 +471,7 @@ function render() {
   app.dataset.view = lineup || debrief ? 'lineup' : 'world';
   syncWalking();
   station?.focus(dialogueOpen && !introVisible && ids().includes(panel) ? panel : null);
+  walkingScene?.setActive(ids().includes(panel) ? panel : null);
   const target = document.querySelector<HTMLElement>('#panel')!;
   const sections: Record<string, string> = { briefing: plain('hud.briefing'), ...Object.fromEntries(state.characters.map(c => [c.id, plain('main.section.chat', { name: c.name })])), evidence: plain('main.nav.evidence'), quotes: plain('main.nav.quotes'), report: plain(session?.status === 'closed' ? 'main.section.solved' : 'main.section.guess') };
   document.querySelector('#notebook-section')!.textContent = threadOpen ? plain('main.section.thread') : sections[panel];

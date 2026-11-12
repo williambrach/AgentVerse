@@ -126,3 +126,69 @@ test('name_tags_do_not_overlap: 7 world px per character plus 10, at labelLift',
   }
   assert.ok(w.slots[4].x >= 100);
 });
+
+// Layout of the prop activity areas (T7).
+import { readFileSync } from 'node:fs';
+import { atlasItem, placeProp, depthScale } from '../client/scenery.ts';
+
+const atlas = JSON.parse(readFileSync(new URL('../public/assets/renaissance/expansion/atlas.json', import.meta.url), 'utf8'));
+const placed = () => w.scenery.props.map(p => {
+  const item = atlasItem(atlas, 'market-props.png', p.id);
+  assert.ok(item, `atlas item ${p.id}`);
+  return { prop: p, ...placeProp(item, p, depthScale(w.perspective, p.y)) };
+});
+
+test('every_market_prop_placed_once: all eight market props, each exactly once, each with a foot', () => {
+  const ids = w.scenery.props.map(p => p.id).sort();
+  const all = atlas.sheets.find(s => s.file === 'market-props.png').items.map(i => i.id).sort();
+  assert.deepEqual(ids, all);
+  assert.equal(new Set(ids).size, ids.length);
+  for (const p of w.scenery.props) assert.ok(p.foot && p.foot.w > 0 && p.foot.h > 0, p.id);
+});
+
+test('props_on_cobbles: every prop foot is inside the walk bounds and clear of the painted blocks', () => {
+  const b = w.walk.bounds;
+  for (const { prop, footprint } of placed()) {
+    assert.ok(footprint.x >= b.x && footprint.x + footprint.w <= b.x + b.w, `${prop.id} x`);
+    assert.ok(footprint.y >= b.y && footprint.y + footprint.h <= b.y + b.h, `${prop.id} y`);
+    for (const k of w.walk.blocks) {
+      const hit = footprint.x < k.x + k.w && footprint.x + footprint.w > k.x && footprint.y < k.y + k.h && footprint.y + footprint.h > k.y;
+      assert.ok(!hit, `${prop.id} in a painted block`);
+    }
+  }
+});
+
+test('slots_apart: NPCs at least 48 units apart and none stands on a prop foot', () => {
+  for (let i = 0; i < w.slots.length; i++) for (let j = i + 1; j < w.slots.length; j++) {
+    assert.ok(Math.hypot(w.slots[i].x - w.slots[j].x, w.slots[i].y - w.slots[j].y) >= 48, `${i} ${j}`);
+  }
+  for (const s of w.slots) for (const { prop, footprint: f } of placed()) {
+    assert.ok(!(s.x > f.x && s.x < f.x + f.w && s.y > f.y && s.y < f.y + f.h), `slot on ${prop.id}`);
+  }
+});
+
+test('routes_connected: a 6-unit flood from the briefing stop reaches every approach point and most of the bounds', () => {
+  const feet = placed().map(p => p.footprint);
+  const b = w.walk.bounds, S = 6;
+  const open = (x, y) => inWalk(w.walk, { x, y }) && !feet.some(f => x > f.x && x < f.x + f.w && y > f.y && y < f.y + f.h);
+  const cols = Math.floor(b.w / S), rows = Math.floor(b.h / S);
+  const cell = p => [Math.round((p.x - b.x) / S), Math.round((p.y - b.y) / S)];
+  const seen = new Set(), key = (c, r) => `${c},${r}`;
+  const [c0, r0] = cell(w.stops.briefing);
+  const stack = [[c0, r0]];
+  seen.add(key(c0, r0));
+  while (stack.length) {
+    const [c, r] = stack.pop();
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nc = c + dc, nr = r + dr;
+      if (nc < 0 || nr < 0 || nc > cols || nr > rows || seen.has(key(nc, nr))) continue;
+      if (open(b.x + nc * S, b.y + nr * S)) { seen.add(key(nc, nr)); stack.push([nc, nr]); }
+    }
+  }
+  for (const s of w.slots) {
+    const [c, r] = cell({ x: s.x, y: s.y + 14 });
+    const near = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([dc, dr]) => seen.has(key(c + dc, r + dr)));
+    assert.ok(near, `approach ${JSON.stringify(s)}`);
+  }
+  assert.ok(seen.size >= 0.6 * (cols + 1) * (rows + 1), `reached ${seen.size}`);
+});

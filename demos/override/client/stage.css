@@ -3,3 +3,9 @@
 .station-label, .station-prompt { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font: 600 calc(var(--u) * 7) / 1 var(--font, system-ui, sans-serif); letter-spacing: .06em; padding: calc(var(--u) * 3) calc(var(--u) * 4); color: var(--label, #40533c); background: var(--label-bg, #fff6dd); }
 .station-prompt { font-size: calc(var(--u) * 8); padding: calc(var(--u) * 3) calc(var(--u) * 5); color: #384d3a; background: #fff5d9; box-shadow: 0 0 0 calc(var(--u) * 1) #384d3a; z-index: 1; }
 .station-prompt[hidden] { display: none; }
+
+/* Compact tags (department, renaissance): small and dark; strong beside, hovered or in chat, subtle elsewhere. */
+.station-labels[data-labels="compact"] .station-label { font-size: calc(var(--u) * 5); padding: calc(var(--u) * 1.5) calc(var(--u) * 3); letter-spacing: .04em; color: #f6ead2; background: rgba(22, 16, 10, .78); transition: opacity .15s; }
+.station-labels[data-labels="compact"] .station-prompt { font-size: calc(var(--u) * 5.5); padding: calc(var(--u) * 1.5) calc(var(--u) * 3); letter-spacing: .04em; color: #f6ead2; background: rgba(22, 16, 10, .78); box-shadow: none; outline: 1px solid #F4B740; }
+.station-labels[data-labels="compact"] .station-label[data-emphasis="strong"] { opacity: 1; }
+.station-labels[data-labels="compact"] .station-label[data-emphasis="subtle"] { opacity: .6; font-size: calc(var(--u) * 4.5); }

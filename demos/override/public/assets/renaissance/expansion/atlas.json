@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "tool": "built-in imagegen",
+  "units": "source pixels",
+  "rectFormat": "[x,y,width,height]",
+  "anchorFormat": "[x,y] relative to sourceRect top-left",
+  "notes": [
+    "Static independent objects, not animation frames.",
+    "Use explicit rectangles, not a uniform cell grid.",
+    "World props use approximate bottom-center anchors; inventory objects use center anchors.",
+    "World sizes and collision footprints belong in scene configuration.",
+    "Visible bounds measured at alpha >= 8; generated sheets have occasional near-invisible alpha noise outside silhouettes.",
+    "No item establishes a hidden character role."
+  ],
+  "sheets": [
+    {
+      "file": "market-props.png",
+      "width": 1536,
+      "height": 1024,
+      "items": [
+        {
+          "id": "crate-stack",
+          "sourceRect": [
+            47,
+            94,
+            301,
+            399
+          ],
+          "anchor": [
+            150,
+            395
+          ]
+        },
+        {
+          "id": "barrel",
+          "sourceRect": [
+            444,
+            107,
+            260,
+            376
+          ],
+          "anchor": [
+            130,
+            372
+          ]
+        },
+        {
+          "id": "handcart",
+          "sourceRect": [
+            750,
+            153,
+            388,
+            315
+          ],
+          "anchor": [
+            194,
+            311
+          ]
+        },
+        {
+          "id": "bench",
+          "sourceRect": [
+            1168,
+            226,
+            353,
+            253
+          ],
+          "anchor": [
+            176,
+            249
+          ]
+        },
+        {
+          "id": "produce-basket",
+          "sourceRect": [
+            41,
+            622,
+            312,
+            344
+          ],
+          "anchor": [
+            156,
+            340
+          ]
+        },
+        {
+          "id": "herb-planter",
+          "sourceRect": [
+            402,
+            575,
+            344,
+            390
+          ],
+          "anchor": [
+            172,
+            386
+          ]
+        },
+        {
+          "id": "cloth-bolts",
+          "sourceRect": [
+            761,
+            657,
+            380,
+            306
+          ],
+          "anchor": [
+            190,
+            302
+          ]
+        },
+        {
+          "id": "ceramic-jars",
+          "sourceRect": [
+            1171,
+            587,
+            334,
+            379
+          ],
+          "anchor": [
+            167,
+            375
+          ]
+        }
+      ]
+    },
+    {
+      "file": "inventory-objects.png",
+      "width": 1536,
+      "height": 1024,
+      "items": [
+        {
+          "id": "notebook",
+          "sourceRect": [
+            37,
+            96,
+            326,
+            370
+          ],
+          "anchor": [
+            163,
+            185
+          ]
+        },
+        {
+          "id": "sealed-letter",
+          "sourceRect": [
+            408,
+            133,
+            361,
+            281
+          ],
+          "anchor": [
+            180,
+            140
+          ]
+        },
+        {
+          "id": "iron-keys",
+          "sourceRect": [
+            856,
+            67,
+            251,
+            407
+          ],
+          "anchor": [
+            126,
+            204
+          ]
+        },
+        {
+          "id": "medicine-vial",
+          "sourceRect": [
+            1253,
+            87,
+            188,
+            362
+          ],
+          "anchor": [
+            94,
+            181
+          ]
+        },
+        {
+          "id": "town-map",
+          "sourceRect": [
+            12,
+            598,
+            359,
+            329
+          ],
+          "anchor": [
+            180,
+            164
+          ]
+        },
+        {
+          "id": "coin-pouch",
+          "sourceRect": [
+            398,
+            586,
+            349,
+            348
+          ],
+          "anchor": [
+            174,
+            174
+          ]
+        },
+        {
+          "id": "clockwork-gears",
+          "sourceRect": [
+            782,
+            596,
+            344,
+            326
+          ],
+          "anchor": [
+            172,
+            163
+          ]
+        },
+        {
+          "id": "seal-stamp",
+          "sourceRect": [
+            1173,
+            599,
+            339,
+            335
+          ],
+          "anchor": [
+            170,
+            168
+          ]
+        }
+      ]
+    }
+  ]
+}

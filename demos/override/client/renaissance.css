@@ -71,3 +71,11 @@ html [data-world="renaissance"] .monkey-face.agnese, html .monkey-line[data-worl
 #app[data-world="renaissance"] .debrief-secondary { background: transparent; color: #7a2132; border-color: #7a2132; }
 #app[data-world="renaissance"] .debrief-primary { background: #7a2132; color: #f1e4c3; border-color: #3b2a1a; box-shadow: 0 4px 0 #3b2a1a; }
 #app[data-world="renaissance"] .debrief-page button:focus-visible { outline-color: #7a2132; }
+
+/* Castelvento HUD icons: crops of the inventory sheet (1536 x 1024), each rect contained in a 24px square by its longer side. Labels stay as text. */
+#app[data-world="renaissance"] #notebook-button > svg, #app[data-world="renaissance"] .verdict-button > svg { display: none; }
+#app[data-world="renaissance"] #notebook-button::before, #app[data-world="renaissance"] .verdict-button::before, #app[data-world="renaissance"] #coin-counter::before { content: ''; flex: none; display: inline-block; width: 24px; height: 24px; }
+#app[data-world="renaissance"] #notebook-button::before { background: url('/assets/renaissance/expansion/inventory-objects.png') -0.973px -6.227px / 99.632px 66.422px no-repeat; image-rendering: pixelated; }
+#app[data-world="renaissance"] .verdict-button::before { background: url('/assets/renaissance/expansion/inventory-objects.png') -83.044px -42.265px / 108.743px 72.496px no-repeat; image-rendering: pixelated; }
+#app[data-world="renaissance"] #coin-counter::before { background: url('/assets/renaissance/expansion/inventory-objects.png') -27.370px -40.264px / 105.628px 70.418px no-repeat; image-rendering: pixelated; }
+#app[data-world="renaissance"] .world-panel .world-swatch { width: 24px; height: 24px; border: 0; background-color: transparent; background: url('/assets/renaissance/expansion/inventory-objects.png') -0.802px -38.975px / 102.685px 68.457px no-repeat; image-rendering: pixelated; }

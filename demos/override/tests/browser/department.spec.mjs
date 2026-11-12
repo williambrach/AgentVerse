@@ -345,3 +345,70 @@ test('department_walk_sheet_missing: a sheet that fails to load leaves the still
   expect(samples.some(s => s.walking)).toBe(true);
   expect(samples.every(s => s.key === 'factory-player-listening'), JSON.stringify([...new Set(samples.map(s => s.key))])).toBe(true);
 });
+
+const tags = page => page.locator('#station .station-labels .station-label');
+const emphasisOf = (page, id) => page.locator(`#station .station-labels [data-figure="${id}"]`).getAttribute('data-emphasis');
+
+test('compact_tags_strong_near_and_subtle_far', async ({ page }) => {
+  await start(page);
+  await expect(page.locator('#station .station-labels')).toHaveAttribute('data-labels', 'compact');
+  const home = await stopOf(page, 'briefing');
+  await teleport(page, home.x, home.y);
+  for (const id of IDS) await expect.poll(() => emphasisOf(page, id)).toBe('subtle');
+  const freja = await stopOf(page, 'freja');
+  await teleport(page, freja.x, freja.y + 12);
+  await expect.poll(() => emphasisOf(page, 'freja')).toBe('strong');
+  for (const id of IDS.filter(i => i !== 'freja')) expect(await emphasisOf(page, id)).toBe('subtle');
+  // hover_strong: the pointer over a figure makes its tag strong; leaving makes it subtle again.
+  await teleport(page, home.x, home.y);
+  await expect.poll(() => emphasisOf(page, 'mikkel')).toBe('subtle');
+  await scene(page, s => s.figs.get('mikkel').img.emit('pointerover'));
+  await expect.poll(() => emphasisOf(page, 'mikkel')).toBe('strong');
+  await scene(page, s => s.figs.get('mikkel').img.emit('pointerout'));
+  await expect.poll(() => emphasisOf(page, 'mikkel')).toBe('subtle');
+});
+
+test('no_start_or_guess_tags: no report stop, no tag for the briefing', async ({ page }) => {
+  await start(page);
+  expect(await scene(page, s => 'report' in s.stops)).toBe(false);
+  const texts = await tags(page).allTextContents();
+  expect(texts.length).toBe(5);
+  expect(texts.join(' ')).not.toMatch(/START HERE|YOUR GUESS/i);
+  // The briefing stop still has its [E] prompt, on the spot where the tag would be.
+  const b = await stopOf(page, 'briefing');
+  await teleport(page, b.x, b.y);
+  await expect(page.locator('#station .station-prompt')).toBeVisible();
+});
+
+test('clicking a figure opens its chat like E', async ({ page }) => {
+  await start(page);
+  await scene(page, s => s.figs.get('freja').img.emit('pointerdown'));
+  await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'open');
+  await expect(page.locator('.hud-rail [data-go="freja"]')).toHaveClass(/active/);
+});
+
+for (const [w, h] of [[1440, 900], [820, 600]]) {
+  test(`verdict_button_opens_report ${w}x${h}`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await start(page);
+    const button = page.locator('.verdict-button');
+    await expect(button).toBeVisible();
+    await button.click();
+    await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'open');
+    await expect(page.locator('[data-go="report"]').first()).toHaveClass(/active/);
+  });
+}
+
+test('tags_never_overlap', async ({ page }) => {
+  await start(page);
+  const boxes = async () => tags(page).evaluateAll(list => list.map(el => { const r = el.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; }));
+  const overlaps = list => list.flatMap((a, i) => list.slice(i + 1).filter(c => a.l < c.r && c.l < a.r && a.t < c.b && c.t < a.b));
+  expect(overlaps(await boxes())).toEqual([]);
+  const freja = await stopOf(page, 'freja');
+  await teleport(page, freja.x, freja.y + 12);
+  await page.waitForTimeout(300);
+  expect(overlaps(await boxes())).toEqual([]);
+  await page.setViewportSize({ width: 820, height: 600 });
+  await page.waitForTimeout(500);
+  expect(overlaps(await boxes())).toEqual([]);
+});

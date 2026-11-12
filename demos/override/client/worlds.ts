@@ -1,5 +1,6 @@
 import type { FigureArt, WalkSheet } from './factory-figures.ts';
 import type { Walk } from './hall-layout.ts';
+import type { SceneryProp, Perspective } from './scenery.ts';
 import { plain } from './text.ts';
 
 /** flip: draw the figure mirrored. The pose art faces right, so a flipped figure faces left. */
@@ -29,6 +30,12 @@ export interface WorldPack {
   /** Painted floor under the factory's own props (factory): the image lowest, at scale world units per image px,
    * top-left at (x, y), fill beyond it. Unlike backdrop it changes nothing else: stops, labels and the [E] prompt stay as they are. */
   floorArt?: { url: string; width: number; height: number; scale: number; x: number; y: number; fill: string };
+  /** Prop activity areas drawn from a sheet and its atlas (renaissance): each prop's footprint blocks the walk. */
+  scenery?: { sheet: string; atlas: string; props: SceneryProp[] };
+  /** Depth scale: figures, props and shadows shrink toward the far line. Absent: everything draws at its own scale. */
+  perspective?: Perspective;
+  /** Name tags: compact (department, renaissance). Absent: the standard tags. */
+  labels?: 'compact';
   /** Where the detective may stand (department). */
   walk?: Walk;
   /** Examinable evidence spots by foot point (department). */
@@ -165,6 +172,7 @@ const department: WorldPack = {
     chill: true,
   },
   backdrop: { url: '/assets/department/department-hall.png', width: 1536, height: 1024, scale: 1 / 3, x: -16, y: 0, fill: '#1b1714' },
+  labels: 'compact',
   walk: {
     bounds: { x: 40, y: 188, w: 396, h: 138 },
     blocks: [{ x: -16, y: 150, w: 82, h: 62 }, { x: -16, y: 200, w: 74, h: 100 }, { x: -16, y: 282, w: 104, h: 60 }, { x: 386, y: 272, w: 80, h: 70 }, { x: 422, y: 150, w: 80, h: 112 }],
@@ -202,7 +210,7 @@ const renaissance: WorldPack = {
   // Cast order: Ottavio (before the palazzo door), Matteo (by his clock workshop), Beatrice (by the cloth stall),
   // Bruno (open plaza, watching the square), Agnese (beside her herb pot, left of the shop door at x 350..372).
   // Feet points in world units (image px / 3, x - 16); every one is on open cobbles.
-  slots: [{ x: 222, y: 166 }, { x: 410, y: 192 }, { x: 150, y: 190 }, { x: 395, y: 255 }, { x: 330, y: 168 }],
+  slots: [{ x: 222, y: 166 }, { x: 410, y: 192 }, { x: 150, y: 190 }, { x: 300, y: 250 }, { x: 330, y: 168 }],
   figures: {
     base: '/assets/renaissance/characters',
     props: '/assets/renaissance/props',
@@ -222,6 +230,25 @@ const renaissance: WorldPack = {
     stopProps: { briefing: 'scroll', report: 'seal' },
   },
   backdrop: { url: '/assets/renaissance/town-square.png', width: 1536, height: 1024, scale: 1 / 3, x: -16, y: 0, fill: '#2a2018' },
+  labels: 'compact',
+  // Prop activity areas (x, y = ground point; width in world units before perspective; foot = ground contact, a static
+  // collision body). Each NPC has one: Beatrice the cloth bolts, Agnese the herb planter and jars, Matteo the delivery
+  // side (barrel, crates, handcart), Ottavio the bench on the palazzo steps, Bruno the open plaza (no prop).
+  scenery: {
+    sheet: '/assets/renaissance/expansion/market-props.png',
+    atlas: '/assets/renaissance/expansion/atlas.json',
+    props: [
+      { id: 'produce-basket', x: 62, y: 184, width: 22, foot: { w: 16, h: 6 } },
+      { id: 'cloth-bolts', x: 112, y: 180, width: 30, foot: { w: 22, h: 6 } },
+      { id: 'bench', x: 278, y: 168, width: 40, foot: { w: 34, h: 7 } },
+      { id: 'herb-planter', x: 378, y: 172, width: 22, foot: { w: 14, h: 6 } },
+      { id: 'ceramic-jars', x: 395, y: 172, width: 20, foot: { w: 12, h: 6 } },
+      { id: 'barrel', x: 440, y: 202, width: 26, foot: { w: 12, h: 6 } },
+      { id: 'crate-stack', x: 430, y: 228, width: 30, foot: { w: 22, h: 6 } },
+      { id: 'handcart', x: 420, y: 264, width: 44, foot: { w: 36, h: 8 } },
+    ],
+  },
+  perspective: { far: { y: 158, scale: 0.86 }, near: { y: 326, scale: 1 } },
   // The painted market square (market-square.png, copied untouched): at 1/3 it is 512 x 341 world units, x -16..496.
   // Measured on the art (world units): the palazzo steps and the shop doorsteps end at y 142..153, the produce stall's
   // counter at x <= 72, y <= 169, the cloth stall at x 68..121, y <= 160, the barrel and crate at x <= 21, y <= 196,

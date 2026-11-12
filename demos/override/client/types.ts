@@ -63,3 +63,12 @@ export interface BoardCase { id: string; title: string; order: number; total: nu
 export interface LeaderboardRow { rank: number | null; name: string; points: number; played: number; timeMs: number; coins: number; you: boolean; cells?: BoardCell[] }
 export interface Leaderboard { rankBy: 'time' | 'coins'; startedAt?: number; round?: string | null; cases?: BoardCase[]; teams: LeaderboardRow[] }
 export type Board = Leaderboard;
+
+// Wave 0 stub shapes for the Castelvento scenery (T2) and world labels (T3). The owning tasks refine them.
+export type Atlas = Record<string, unknown>;
+export interface AtlasItem { id: string; sourceRect: [number, number, number, number]; anchor: [number, number] }
+export interface Perspective { far: { y: number; scale: number }; near: { y: number; scale: number } }
+export interface SceneryProp { id: string; x: number; y: number; width: number; foot?: { w: number; h: number }; flip?: boolean }
+export interface PropPlacement { scale: number; originX: number; originY: number; depth: number; footprint: { x: number; y: number; w: number; h: number } | null }
+export interface LabelState { near: string | null; hovered: string | null; active: string | null }
+export interface LabelBox { id: string; x: number; y: number; w: number; h: number }

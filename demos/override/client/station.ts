@@ -7,6 +7,8 @@ import { placeholderAtlas, ATLAS_DIMS } from './placeholder-art';
 import { worldFor, type WorldPack } from './worlds';
 import { plain } from './text.ts';
 import * as factoryFigures from './factory-figures';
+import * as scenery from './scenery';
+import * as worldLabels from './world-labels';
 import * as motion from './figure-motion';
 import { evidenceKey, type EvidenceMark } from './hall-layout';
 import type { Pose } from './factory-figures';
@@ -25,10 +27,12 @@ const groveCast: Character[] = ['Momo', 'Pip', 'Nori'].map((name, i) => ({
 }));
 
 function buildStops(world: WorldPack, cast: Character[], marks: Map<string, EvidenceMark> = new Map()): Record<string, Stop> {
+  // Compact worlds have no report stop (the rail's verdict button is the control) and no tag for the briefing stop.
+  const compact = world.labels === 'compact';
   const stops: Record<string, Stop> = {
-    report: { ...(world.stops?.report ?? { x: 132, y: 276 }), title: plain('station.report.title'), label: plain('station.report.label') },
-    briefing: { ...(world.stops?.briefing ?? { x: 244, y: 276 }), title: plain('station.briefing.title'), label: plain('station.briefing.label') },
+    briefing: { ...(world.stops?.briefing ?? { x: 244, y: 276 }), title: plain('station.briefing.title'), label: compact ? '' : plain('station.briefing.label') },
   };
+  if (!compact) stops.report = { ...(world.stops?.report ?? { x: 132, y: 276 }), title: plain('station.report.title'), label: plain('station.report.label') };
   cast.forEach((c, slot) => { stops[c.id] = { ...world.slots[slot], title: plain('station.ask', { name: c.name }), label: c.name.toUpperCase() }; });
   // Evidence spots are stops too: no name tag, the [E] prompt sits just above the item.
   world.evidence?.forEach(e => { stops[evidenceKey(e.id)] = { x: e.x, y: e.y, title: plain('station.examine', { title: marks.get(e.id)?.title ?? e.id }), label: '', bare: true }; });
@@ -130,6 +134,13 @@ export class Station extends Phaser.Scene {
   // Evidence marks (title, examined) as last told by the page; kept before create and across rebuilds.
   private marks = new Map<string, EvidenceMark>();
   private markers = new Map<string, Phaser.GameObjects.Image>();
+  // Compact name tags: which figure is near / hovered / the open chat; the tags are laid out again only when one changes.
+  private nearId: string | null = null;
+  private hoverId: string | null = null;
+  private activeId: string | null = null;
+  private tagsDirty = true;
+  private uScale = 0;
+  private ring?: Phaser.GameObjects.Ellipse;
 
   constructor(onArrival: (location: LocationId) => void, onHint: (hint: string) => void, onWalk: () => void = () => {}) {
     super('banana-grove');
@@ -169,7 +180,9 @@ export class Station extends Phaser.Scene {
   /** Canvas pixels per world unit: 1 for grove and tower, the pack's density for a factory. */
   private density(): number { return this.world.figures?.density ?? 1; }
   /** Name-tag and bubble anchor height above a stop's foot. */
-  private lift(): number { return this.world.figures?.labelLift ?? 66; }
+  private lift(y?: number): number { return (this.world.figures?.labelLift ?? 66) * (y === undefined ? 1 : this.depth(y)); }
+  /** The perspective factor at foot y; 1 in every world without a perspective. */
+  private depth(y: number): number { return scenery.depthScale(this.world.perspective, y); }
 
   /** Switch world or cast: a no-op when both are unchanged, otherwise the scene restarts. */
   configure(world: WorldPack, cast: Character[]) {
@@ -194,6 +207,8 @@ export class Station extends Phaser.Scene {
     this.npcs = new Map();
     this.player = undefined as unknown as Phaser.Physics.Arcade.Image;
     this.currentHint = '';
+    this.nearId = null; this.hoverId = null; this.tagsDirty = true;
+    this.ring = undefined;
     clearTimeout(this.speakTimer);
     this.figs = new Map();
     this.detectiveImg = undefined;
@@ -219,6 +234,10 @@ export class Station extends Phaser.Scene {
       if (sheet) this.load.image(walkSheetKey(art.detective), sheet.url);
       else for (let i = 0; i < (art.walkFrames ?? 0); i++) this.load.image(walkKey(art.detective, i), factoryFigures.walkFrameUrl(art, i));
       this.world.floor?.props.forEach(p => this.load.image(`factory-prop-${p.id}`, factoryFigures.propUrl(art, p.id)));
+      if (this.world.scenery) {
+        this.load.image(`${this.world.id}-scenery`, this.world.scenery.sheet);
+        this.load.json(`${this.world.id}-scenery-atlas`, this.world.scenery.atlas);
+      }
       if (this.world.floorArt) this.load.image(`${this.world.id}-floor-art`, this.world.floorArt.url);
       const back = this.world.backdrop;
       if (back) {
@@ -422,6 +441,13 @@ export class Station extends Phaser.Scene {
     this.lastX = this.player.x; this.lastY = this.player.y; this.moving = false;
     this.cast.forEach(({ id }) => { const p = this.stops[id]; const feet = this.physics.add.staticImage(p.x, p.y - (art ? 4 : 12), 'feet').setVisible(false); this.physics.add.collider(this.player, feet); });
     blocks.forEach(b => this.physics.add.collider(this.player, b));
+    // Each scenery prop's footprint is a static body the detective cannot walk through.
+    this.sceneryPlaced().forEach(({ placement }) => {
+      const f = placement.footprint;
+      if (!f) return;
+      const body = this.physics.add.staticImage(f.x + f.w / 2, f.y + f.h / 2, 'feet').setVisible(false).setDisplaySize(f.w, f.h).refreshBody();
+      this.physics.add.collider(this.player, body);
+    });
     this.shadowDepth = NaN;
     this.shadow = this.add.ellipse(this.player.x, this.player.y + 1, 22, 6, 0x314c34, .22);
     if (art) this.addDetective(art);
@@ -432,6 +458,7 @@ export class Station extends Phaser.Scene {
     }
     (['briefing', 'report'] as const).forEach(id => {
       const p = this.stops[id];
+      if (!p || this.compact()) return;
       // Backdrop worlds put both tags at name-tag height, so the [E] prompt replaces them like a character's.
       if (this.world.backdrop) { this.labels.set(id, this.label(p.x, p.y - this.lift(), p.label)); return; }
       if (id === 'briefing') { this.labels.set(id, this.label(p.x, p.y + 33, p.label)); return; }
@@ -481,15 +508,39 @@ export class Station extends Phaser.Scene {
     const id = this.world.id;
     this.add.rectangle(-400, -300, 1280, 940, Phaser.Display.Color.HexStringToColor(back.fill).color).setOrigin(0, 0).setDepth(-9);
     this.add.image(back.x, back.y, `${id}-backdrop`).setOrigin(0, 0).setScale(back.scale).setDepth(-8);
+    this.drawScenery();
     const prop = (name: string, x: number, y: number, scale: number) => this.add.image(x, y, `${id}-${name}`).setOrigin(.5, 1).setScale(scale).setDepth(y);
     const names = factoryFigures.stopPropsOf(art);
     prop(names.briefing, this.stops.briefing.x, this.stops.briefing.y, 1 / 12);
-    prop(names.report, this.stops.report.x, this.stops.report.y, 1 / 12);
+    if (this.stops.report) prop(names.report, this.stops.report.x, this.stops.report.y, 1 / 12);
     this.world.evidence?.forEach(e => {
       const item = prop(`evidence-${e.id}`, e.x, e.y, 1 / 12);
       const mark = prop('evidence-marker', e.x + item.displayWidth / 2 + 4, e.y, 1 / 24);
       mark.setVisible(!this.marks.get(e.id)?.examined);
       this.markers.set(e.id, mark);
+    });
+  }
+
+  /** The scenery props that have their atlas item, each with its placement at the perspective scale of its foot. */
+  private sceneryPlaced(): { prop: scenery.SceneryProp; item: scenery.AtlasItem; placement: scenery.PropPlacement }[] {
+    const sc = this.world.scenery, id = this.world.id;
+    const atlas = this.cache.json.get(`${id}-scenery-atlas`) as scenery.Atlas | undefined;
+    if (!sc || !atlas || !this.textures.exists(`${id}-scenery`)) return [];
+    const file = sc.sheet.slice(sc.sheet.lastIndexOf('/') + 1);
+    return sc.props.flatMap(prop => {
+      const item = scenery.atlasItem(atlas, file, prop.id);
+      return item ? [{ prop, item, placement: scenery.placeProp(item, prop, this.depth(prop.y)) }] : [];
+    });
+  }
+
+  /** Props from the scenery sheet: atlas rects added once as frames, drawn by foot with the placement's scale and depth. */
+  private drawScenery() {
+    const texture = this.textures.get(`${this.world.id}-scenery`);
+    this.sceneryPlaced().forEach(({ prop, item, placement }) => {
+      const [x, y, w, h] = item.sourceRect;
+      if (!texture.has(item.id)) texture.add(item.id, 0, x, y, w, h);
+      this.add.image(prop.x, prop.y, `${this.world.id}-scenery`, item.id).setOrigin(placement.originX, placement.originY)
+        .setScale(placement.scale).setDepth(placement.depth).setFlipX(prop.flip === true);
     });
   }
 
@@ -508,15 +559,24 @@ export class Station extends Phaser.Scene {
   }
 
   private figureImage(art: NonNullable<WorldPack['figures']>, sprite: string, pose: Pose, x: number, y: number) {
-    return this.add.image(x, y, figureKey(sprite, pose)).setOrigin(art.anchor.x / art.frame.w, art.anchor.y / art.frame.h).setScale(factoryFigures.spriteScale(art, sprite)).setDepth(y);
+    return this.add.image(x, y, figureKey(sprite, pose)).setOrigin(art.anchor.x / art.frame.w, art.anchor.y / art.frame.h).setScale(factoryFigures.spriteScale(art, sprite, this.depth(y))).setDepth(y);
   }
 
   private addFigure(id: string, p: Point & { flip?: boolean }, art: NonNullable<WorldPack['figures']>, text: string) {
     const sprite = art.sprites[id];
-    const shadow = this.add.ellipse(p.x, p.y - 1, 25, 7, 0x000000, .25).setDepth(p.y - 1);
+    const k = this.depth(p.y);
+    const shadow = this.add.ellipse(p.x, p.y - 1, 25 * k, 7 * k, 0x000000, .25).setDepth(p.y - 1);
     // The slot says which way the figure faces (the art faces right).
     const img = this.figureImage(art, sprite, 'listening', p.x, p.y).setFlipX(p.flip === true);
-    const label = this.label(p.x, p.y - art.labelLift, text);
+    const label = this.label(p.x, p.y - art.labelLift * k, text);
+    if (this.compact()) {
+      // Hovering a figure makes its tag strong; clicking it is the same as pressing E beside it.
+      img.setInteractive({ useHandCursor: true });
+      img.on('pointerover', () => this.setHover(id));
+      img.on('pointerout', () => this.setHover(null));
+      img.on('pointerdown', () => { if (this.enabled && !this.covered && !this.typing()) this.onArrival(id); });
+      label.dataset.emphasis = 'subtle';
+    }
     label.dataset.figure = id;
     label.dataset.pose = 'listening';
     this.figs.set(id, { img, sprite, shadow, label, foot: { x: p.x, y: p.y }, seed: motion.seedOf(id), pose: 'listening', poseSince: -motion.POP_MS, home: p.flip === true });
@@ -557,7 +617,7 @@ export class Station extends Phaser.Scene {
     else if (frame !== undefined && String(img.frame.name) !== String(frame)) img.setFrame(frame);
     const sheet = frame !== undefined ? art.walkSheet! : undefined;
     const origin = sheet ? factoryFigures.sheetOrigin(sheet, frame) : { x: art.anchor.x / art.frame.w, y: art.anchor.y / art.frame.h };
-    const scale = sheet ? sheet.scale : factoryFigures.spriteScale(art, sprite);
+    const scale = (sheet ? sheet.scale : factoryFigures.spriteScale(art, sprite)) * this.depth(y);
     if (img.originX !== origin.x || img.originY !== origin.y) img.setOrigin(origin.x, origin.y);
     const tall = (sheet ? sheet.cell.h : art.frame.h) * scale * art.density;
     img.setScale(scale, scale * (1 + look.stretch / tall));
@@ -594,6 +654,7 @@ export class Station extends Phaser.Scene {
     this.addWalkSheetFrames(art);
     this.detectiveImg = this.figureImage(art, art.detective, this.detectivePose, this.player.x, this.player.y);
     this.shadow.setFillStyle(0x000000, .25);
+    if (this.compact()) this.ring = this.add.ellipse(this.player.x, this.player.y + 1, 30, 10, 0xf0b840, .1).setStrokeStyle(1, 0xf0b840, .35).setDepth(this.player.y - 2);
     // An empty, hidden marker carries the detective's pose beside the name tags.
     const marker = this.detectiveMarker = document.createElement('span');
     marker.hidden = true;
@@ -781,12 +842,12 @@ export class Station extends Phaser.Scene {
     if (!p || !this.cast.some(c => c.id === characterId)) return;
     this.clearBubbles();
     const overlay = this.labelLayer();
-    const { left } = placeBubble(p.x, p.y - this.lift(), BUBBLE_WIDTH) /* anchored on the name label's centre */;
+    const { left } = placeBubble(p.x, p.y - this.lift(p.y), BUBBLE_WIDTH) /* anchored on the name label's centre */;
     // With the HUD up the stage fills the window, so the world's top can sit under the top bar (and, at the right, the mode strip): keep the bubble below them.
     const canvas = this.game.canvas;
     const scale = canvas.clientWidth && this.scale.gameSize.width ? canvas.clientWidth / this.scale.gameSize.width * this.density() : 1;
     const hudClear = matchMedia(COMPACT_QUERY).matches ? 0 : this.hudClearance(scale, left);
-    const { bottom, maxHeight, tail } = placeBubble(p.x, p.y - this.lift(), BUBBLE_WIDTH, Math.max(4, hudClear));
+    const { bottom, maxHeight, tail } = placeBubble(p.x, p.y - this.lift(p.y), BUBBLE_WIDTH, Math.max(4, hudClear));
     const el = document.createElement('div');
     el.className = 'station-bubble';
     el.dataset.character = characterId;
@@ -818,12 +879,14 @@ export class Station extends Phaser.Scene {
     if (this.overlay) {
       this.overlay.style.setProperty('--label', this.world.palette.label);
       this.overlay.style.setProperty('--label-bg', this.world.palette.labelBg);
+      if (this.compact()) this.overlay.dataset.labels = 'compact'; else delete this.overlay.dataset.labels;
       return this.overlay;
     }
     const canvas = this.game.canvas;
     const overlay = this.overlay = document.createElement('div');
     overlay.className = 'station-labels';
     overlay.setAttribute('aria-hidden', 'true');
+    if (this.compact()) overlay.dataset.labels = 'compact';
     canvas.after(overlay);
     const sync = () => this.syncOverlay();
     const observer = new ResizeObserver(sync);
@@ -843,6 +906,61 @@ export class Station extends Phaser.Scene {
     overlay.style.width = `${width * scale}px`;
     overlay.style.height = `${height * scale}px`;
     overlay.style.setProperty('--u', `${scale}px`);
+    if (this.uScale !== scale) { this.uScale = scale; this.tagsDirty = true; }
+  }
+
+  private compact(): boolean { return this.world.labels === 'compact'; }
+
+  /** The cast figure the detective stands near (within 40 units), for tag emphasis; changes mark the tags for a new layout. */
+  private trackNear() {
+    let best: string | null = null, bestD = 40;
+    this.figs.forEach((f, id) => {
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, f.foot.x, f.foot.y);
+      if (d <= bestD) { best = id; bestD = d; }
+    });
+    if (best !== this.nearId) { this.nearId = best; this.tagsDirty = true; }
+  }
+
+  private setHover(id: string | null) {
+    if (this.hoverId === id) return;
+    this.hoverId = id;
+    this.tagsDirty = true;
+    this.game.loop.wake();
+  }
+
+  /** The open chat's character, shown strong; null when no chat is open. */
+  setActive(id: string | null): void {
+    if (this.activeId === id) return;
+    this.activeId = id;
+    this.tagsDirty = true;
+  }
+
+  /** Compact tags: emphasis by near / hovered / active, measured in world units and spread so none overlap.
+   * Runs only when one of those, the size, or the prompt changes, never every frame. */
+  private layoutTags() {
+    const u = this.uScale;
+    if (!this.compact() || !u || !this.overlay) return;
+    this.tagsDirty = false;
+    const state = { near: this.nearId, hovered: this.hoverId, active: this.activeId };
+    const boxes: worldLabels.LabelBox[] = [];
+    this.figs.forEach((f, id) => {
+      const el = f.label;
+      el.dataset.emphasis = worldLabels.labelEmphasis(id, state);
+      const r = el.getBoundingClientRect();
+      boxes.push({ id, x: f.foot.x, y: f.foot.y - this.lift(f.foot.y), w: r.width / u, h: r.height / u });
+    });
+    // Strong tags go first: they keep their place and the subtle ones step aside.
+    boxes.sort((a, b) => Number(worldLabels.labelEmphasis(b.id, state) === 'strong') - Number(worldLabels.labelEmphasis(a.id, state) === 'strong'));
+    const placed = worldLabels.layoutLabels(boxes, { w: width, h: height });
+    this.figs.forEach((f, id) => {
+      const at = placed[id];
+      if (!at) return;
+      f.label.style.left = `${at.x / width * 100}%`;
+      f.label.style.top = `${at.y / height * 100}%`;
+    });
+    // The [E] prompt sits on its tag: follow the tag where layout moved it.
+    const tag = this.prompt && !this.prompt.hidden ? this.labels.get(this.promptKey) : undefined;
+    if (tag && this.prompt) { this.prompt.style.left = tag.style.left; this.prompt.style.top = tag.style.top; this.fitPrompt(); }
   }
   private typing() { return Boolean(document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')); }
   setEnabled(enabled: boolean) { this.enabled = enabled; if (!enabled) this.hidePrompt(); }
@@ -927,8 +1045,11 @@ export class Station extends Phaser.Scene {
     this.npcs.forEach(npc => npc.update(delta, this.enabled, reducedMotion.matches,
       Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 54));
     this.shadow.setPosition(this.player.x, this.player.y + 1);
+    if (this.world.perspective) this.shadow.setScale(this.depth(this.player.y));
+    this.ring?.setPosition(this.player.x, this.player.y + 1).setScale(this.depth(this.player.y)).setDepth(this.player.y - 2);
     if (this.shadowDepth !== this.player.y - 1) this.shadow.setDepth(this.shadowDepth = this.player.y - 1);
     const near = Object.entries(this.stops).find(([, p]) => Phaser.Math.Distance.Between(this.player.x, this.player.y, p.x, p.y) < 18);
+    if (this.compact()) this.trackNear();
     const hint = near ? plain('station.hint.near', { title: near[1].title }) : this.world.text.hint;
     if (hint !== this.currentHint) { this.currentHint = hint; this.onHint(hint); }
     const shown = Boolean(near && this.enabled && !this.typing());
@@ -938,16 +1059,18 @@ export class Station extends Phaser.Scene {
       this.labels.get(this.promptKey)?.style.removeProperty('visibility');
       this.promptKey = promptKey;
       this.prompt.hidden = !shown;
+      this.tagsDirty = true;
       const tag = shown && !near![1].bare ? this.labels.get(promptKey) : undefined;
       if (shown) {
         const p = near![1];
         this.prompt.textContent = plain('station.prompt', { title: p.title });
         this.prompt.style.left = tag?.style.left ?? `${p.x / width * 100}%`;
-        this.prompt.style.top = tag?.style.top ?? `${(p.y - this.lift()) / height * 100}%`;
+        this.prompt.style.top = tag?.style.top ?? `${(p.y - this.lift(p.y)) / height * 100}%`;
         tag?.style.setProperty('visibility', 'hidden');
         this.fitPrompt();
       }
     }
+    if (this.tagsDirty) this.layoutTags();
     if (near && this.enabled && !this.typing() && (Phaser.Input.Keyboard.JustDown(this.keys.E) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE))) this.onArrival(near[0]);
   }
 }

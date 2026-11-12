@@ -32,14 +32,14 @@
   "worlds.department.eyebrow": "DEPARTMENT",
   "worlds.department.one": "colleague",
   "worlds.department.many": "colleagues",
-  "worlds.department.hint": "Walk with WASD / arrows. Press E next to a colleague or a piece of evidence.",
+  "worlds.department.hint": "Find who killed Anders Vik. Walk with WASD, press E by a colleague or evidence.",
   "worlds.department.oneWithArticle": "a colleague",
   "worlds.department.investigator": "detective",
   "worlds.renaissance.place": "Castelvento",
   "worlds.renaissance.eyebrow": "CASTELVENTO",
   "worlds.renaissance.one": "townsperson",
   "worlds.renaissance.many": "townsfolk",
-  "worlds.renaissance.hint": "Walk with WASD / arrows. Press E next to a townsperson.",
+  "worlds.renaissance.hint": "Find the time traveller. Walk with WASD, press E beside a townsperson.",
   "worlds.renaissance.oneWithArticle": "a townsperson",
   "worlds.renaissance.investigator": "traveller"
 }

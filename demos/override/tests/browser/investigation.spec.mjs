@@ -167,7 +167,7 @@ test('copy, counts and nav come from the active case', async ({ page }) => {
   await expect(page.locator('#intro-title')).toContainText('Friends');
   await page.locator('#begin-button').click();
   await expect(page.locator('#panel h2')).toHaveText('Find the conspiracists.');
-  await expect(page.locator('#case-eyebrow')).toContainText('CASE 002');
+  await expect(page.locator('#case-eyebrow')).toContainText('CASE 005');
   await expect(page.locator('#case-eyebrow')).toContainText('FRIENDS');
   await expect(page.locator('#case-headline')).toHaveText('Find the conspiracists');
 });

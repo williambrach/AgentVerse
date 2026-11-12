@@ -73,7 +73,9 @@ test('renaissance_board_and_assets: five cases, figures, assets 200, no console 
   await page.goto('/');
   await expect(page.locator('.case-option')).toHaveCount(5);
   const cases = await (await page.request.get('/api/cases')).json();
-  expect(cases.cases.at(-1).id).toBe('renaissance-traveler');
+  // Listed at its own order position (banana 1, department 2, renaissance 3, factory 4, friends 5), not last.
+  const listed = cases.cases.map(c => c.id);
+  expect(listed.indexOf('renaissance-traveler')).toBe(2);
   await start(page);
   await expect(page.locator('#app')).toHaveAttribute('data-world', 'renaissance');
   expect(await page.evaluate(() => window.walkingTestGame.scene.getScene('banana-grove').figs.size)).toBe(5);
@@ -295,4 +297,79 @@ walkSheetTests({
     await page.locator(`[data-go="${IDS[0]}"]`).first().click();
     await expect(page.locator('[data-topic]').first()).toBeVisible({ timeout: 15_000 });
   },
+});
+
+// Prop activity areas, depth sorting and compact name tags (castelvento-scene).
+const scene = (page, fn, arg) => page.evaluate(`(${fn})(window.walkingTestGame.scene.getScene('banana-grove'), ${JSON.stringify(arg ?? null)})`);
+const teleport = (page, x, y) => scene(page, (s, p) => { s.player.body.reset(p.x, p.y); }, { x, y });
+const pressE = async page => { await page.keyboard.down('e'); await page.waitForTimeout(150); await page.keyboard.up('e'); };
+const tagOf = (page, id) => page.locator(`#station .station-labels [data-figure="${id}"]`);
+/** A scenery prop as drawn: its ground point (x, y) and depth. */
+const propOf = (page, id) => scene(page, (s, want) => {
+  const img = s.children.list.find(o => o.texture?.key === 'renaissance-scenery' && o.frame?.name === want);
+  return img ? { x: img.x, y: img.y, depth: img.depth } : null;
+}, id);
+
+test('scout_depth_sorts_with_props: behind a prop when north of its foot, in front when south', async ({ page }) => {
+  await start(page);
+  const barrel = await propOf(page, 'barrel');
+  expect(barrel).not.toBeNull();
+  expect(barrel.depth).toBe(barrel.y);
+  const depthAt = async y => {
+    await teleport(page, barrel.x - 45, y);
+    await page.waitForTimeout(250);
+    return scene(page, s => s.detectiveImg.depth);
+  };
+  expect(await depthAt(barrel.y - 12)).toBeLessThan(barrel.depth);
+  expect(await depthAt(barrel.y + 12)).toBeGreaterThan(barrel.depth);
+});
+
+test('prop_footprint_blocks: walking into the crate stack stops the scout', async ({ page }) => {
+  await start(page);
+  const crate = await propOf(page, 'crate-stack');
+  await teleport(page, crate.x - 45, crate.y - 3);
+  await page.keyboard.down('d');
+  await page.waitForTimeout(1500);
+  await page.keyboard.up('d');
+  const at = await scene(page, s => ({ x: s.player.x, y: s.player.y }));
+  expect(at.x).toBeGreaterThan(crate.x - 45 + 5);
+  expect(at.x).toBeLessThan(crate.x - 5);
+});
+
+test('every_npc_reachable_and_opens_dialogue: from the approach point E opens each chat and its tag turns strong', async ({ page }) => {
+  await start(page);
+  for (const id of IDS) {
+    const foot = await scene(page, (s, who) => ({ x: s.figs.get(who).foot.x, y: s.figs.get(who).foot.y }), id);
+    await teleport(page, foot.x, foot.y + 14);
+    await page.waitForTimeout(200);
+    const at = await scene(page, s => ({ x: s.player.x, y: s.player.y }));
+    expect(Math.hypot(at.x - foot.x, at.y - foot.y - 14), `${id} approach is open ground`).toBeLessThan(3);
+    await pressE(page);
+    await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'open', { timeout: 15_000 });
+    await expect(page.locator(`.hud-rail [data-go="${id}"]`)).toHaveClass(/active/);
+    await expect(tagOf(page, id)).toHaveAttribute('data-emphasis', 'strong');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'closed');
+  }
+});
+
+test('accuse_button_opens_report: no report stop, the rail button opens it', async ({ page }) => {
+  await start(page);
+  expect(await scene(page, s => 'report' in s.stops)).toBe(false);
+  await page.locator('.verdict-button').click();
+  await expect(page.locator('#app')).toHaveAttribute('data-dialogue', 'open');
+  await expect(page.locator('[data-go="report"]').first()).toHaveClass(/active/);
+});
+
+test('no_traveller_hint_in_labels: five tags, no stop tags, the same words for every deal', async ({ page }) => {
+  await start(page);
+  const tags = page.locator('#station .station-labels [data-figure]');
+  const texts = await tags.evaluateAll(els => els.filter(e => e.dataset.figure !== 'detective').map(e => e.textContent));
+  expect(texts.length).toBe(5);
+  const joined = texts.join(' ');
+  expect(joined).not.toMatch(/START HERE|YOUR GUESS|traveller|traveler|stranger|suspect/i);
+  for (const id of IDS) await expect(tagOf(page, id)).toHaveAttribute('data-emphasis', /^(strong|subtle)$/);
+  // Emphasis follows the scout, never the case: with the scout at the briefing stop no tag is strong by deal.
+  const strong = await page.locator('#station .station-labels [data-emphasis="strong"]').count();
+  expect(strong).toBeLessThanOrEqual(1);
 });

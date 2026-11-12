@@ -120,8 +120,8 @@ export function propUrl(art: FigureArt, id: string): string {
 }
 
 /** World units per image px for one sprite's pose frames: the pack's scale times its size factor. */
-export function spriteScale(art: FigureArt, sprite: string): number {
-  return art.scale * (art.sizes?.[sprite] ?? 1);
+export function spriteScale(art: FigureArt, sprite: string, depth = 1): number {
+  return art.scale * (art.sizes?.[sprite] ?? 1) * depth;
 }
 
 /** The frame's rectangle in world units, placed so its foot anchor sits on `foot`. */
