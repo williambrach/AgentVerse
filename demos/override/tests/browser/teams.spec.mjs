@@ -47,7 +47,7 @@ test('bad_name_inline', async ({ page }) => {
   expect(posts).toEqual([]);
 });
 
-test('join_same_team', async ({ browser, baseURL }) => {
+test('taken_name_cannot_join', async ({ browser, baseURL }) => {
   const name = unique();
   const a = await browser.newContext({ baseURL });
   const b = await browser.newContext({ baseURL });
@@ -58,12 +58,12 @@ test('join_same_team', async ({ browser, baseURL }) => {
     await page.goto('/');
     await page.locator('#team-name').fill(name.toLowerCase());
     await page.locator('#team-submit').click();
-    await expect(page.locator('#team-join')).toContainText(`Join ${name}`);
-    await page.locator('#team-join').click();
-    await expect(page.locator('#team-button')).toContainText(name);
+    await expect(page.locator('.team-taken')).toContainText(name);
+    await expect(page.locator('#team-join')).toHaveCount(0);
+    await page.locator('#team-other').click();
+    await expect(page.locator('#team-name')).toHaveValue('');
     const seen = await (await b.request.get('/api/state')).json();
-    expect(seen.session.id).toBe(started.session.id);
-    expect(seen.session.team.name).toBe(name);
+    expect(seen.session?.id ?? null).not.toBe(started.session.id);
   } finally { await a.close(); await b.close(); }
 });
 
@@ -124,7 +124,7 @@ test('topbar_fits_after_check_in', async ({ page }, testInfo) => {
     if (width === 1440) {
       expect(Math.max(...tops) - Math.min(...tops), `top bar wraps: ${tops}`).toBeLessThanOrEqual(6);
       // The label only hides below 1180 px, so it stays visible at 1440 px.
-      await expect(page.locator('.authored-label')).toBeVisible();
+      await expect(page.locator('#mode-badge')).toBeVisible();
     }
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
     expect(overflow).toBeLessThanOrEqual(0);

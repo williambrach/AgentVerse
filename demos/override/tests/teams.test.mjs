@@ -19,13 +19,14 @@ test('team_name_rules', () => {
   assert.equal(teamName('a'.repeat(24)).name.length, 24);
 });
 
-test('join_create_taken_join', () => {
+test('create_then_taken_never_joins', () => {
   const t = createTeams({ file: null, max: 10 });
-  const first = t.join('Banana Squad', { join: false });
+  const first = t.join('Banana Squad');
   assert.equal(first.created, true);
   assert.equal(first.team.sessionId, null);
-  assert.deepEqual(t.join('banana squad', { join: false }), { taken: 'Banana Squad' });
-  assert.deepEqual(t.join('banana squad', { join: true }), { team: first.team, created: false });
+  assert.deepEqual(t.join('banana squad'), { taken: 'Banana Squad' });
+  // The old join flag is ignored: a known name never hands out its team.
+  assert.deepEqual(t.join('banana squad', { join: true }), { taken: 'Banana Squad' });
   assert.equal(t.exists('BANANA squad'), true);
   assert.equal(t.exists('Owls'), false);
   assert.equal(t.exists('x'), false);
@@ -46,7 +47,7 @@ test('persist_and_reload', () => {
   a.attach(team.id, 's2');
   const b = createTeams({ file, max: 10 });
   assert.deepEqual(b.find(team.id), { id: team.id, name: 'Banana Squad', sessionId: 's2' });
-  assert.equal(b.join('banana squad', { join: true }).team.id, team.id);
+  assert.deepEqual(b.join('banana squad'), { taken: 'Banana Squad' });
 });
 
 test('cap_503', () => {
@@ -54,7 +55,7 @@ test('cap_503', () => {
   t.join('One', { join: false });
   t.join('Two', { join: false });
   assert.throws(() => t.join('Three', { join: false }), (e) => e.status === 503 && e.message === 'The team list is full. Ask the organisers.');
-  assert.equal(t.join('two', { join: true }).created, false);
+  assert.deepEqual(t.join('two'), { taken: 'Two' });
 });
 
 test('invalid_400', () => {

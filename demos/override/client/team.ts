@@ -24,8 +24,7 @@ export function teamGate(view: GateView): string {
   const dis = view.busy ? ' disabled' : '';
   const taken = view.taken
     ? `<div class="team-taken"><p>${t('team.taken', { name: view.taken })}</p>` +
-      `<button type="button" id="team-join" class="primary-button"${dis}>${t('team.join', { name: view.taken })}</button>` +
-      `<button type="button" id="team-other" class="secondary-button"${dis}>${t('team.other')}</button></div>`
+      `<button type="button" id="team-other" class="primary-button"${dis}>${t('team.other')}</button></div>`
     : '';
   const cancel = view.switching ? `<button type="button" id="team-cancel" class="secondary-button">${t('team.cancel')}</button>` : '';
   return `<div class="reset-card team-gate"><span class="eyebrow">${t('team.eyebrow')}</span><h2>${t('team.title')}</h2>` +

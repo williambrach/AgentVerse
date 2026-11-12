@@ -24,7 +24,7 @@ test('gate', () => {
   for (const s of ['id="team-form"', 'id="team-name"', 'maxlength="24"', 'id="team-submit"', 'id="team-error"', 'TEAM CHECK-IN']) assert.ok(html.includes(s), s);
   assert.ok(!html.includes('team-join') && !html.includes('team-cancel'));
   const t = gate({ taken: 'Owls', switching: true });
-  assert.ok(t.includes('id="team-join"') && t.includes('Join Owls') && t.includes('id="team-other"') && t.includes('id="team-cancel"'));
+  assert.ok(!t.includes('team-join') && t.includes('id="team-other"') && t.includes('id="team-cancel"'));
 });
 
 test('names_escaped', () => {

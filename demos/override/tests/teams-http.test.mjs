@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { startServer } from '../server/index.mjs';
 
 const json = { 'Content-Type': 'application/json' };
-const TAKEN = (n) => `A team called ${n} is already playing. Join it, or pick another name.`;
+const TAKEN = (n) => `A team called ${n} is already playing. Pick another name.`;
 
 async function boot(t, env = {}, dir = null) {
   if (!dir) { dir = mkdtempSync(join(tmpdir(), 'override-teams-')); t.after(() => rmSync(dir, { recursive: true, force: true })); }
@@ -56,9 +56,10 @@ test('team_gate_flow', async t => {
   assert.equal(taken.status, 409);
   assert.deepEqual(taken.body, { error: TAKEN('Owls'), taken: 'Owls' });
   assert.equal(b.jar.override_team, undefined);
+  // Asking to join a known name is refused too: the cookie is never handed to a second browser.
   const joined = await b.team('owls', true);
-  assert.deepEqual([joined.status, joined.body], [200, { team: { name: 'Owls' }, created: false }]);
-  assert.equal(b.jar.override_team, a.jar.override_team);
+  assert.deepEqual([joined.status, joined.body], [409, { error: TAKEN('Owls'), taken: 'Owls' }]);
+  assert.equal(b.jar.override_team, undefined);
   const stale = browser(s.url);
   stale.jar.override_team = 'nope';
   assert.deepEqual((await stale.call('/api/team')).body, { team: null });
@@ -73,7 +74,7 @@ test('same_team_two_browsers, session_started_team', async t => {
   const id = started.body.session.id;
   assert.equal(started.body.session.team.name, 'Owls');
   const b = browser(s.url);
-  await b.team('Owls', true);
+  b.jar.override_team = a.jar.override_team;
   assert.equal((await b.call('/api/state')).body.session.id, id);
   const reset = await b.call('/api/reset', 'POST', { sessionId: id, revision: started.body.session.revision });
   assert.equal(reset.status, 200);
@@ -122,7 +123,7 @@ test('new_team_rate_limit', async t => {
   const over = await b.team('Late Team');
   assert.equal(over.status, 429);
   assert.equal(over.body.error, 'Too many new teams. Try again in a minute.');
-  assert.equal((await b.team('team aa', true)).status, 200);
+  assert.equal((await b.team('team aa', true)).status, 409);
   assert.equal((await b.team('team aa')).status, 409);
 });
 
@@ -157,7 +158,7 @@ test('start_race_pointer_follows_last, stale_session_cookie_ignored, no_attach_o
   const a = browser(s.url);
   await a.team('Owls');
   const b = browser(s.url);
-  await b.team('Owls', true);
+  b.jar.override_team = a.jar.override_team;
   const [ra, rb] = await Promise.all([a.call('/api/start', 'POST', {}), b.call('/api/start', 'POST', {})]);
   assert.ok([ra.status, rb.status].every(c => c === 200 || c === 409));
   assert.ok(ra.status === 200 || rb.status === 200);
@@ -166,7 +167,7 @@ test('start_race_pointer_follows_last, stale_session_cookie_ignored, no_attach_o
   assert.equal((await b.call('/api/state')).body.session.id, pointer);
   // a stale teamless session cookie never beats the team
   const c = browser(s.url);
-  await c.team('Owls', true);
+  c.jar.override_team = a.jar.override_team;
   c.jar.override_session = '11111111-1111-4111-8111-111111111111';
   assert.equal((await c.call('/api/state')).body.session.id, pointer);
   // a rejected mutation leaves the pointer alone

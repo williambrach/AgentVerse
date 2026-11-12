@@ -38,11 +38,12 @@ export function createTeams({ file = null, max = 1000 } = {}) {
 
   const view = (t) => ({ id: t.id, name: t.name, sessionId: t.sessionId });
 
-  function join(raw, { join: joining = false } = {}) {
+  // A name belongs to the browser that made it. Nobody joins an existing team by typing its name.
+  function join(raw) {
     const parsed = teamName(raw);
     if (!parsed) throw new RequestError(400, NAME_ERROR);
     const known = byKey.get(parsed.key);
-    if (known) return joining ? { team: view(known), created: false } : { taken: known.name };
+    if (known) return { taken: known.name };
     if (byId.size >= max) throw new RequestError(503, FULL_ERROR);
     const id = randomUUID();
     if (file) appendJsonl(file, { type: 'team_created', teamId: id, name: parsed.name, timestamp: new Date().toISOString() }, 'teams');

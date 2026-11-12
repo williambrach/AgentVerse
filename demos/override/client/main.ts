@@ -863,9 +863,9 @@ function showLeaderboard(opener: string) {
 }
 
 /** POST /api/team with the body kept on errors, so a 409 can name the team that is taken. */
-async function postTeam(name: string, join: boolean): Promise<{ ok: true } | { ok: false; error: string; taken: string | null }> {
+async function postTeam(name: string): Promise<{ ok: true } | { ok: false; error: string; taken: string | null }> {
   try {
-    const { ok, status, data: body } = await apiRaw('team', join ? { name, join: true } : { name });
+    const { ok, status, data: body } = await apiRaw('team', { name });
     if (ok) return { ok: true };
     const data = body ?? {};
     return { ok: false, error: status === 409 ? '' : String(data.error || failed()), taken: status === 409 && typeof data.taken === 'string' ? data.taken : null };
@@ -879,9 +879,9 @@ function mountGate(host: HTMLElement, switching: boolean, onDone: () => void, on
     host.innerHTML = teamGate(view);
     const input = host.querySelector<HTMLInputElement>('#team-name')!;
     input.addEventListener('input', () => { view.name = input.value; });
-    const send = async (name: string, join: boolean) => {
+    const send = async (name: string) => {
       view.busy = true; view.error = ''; draw();
-      const result = await postTeam(name, join);
+      const result = await postTeam(name);
       view.busy = false;
       if (result.ok) { onDone(); return; }
       view.error = result.error; view.taken = result.taken;
@@ -894,9 +894,8 @@ function mountGate(host: HTMLElement, switching: boolean, onDone: () => void, on
       view.name = input.value;
       const problem = teamNameError(view.name);
       if (problem) { view.error = problem; view.taken = null; draw(); host.querySelector<HTMLInputElement>('#team-name')!.focus(); return; }
-      void send(view.name, false);
+      void send(view.name);
     });
-    host.querySelector('#team-join')?.addEventListener('click', () => { if (view.taken && !view.busy) void send(view.taken, true); });
     host.querySelector('#team-other')?.addEventListener('click', () => { view.taken = null; view.error = ''; view.name = ''; draw(); host.querySelector<HTMLInputElement>('#team-name')!.focus(); });
     host.querySelector('#team-cancel')?.addEventListener('click', () => onCancel?.());
   };
