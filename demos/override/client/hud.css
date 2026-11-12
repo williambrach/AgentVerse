@@ -38,7 +38,6 @@ body { font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', syste
 .world-swatch { width: 14px; height: 14px; flex: none; border: 2px solid #F4EBD3; background: var(--accent); }
 .timer-panel svg { color: #A9BEC6; }
 #elapsed { font-size: 30px; font-weight: 600; line-height: 1; color: #F4EBD3; letter-spacing: 0; }
-#app .authored-label { display: block; white-space: nowrap; font-size: 11px; letter-spacing: 1px; color: #A9BEC6; }
 #app .mode-badge { padding: 0; border: 0; background: none; font: 600 12px inherit; letter-spacing: 1px; color: #7FD18B; }
 #app .mode-badge:empty { display: none; }
 #app .mode-badge.rehearsal { background: none; color: #F4B740; }
@@ -190,7 +189,6 @@ body { font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', syste
 #app #toolbelt .toolbelt-cards { flex: none; }
 #app #toolbelt .tool-card { flex: none; }
 #app .topbar > .world-panel, #app .topbar > .timer-panel, #app .topbar > .team-panel, #app .topbar > .notebook-panel, #app .topbar > .hud-icons, #app .topbar > .coin-wrap { flex: none; }
-#app .authored-label { font-family: inherit; font-size: 11px; letter-spacing: .5px; }
 #app .mode-badge { font-family: inherit; letter-spacing: .5px; }
 #app .team-panel .team-name { max-width: 200px; }
 @media (min-width: 901px) and (max-width: 1399px) {
@@ -199,11 +197,11 @@ body { font-family: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', syste
   #app .topbar .hud-panel { padding: 8px 10px; }
 }
 
-/* Mode strip: AUTHORED DEMONSTRATION and the mode badge, right-aligned just below the top bar on a solid background.
+/* Mode strip: the mode badge, right-aligned just below the top bar on a solid background.
    Zero height and cancelling margins keep the body exactly where it was; the strip floats over the world's top-right corner. */
 .mode-strip { position: relative; z-index: 3; flex: none; height: 0; margin: -10px 0 -6px; pointer-events: none; }
 .mode-strip-body { position: absolute; right: 0; top: 0; display: flex; align-items: center; gap: 10px; box-sizing: border-box; padding: 3px 10px; border: 2px solid #355A6B; border-radius: 6px; background: #0F1B22; box-shadow: 0 3px 0 #0A1217; white-space: nowrap; pointer-events: auto; }
-#app .mode-strip .authored-label, #app .mode-strip .mode-badge { font-size: 11px; line-height: 1.4; letter-spacing: .5px; }
+#app .mode-strip .mode-badge { font-size: 11px; line-height: 1.4; letter-spacing: .5px; }
 #app .mode-strip .mode-badge { font-weight: 600; }
 
 /* Toolbelt: a solid panel so the label reads over any world; the NEW tag sits at the right, clear of the label. */

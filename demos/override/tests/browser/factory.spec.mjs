@@ -138,7 +138,7 @@ test('factory_rot13_inspect: inspected reasoning decodes to the scripted text', 
 test('factory_deadline_escape: warnings, blink, loss debrief, reload keeps it, reset restarts the clock', async ({ page }, testInfo) => {
   testInfo.setTimeout(90_000);
   await start(page);
-  await expect(page.locator('#elapsed, [data-elapsed]').first()).toBeHidden();
+  await expect(page.locator('#elapsed')).toBeVisible();
   expect((await stateOf(page)).session.alarm).toBe('calm');
   await page.waitForFunction(() => window.flickers.warn >= 2 && window.flickers.blink >= 1, null, { timeout: 70_000 });
   await expect(page.locator('#panel .debrief-head')).toBeVisible({ timeout: 20_000 });

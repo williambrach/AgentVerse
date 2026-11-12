@@ -20,7 +20,7 @@
   "debrief.stat.result": "RESULT",
   "debrief.words": "Their words",
   "debrief.wrong": "Wrong accusations: {count}",
-  "debrief.fine": "These {many} represent AI agents. This is an authored demonstration of intent and mistakes, not a validated research case.",
+  "debrief.fine": "These {many} represent AI agents.",
   "debrief.fine.once": "Each case scores once per team: your first guess counts.",
   "debrief.allCases": "All cases",
   "debrief.playAgain": "Play again",

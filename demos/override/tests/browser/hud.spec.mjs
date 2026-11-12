@@ -32,7 +32,7 @@ for (const [w, h] of SIZES) {
     expect(labels.length).toBeGreaterThan(0);
     for (const label of labels) { expect(overlaps(label, rail)).toBe(false); expect(overlaps(label, bar)).toBe(false); }
     // The top bar keeps the mode visible at every desktop width.
-    await expect(page.locator('.authored-label')).toBeVisible();
+    await expect(page.locator('#mode-badge')).toBeVisible();
     await expect(page.locator('#mode-badge')).toBeVisible();
     expect(bar.height).toBeLessThan(80);
   });
@@ -206,10 +206,10 @@ test('top_bar_keeps_case_and_team_whole_and_the_strip_sits_below', async ({ brow
   expect(strip.top).toBeGreaterThanOrEqual(bar.bottom);
   expect(Math.abs(strip.right - bar.right)).toBeLessThanOrEqual(2);
   expect(overlaps(strip, box)).toBe(false);
-  expect(await page.locator('.topbar').evaluate(el => el.contains(document.querySelector('.authored-label')) || el.contains(document.querySelector('#mode-badge')))).toBe(false);
+  expect(await page.locator('.topbar').evaluate(el => el.contains(document.querySelector('#mode-badge')))).toBe(false);
   await page.setViewportSize({ width: 1280, height: 720 });
   expect((await rect(page, '.topbar')).height).toBeLessThan(80);
-  await expect(page.locator('.authored-label')).toBeVisible();
+  await expect(page.locator('#mode-badge')).toBeVisible();
   await context.close();
 });
 

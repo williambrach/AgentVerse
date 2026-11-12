@@ -51,7 +51,7 @@ export function hudShell(v: { teamName: string; headline: string; topline: strin
         ${iconButton('export-button', t('hud.export'), ICONS.exportArrow)}
       </div>
     </header>
-    <div class="mode-strip"><div class="mode-strip-body"><span class="authored-label">${t('hud.authored')}</span><span id="mode-badge" class="mode-badge"></span></div></div>
+    <div class="mode-strip"><div class="mode-strip-body"><span id="mode-badge" class="mode-badge"></span></div></div>
     <div class="hud-body">
       <div class="hud-rail">
         <nav class="room-nav" id="room-nav"></nav>

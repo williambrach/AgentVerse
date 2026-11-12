@@ -6,7 +6,7 @@ The UI is a full-screen world with a HUD on top of it: a top bar, a left rail wi
 
 The fast path needs one one-click interview question per character and one role pick for each. Answers are prompted to stay around 15–40 words. Confidence has three choices; a written explanation is optional. Free-text follow-ups remain available. The intended 2–3 minute duration includes reading; live model latency and extra questions can make a run longer.
 
-**This is an authored demonstration, not a validated research case or a recorded agent run.** Every browser gets its own independent game (an HttpOnly `override_session` cookie), so about 200 people can play at once on one server, and a game resumes after a page reload or a server restart. Choose a case on the intro screen, or open `?case=<id>` to go straight to one.
+Every browser gets its own independent game (an HttpOnly `override_session` cookie), so about 200 people can play at once on one server, and a game resumes after a page reload or a server restart. Choose a case on the intro screen, or open `?case=<id>` to go straight to one.
 
 ## Run locally
 

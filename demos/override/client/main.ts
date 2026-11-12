@@ -269,8 +269,7 @@ function elapsedText(): string {
 function tick() {
   if (!state?.session) return;
   const text = elapsedText();
-  const hidden = Boolean(state.session.alarm);
-  document.querySelectorAll<HTMLElement>('#elapsed, [data-elapsed]').forEach(el => { el.hidden = hidden; el.textContent = hidden ? '' : text; });
+  document.querySelectorAll<HTMLElement>('#elapsed, [data-elapsed]').forEach(el => { el.textContent = text; });
 }
 
 /** The parts of the page that belong to the case's world. Rebuilt only when the world or the cast changes. */
@@ -529,7 +528,7 @@ function casePreview(id: 'intro' | 'case-switch') {
   // The picked case's own personas (the catalog carries them), so the preview never shows the loaded case's cast.
   const cast = row?.cast ?? state.characters;
   const note = active && (id === 'case-switch' || !loaded) ? t(loaded ? 'main.preview.noteRestarting' : 'main.preview.noteStarting') : '';
-  return `<div class="intro-stamp">${t('main.case')} ${caseNumber(row ? row.order : state.order)} <span>${t('hud.authored')}</span></div>
+  return `<div class="intro-stamp">${t('main.case')} ${caseNumber(row ? row.order : state.order)}</div>
     <div class="monkey-line" data-world="${escape(row?.world || state.world?.id || 'grove')}" aria-hidden="true">${cast.map((c, i) => `<i class="monkey-face ${escape(c.id)} slot-${i}"></i>`).join('')}</div>
     <span class="eyebrow">${t('main.preview.eyebrow')}</span><h2 id="intro-title">${escape(title).replace(/ (\S+)$/, '<br>$1')}<span>.</span></h2>
     <p class="intro-lead">${escape(row ? row.lead : state.copy.intro.lead).replace(/\n/g, '<br>')}</p>
@@ -613,7 +612,7 @@ function debriefMarkup() {
   return debriefPage({
     title: state.title, debrief: state.debrief!, roles: state.roles,
     cast: state.characters.map(c => ({ id: c.id, name: c.name, part: c.role, faceClass: castClass(c.id) })),
-    time: session.alarm ? null : elapsedText(), spent: economy.spent, budget: economy.budget,
+    time: elapsedText(), spent: economy.spent, budget: economy.budget,
     questions: Object.values(session.interviews).reduce((sum, turns) => sum + turns.length, 0),
     inspections: economy.charges.inspect.used, talks: economy.charges.continue.used,
     next: next ? { id: next.id, title: next.title } : null, many: world().text.many,

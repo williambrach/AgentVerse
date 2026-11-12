@@ -17,7 +17,7 @@ test('shell_has_hooks', () => {
     'id="team-button"', 'id="coin-counter"', 'id="notebook-button"', 'id="leaderboard-button"', 'id="restart-button"', 'id="reset-button"',
     'id="export-button"', 'id="room-nav"', 'id="toolbelt"', 'id="toolbelt-cards"', 'ARBITER TOOLS', 'id="quick-progress"', 'data-go="report"',
     'Make your verdict', 'id="panel"', 'id="notebook-section"', 'id="dialogue-close"', 'id="movement-hint"', 'id="toast"', 'id="overlay-root"',
-    'AUTHORED DEMONSTRATION', 'id="mode-badge"', 'aria-label="The Override home"']) assert.ok(html.includes(needle), needle);
+    'id="mode-badge"', 'aria-label="The Override home"']) assert.ok(html.includes(needle), needle);
   assert.ok(html.includes('Who took the bananas?') && html.includes('THE BANANA MYSTERY'));
 });
 
@@ -74,7 +74,7 @@ test('cast_card_escapes', () => {
 test('shell_has_a_strip_for_the_mode_below_the_top_bar', () => {
   const html = shell();
   const bar = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
-  assert.ok(!bar.includes('authored-label') && !bar.includes('id="mode-badge"'));
+  assert.ok(!bar.includes('id="mode-badge"'));
   assert.ok(html.indexOf('class="mode-strip"') > html.indexOf('</header>') && html.indexOf('id="mode-badge"') > html.indexOf('class="mode-strip"'));
   assert.ok(html.includes('id="elapsed">0:00<'));
 });

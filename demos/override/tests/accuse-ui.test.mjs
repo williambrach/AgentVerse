@@ -93,7 +93,7 @@ const base = (o = {}) => ({ title: 'T', debrief: { title: 'D', summary: 'S', sco
 
 test('escaped_and_role_debriefs_unchanged', () => {
   const hashes = [base(), base({ next: null, time: null, budget: null }), base({ title: '<T>', debrief: { ...base().debrief, outcome: 'escaped', title: '<D>' } })].map(v => sha(debriefPage(v)));
-  assert.deepEqual(hashes, ['e6c6de9760844686bb95f5040e49409ca3cb5099b020b057ec8244184acb81a0', '92846f8ef04694d9985c6109e71ad7cc76359d2391294d41060e42a4ac6896c9', 'd72128dbc5fbe8ce7455b7d3ed4a66225abcb1ef36a453aa7e7b525286303cf8']);
+  assert.deepEqual(hashes, ['05a8ac6e8d55b985ced0c751fe01c912cf04a0c04a022cf89da78c531b397587', 'c996610b0b0d59c3a8d5eed2794a1d64f6b1adb2bd852c5b21375fd242795f17', '580b1af8b45c25b66ff985eccee68f9da390e1ad2101477000fe961d31bbc7a0']);
 });
 
 test('reveal_lists_cited', () => {
