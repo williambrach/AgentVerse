@@ -121,7 +121,7 @@ export class Station extends Phaser.Scene {
   private faceSheets = new Map<string, { key: string; url: string }>();
   // Pose-image worlds (world.figures): the pose follows think/speak/detective; figure-motion.ts moves it every frame.
   // walkFrom: set while the figure walks off to the exit; its tween moves it then.
-  private figs = new Map<string, { img: Phaser.GameObjects.Image; sprite: string; shadow: Phaser.GameObjects.Ellipse; label: HTMLSpanElement; foot: Point; seed: number; pose: Pose; poseSince: number; home: boolean; walkFrom?: Point; gesture?: { g: factoryFigures.Gesture; since: number; holdMs: number } }>();
+  private figs = new Map<string, { img: Phaser.GameObjects.Image; sprite: string; shadow: Phaser.GameObjects.Ellipse; label: HTMLSpanElement; foot: Point; seed: number; pose: Pose; poseSince: number; home: boolean; walkFrom?: Point; base: Point; route?: readonly Point[]; strollMs: number; tagAt: Point; feet?: Phaser.Physics.Arcade.Image; gesture?: { g: factoryFigures.Gesture; since: number; holdMs: number } }>();
   private detectiveImg?: Phaser.GameObjects.Image;
   private detectiveMarker?: HTMLSpanElement;
   private detectivePose: Pose = 'listening';
@@ -439,7 +439,10 @@ export class Station extends Phaser.Scene {
     });
     this.player = this.physics.add.image(this.stops.briefing.x, this.stops.briefing.y, 'feet').setVisible(false).setCollideWorldBounds(true);
     this.lastX = this.player.x; this.lastY = this.player.y; this.moving = false;
-    this.cast.forEach(({ id }) => { const p = this.stops[id]; const feet = this.physics.add.staticImage(p.x, p.y - (art ? 4 : 12), 'feet').setVisible(false); this.physics.add.collider(this.player, feet); });
+    this.cast.forEach(({ id }) => {
+      const p = this.stops[id]; const feet = this.physics.add.staticImage(p.x, p.y - (art ? 4 : 12), 'feet').setVisible(false); this.physics.add.collider(this.player, feet);
+      const f = this.figs.get(id); if (f) f.feet = feet;
+    });
     blocks.forEach(b => this.physics.add.collider(this.player, b));
     // Each scenery prop's footprint is a static body the detective cannot walk through.
     this.sceneryPlaced().forEach(({ placement }) => {
@@ -508,6 +511,13 @@ export class Station extends Phaser.Scene {
     const id = this.world.id;
     this.add.rectangle(-400, -300, 1280, 940, Phaser.Display.Color.HexStringToColor(back.fill).color).setOrigin(0, 0).setDepth(-9);
     this.add.image(back.x, back.y, `${id}-backdrop`).setOrigin(0, 0).setScale(back.scale).setDepth(-8);
+    // Beyond the painting, a wide or tall window shows it mirrored about each edge (like the grove's overscan),
+    // so the hall continues without a seam instead of stopping at the fill colour. The world is unchanged.
+    const w = back.width * back.scale, h = back.height * back.scale;
+    for (const gx of [-1, 0, 1]) for (const gy of [-1, 0, 1]) {
+      if (!gx && !gy) continue;
+      this.add.image(back.x + gx * w, back.y + gy * h, `${id}-backdrop`).setOrigin(0, 0).setScale(back.scale).setFlip(gx !== 0, gy !== 0).setDepth(-8);
+    }
     this.drawScenery();
     const prop = (name: string, x: number, y: number, scale: number) => this.add.image(x, y, `${id}-${name}`).setOrigin(.5, 1).setScale(scale).setDepth(y);
     const names = factoryFigures.stopPropsOf(art);
@@ -562,7 +572,7 @@ export class Station extends Phaser.Scene {
     return this.add.image(x, y, figureKey(sprite, pose)).setOrigin(art.anchor.x / art.frame.w, art.anchor.y / art.frame.h).setScale(factoryFigures.spriteScale(art, sprite, this.depth(y))).setDepth(y);
   }
 
-  private addFigure(id: string, p: Point & { flip?: boolean }, art: NonNullable<WorldPack['figures']>, text: string) {
+  private addFigure(id: string, p: Point & { flip?: boolean; route?: readonly Point[] }, art: NonNullable<WorldPack['figures']>, text: string) {
     const sprite = art.sprites[id];
     const k = this.depth(p.y);
     const shadow = this.add.ellipse(p.x, p.y - 1, 25 * k, 7 * k, 0x000000, .25).setDepth(p.y - 1);
@@ -579,7 +589,8 @@ export class Station extends Phaser.Scene {
     }
     label.dataset.figure = id;
     label.dataset.pose = 'listening';
-    this.figs.set(id, { img, sprite, shadow, label, foot: { x: p.x, y: p.y }, seed: motion.seedOf(id), pose: 'listening', poseSince: -motion.POP_MS, home: p.flip === true });
+    this.figs.set(id, { img, sprite, shadow, label, foot: { x: p.x, y: p.y }, seed: motion.seedOf(id), pose: 'listening', poseSince: -motion.POP_MS, home: p.flip === true,
+      base: { x: p.x, y: p.y }, route: p.route?.length ? p.route : undefined, strollMs: 0, tagAt: { x: p.x, y: p.y } });
     this.labels.set(id, label);
   }
 
@@ -626,11 +637,28 @@ export class Station extends Phaser.Scene {
   }
 
   /** Every standing figure's look for this frame; still poses under reduced motion. */
-  private animateFigures(time: number) {
+  private animateFigures(time: number, delta: number) {
     const art = this.world.figures;
     if (!art) return;
-    this.figs.forEach(f => {
+    const detective = this.player ? { x: this.player.x, y: this.player.y } : undefined;
+    this.figs.forEach((f, id) => {
       if (f.walkFrom) return;
+      // A townsperson with a route strolls while left alone; the detective coming near, a chat, a pose or a gesture stops
+      // the stroll's clock, so they stand where they are (turned to the detective) and go on from there afterwards.
+      let strollLeft: boolean | null = null;
+      if (f.route) {
+        const near = detective !== undefined && Math.hypot(detective.x - f.foot.x, detective.y - f.foot.y) <= 64;
+        const free = !reducedMotion.matches && this.enabled && !this.covered && !near && f.pose === 'listening' && !f.gesture && this.activeId !== id;
+        if (free) f.strollMs += Math.min(Math.max(0, delta), 100);
+        const s = motion.strollAt(f.strollMs, f.seed, f.base, f.route);
+        this.placeFigure(id, f, s.x, s.y);
+        strollLeft = s.left;
+        if (s.walking && free) {
+          f.img.setFlipX(s.left === true);
+          this.wear(f.img, f.sprite, motion.walkLook(s.distance, 'listening', factoryFigures.drawnOf(art, f.sprite)), f.foot.x, f.foot.y);
+          return;
+        }
+      }
       // A one-shot gesture (the apothecary's vial) replaces the pose until it has played out; reduced motion skips it.
       const gestureFrame = f.gesture && !reducedMotion.matches ? motion.gestureFrameAt(f.gesture.g, time - f.gesture.since, f.gesture.holdMs) : null;
       if (gestureFrame === null) f.gesture = undefined;
@@ -639,15 +667,25 @@ export class Station extends Phaser.Scene {
       let look = motion.standLook(f.pose, time, f.seed, time - f.poseSince, factoryFigures.drawnOf(art, f.sprite));
       if (art.chill) {
         // Idle colleagues live on their own and turn to the detective when near or being talked to.
-        const detective = this.player ? { x: this.player.x, y: this.player.y } : undefined;
         const near = detective !== undefined && Math.hypot(detective.x - f.foot.x, detective.y - f.foot.y) <= 64;
         const idle = f.pose === 'listening' && !near ? motion.chillAt(time, f.seed) : motion.CHILL_REST;
         if (idle.act === 'ponder') look = motion.standLook('thinking', time, f.seed, idle.since);
         else if (idle.act === 'shift') look = { ...look, lean: idle.lean };
-        f.img.setFlipX(motion.faceFor({ home: f.home, current: f.img.flipX, x: f.foot.x, y: f.foot.y, detective, engaged: f.pose !== 'listening', glance: idle.act === 'glance' }));
+        f.img.setFlipX(motion.faceFor({ home: strollLeft ?? f.home, current: f.img.flipX, x: f.foot.x, y: f.foot.y, detective, engaged: f.pose !== 'listening', glance: idle.act === 'glance' }));
       }
       this.wear(f.img, f.sprite, look, f.foot.x, f.foot.y);
     });
+  }
+
+  /** Move a figure's feet: its stop (prompt, bubble), shadow, collision body and, once it has gone 1.5 units, its tag. */
+  private placeFigure(id: string, f: { foot: Point; base: Point; tagAt: Point; shadow: Phaser.GameObjects.Ellipse; feet?: Phaser.Physics.Arcade.Image }, x: number, y: number) {
+    if (f.foot.x === x && f.foot.y === y) return;
+    f.foot = { x, y };
+    const stop = this.stops[id];
+    if (stop) { stop.x = x; stop.y = y; }
+    f.shadow.setPosition(x, y - 1).setDepth(y - 1).setScale(this.depth(y) / this.depth(f.base.y));
+    f.feet?.setPosition(x, y - 4).refreshBody();
+    if (Math.hypot(x - f.tagAt.x, y - f.tagAt.y) >= 1.5) { f.tagAt = { x, y }; this.tagsDirty = true; }
   }
 
   private addDetective(art: NonNullable<WorldPack['figures']>) {
@@ -1041,7 +1079,7 @@ export class Station extends Phaser.Scene {
       this.detectiveImg.setFlipX(this.facing).setDepth(this.player.y);
       this.wear(this.detectiveImg, art.detective, look, this.player.x, this.player.y);
     }
-    this.animateFigures(time);
+    this.animateFigures(time, delta);
     this.npcs.forEach(npc => npc.update(delta, this.enabled, reducedMotion.matches,
       Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) < 54));
     this.shadow.setPosition(this.player.x, this.player.y + 1);

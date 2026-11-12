@@ -3,8 +3,9 @@ import type { Walk } from './hall-layout.ts';
 import type { SceneryProp, Perspective } from './scenery.ts';
 import { plain } from './text.ts';
 
-/** flip: draw the figure mirrored. The pose art faces right, so a flipped figure faces left. */
-export type SlotPoint = { x: number; y: number; flip?: boolean };
+/** flip: draw the figure mirrored. The pose art faces right, so a flipped figure faces left.
+ * route: points the figure strolls to and back from, one at a time (figure-motion strollAt); none: it stays put. */
+export type SlotPoint = { x: number; y: number; flip?: boolean; route?: { x: number; y: number }[] };
 export type FloorProp = { id: string; x: number; y: number };
 
 export interface WorldPack {
@@ -213,7 +214,17 @@ const renaissance: WorldPack = {
   // Cast order: Ottavio (before the palazzo door), Matteo (by his clock workshop), Beatrice (by the cloth stall),
   // Bruno (open plaza, watching the square), Agnese (beside her herb pot, left of the shop door at x 350..372).
   // Feet points in world units (image px / 3, x - 16); every one is on open cobbles.
-  slots: [{ x: 222, y: 166 }, { x: 410, y: 192 }, { x: 150, y: 190 }, { x: 300, y: 250 }, { x: 330, y: 168 }],
+  // Facings: Ottavio and Agnese face each other across the bench, Beatrice turns to her cloth, Matteo to his
+  // barrels, Bruno looks out over the square. Routes are short strolls on open cobbles, clear of every prop footprint
+  // with the approach point (14 below) open too: Ottavio paces the palazzo steps, Matteo checks the crates,
+  // Beatrice browses the bolts, Bruno patrols the plaza, Agnese tends her herbs (tests/stroll.test.mjs).
+  slots: [
+    { x: 222, y: 166, route: [{ x: 246, y: 178 }, { x: 196, y: 172 }] },
+    { x: 410, y: 192, route: [{ x: 398, y: 232 }, { x: 396, y: 206 }] },
+    { x: 150, y: 190, flip: true, route: [{ x: 130, y: 192 }, { x: 176, y: 204 }] },
+    { x: 300, y: 250, flip: true, route: [{ x: 254, y: 262 }, { x: 346, y: 238 }] },
+    { x: 330, y: 168, flip: true, route: [{ x: 358, y: 182 }, { x: 314, y: 182 }] },
+  ],
   figures: {
     base: '/assets/renaissance/characters',
     props: '/assets/renaissance/props',
@@ -226,6 +237,7 @@ const renaissance: WorldPack = {
     density: 3,
     labelLift: 66,
     walkSheet: scoutWalk,
+    chill: true,
     loops: { idle: 4, talk: { wizard: 1, inventor: 1, noble: 2, guard: 1, apothecary: 1, scout: 1 } },
     // Agnese takes out her amber vial, inspects it while she answers about her work, then hides it under her shawl.
     // Same in every deal, so it says nothing about who the traveller is.

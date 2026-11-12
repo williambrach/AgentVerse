@@ -149,6 +149,36 @@ export function chillAt(t: number, seed: number): Chill {
   return { act: 'shift', since, lean: unit(k * 31 + salt) < .5 ? -1 : 1 };
 }
 
+/** Where a strolling figure is after `ms` of free time (time the detective was not near and nobody talked to it).
+ * The routine visits each route point in turn: rest at home (6 to 14 s, by seed), walk there, linger (3 to 7 s),
+ * walk back. It always starts resting at home. `left`: the way it faces (walking: the way it goes; lingering: the
+ * way it went), null at home (the slot's own facing). `distance`: units into the current walk, for walkLook. */
+export type Stroll = { x: number; y: number; walking: boolean; distance: number; left: boolean | null };
+export const STROLL_SPEED = 14;
+export function strollAt(ms: number, seed: number, home: { x: number; y: number }, route: readonly { x: number; y: number }[], speed = STROLL_SPEED): Stroll {
+  const still: Stroll = { x: home.x, y: home.y, walking: false, distance: 0, left: null };
+  if (!route.length || !Number.isFinite(ms) || ms < 0 || speed <= 0) return still;
+  const salt = Math.floor(seed * 1e6);
+  const legs = route.map((p, i) => {
+    const length = Math.hypot(p.x - home.x, p.y - home.y);
+    return { p, length, rest: 6000 + 8000 * unit(i * 7919 + salt), walk: length / speed * 1000, linger: 3000 + 4000 * unit(i * 104729 + salt) };
+  });
+  const cycle = legs.reduce((sum, l) => sum + l.rest + 2 * l.walk + l.linger, 0);
+  let t = ms % cycle;
+  for (const l of legs) {
+    const left = l.p.x < home.x;
+    if (t < l.rest) return still;
+    t -= l.rest;
+    if (t < l.walk) { const k = t / l.walk; return { x: home.x + (l.p.x - home.x) * k, y: home.y + (l.p.y - home.y) * k, walking: true, distance: l.length * k, left }; }
+    t -= l.walk;
+    if (t < l.linger) return { x: l.p.x, y: l.p.y, walking: false, distance: 0, left };
+    t -= l.linger;
+    if (t < l.walk) { const k = t / l.walk; return { x: l.p.x + (home.x - l.p.x) * k, y: l.p.y + (home.y - l.p.y) * k, walking: true, distance: l.length * k, left: !left }; }
+    t -= l.walk;
+  }
+  return still;
+}
+
 /** Which way a figure faces: flipped means facing left (the art faces right). It turns to the detective
  * while being asked or answering, or when the detective stands within `near` units; otherwise it keeps its
  * slot's facing, turned the other way during a glance. Within 6 units sideways it keeps its current facing. */
