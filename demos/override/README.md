@@ -116,7 +116,7 @@ A case is one module in `server/cases/`, registered in `server/cases/index.mjs`.
 The server writes append-only JSONL files under `data/<env>/`, or under `OVERRIDE_DATA_DIR` if set. `<env>` is `OVERRIDE_ENV` (default `live`). These files are outside the served directory.
 
 - `sessions/<sessionId>.jsonl`: the player export, one file per game. **Export session** downloads the current game; older files remain on disk after reset.
-- `traces/<sessionId>.jsonl`: one record per LLM attempt with the full request and response. Admin only: never served to players. Probes go to `traces/probes.jsonl`.
+- `traces/<sessionId>.jsonl`: one record per LLM attempt with the full request and response, including the model's whole reasoning text when the provider returns it (`response.reasoning`, uncapped; the game itself shows at most 4,000 characters). Admin only: never served to players. Probes go to `traces/probes.jsonl`.
 - `system.jsonl`: operator and system events, such as endpoint changes (`llm_active`), `leaderboard_settings` and `team_hidden`.
 - `teams.jsonl`: `team_created {teamId, name}` and `team_session {teamId, sessionId}` records; the team list is rebuilt from it on restart.
 

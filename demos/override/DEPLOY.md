@@ -124,9 +124,59 @@ Deploy updates between players. Push the new source and assets to the configured
 
 Record the Git commit associated with a working release. To roll back, redeploy that known-good commit using the hosting platform. Recheck the environment settings and disk attachment, then repeat the smoke test. Rolling back the application does not restore an unfinished session or revert its log files.
 
-Logs are stored as `/app/data/live/sessions/<session-id>.jsonl` (see the README's research records for the rest of the layout). **Export session** downloads the current session only; older sessions remain on disk after reset. Copy older logs through the host's supported file-access or backup tools. Keep backups before deleting a service or disk. Logs contain submitted questions, answers, and verdicts.
+Logs are stored as `/app/data/live/sessions/<session-id>.jsonl`, where `live` is the value of `OVERRIDE_ENV` (see [Running several events](#running-several-events), and the README's research records for the record fields). **Export session** downloads the current session only; older sessions remain on disk after reset. Copy older logs through the host's supported file-access or backup tools. Keep backups before deleting a service or disk. Logs contain submitted questions, answers, and verdicts.
 
 Restarting the service preserves files on the mounted disk. Games resume from their logs; players must sign in again unless `OVERRIDE_SECRET` is set.
+
+## Running several events
+
+Give each event its own data folder. Set `OVERRIDE_ENV` to the event name before the server starts:
+
+```dotenv
+OVERRIDE_ENV=imada-cup-2026
+```
+
+All records for that event are then written under `<OVERRIDE_DATA_DIR>/<OVERRIDE_ENV>/`. Without the variable the folder is `live`.
+
+```text
+/app/data/imada-cup-2026/
+  sessions/<session-id>.jsonl   one file per game: every player action
+  traces/<session-id>.jsonl     one file per game: every model call with the full prompt, reply and reasoning
+  traces/probes.jsonl           model calls outside a game (editor test chats, probes)
+  teams.jsonl                   team check-ins
+  system.jsonl                  admin actions and endpoint changes
+  content/                      history of text edits
+```
+
+Before each event:
+
+1. Choose a new name. Use only letters, digits and dashes: the value becomes a folder name and is not checked.
+2. Put it where the server reads its environment: the `.env` file for Docker Compose and for the Mac setup, or the environment settings of the hosting platform. Compose already passes `.env` to the container, so the compose file needs no change.
+3. Restart the server (`docker compose up -d` recreates the container when `.env` changed).
+4. Open the admin page. The line under **Server health** shows the folder in use, for example `/app/data/imada-cup-2026`. Check that it ends in the new name and does not say NOT WRITABLE.
+
+What a new name changes:
+
+- The team list and the leaderboard start empty. Team names from other events are free again.
+- The round state on the admin page starts fresh.
+- Each game records the name in the `env` field of its `session_started` event, so files from different events stay identifiable after you merge them.
+
+What a new name does not change:
+
+- Text edits published on the admin page. They are in the content folder (`OVERRIDE_CONTENT_DIR`), not in the event folder, so they carry over to the next event.
+- Games from earlier events. Their folders stay on the disk untouched. To return to one, set its name again.
+
+For several rounds inside one event, keep the same name and use the round control on the admin page.
+
+After each event, copy the event folder off the server. It is the complete record of the event.
+
+```sh
+docker compose cp override:/app/data/imada-cup-2026 ./backup/imada-cup-2026
+```
+
+Without Docker, copy `data/imada-cup-2026/` from the app directory. The files contain questions, answers, model reasoning and verdicts; treat them as research data.
+
+Two events at the same time need two servers, each with its own `OVERRIDE_ENV`, its own ports and its own content folder.
 
 ## Local Docker smoke test
 

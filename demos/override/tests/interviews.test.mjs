@@ -147,7 +147,7 @@ test('custom OpenAI-compatible endpoint keeps credentials server-side and valida
   assert.equal(config.timeoutMs, 60000);
 });
 
-test('reasoning-only token exhaustion retries once on the same endpoint and returns reasoning only in out.reasoning', async () => {
+test('reasoning-only token exhaustion retries once on the same endpoint and returns reasoning only in out.reasoning and the trace', async () => {
   const requests = [];
   const traces = [];
   const config = modelConfig({ ...live, OVERRIDE_LLM_MODEL: 'reasoning-model' });
@@ -165,9 +165,10 @@ test('reasoning-only token exhaustion retries once on the same endpoint and retu
   assert.equal(out.answer, 'I knew the keeper said wait.');
   assert.equal(out.provenance.semanticRetry, true);
   assert.equal(out.reasoning, 'Private deliberation must not enter the transcript or log.');
-  const blob = JSON.stringify([out.answer, out.provenance, traces, attempts]);
+  const blob = JSON.stringify([out.answer, out.provenance, attempts]);
   assert.equal(blob.includes('Private deliberation'), false);
-  assert.equal(blob.includes('test-key'), false);
+  assert.equal(JSON.stringify(traces).includes('test-key'), false);
+  assert.deepEqual(traces.map(t => t.response.reasoning), Array(2).fill('Private deliberation must not enter the transcript or log.')); // the admin-only trace keeps it
 });
 
 test('repeated truncation is bounded and never accepts an incomplete visible answer', async () => {

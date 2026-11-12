@@ -35,15 +35,16 @@ async function liveGame(t, extra = {}) {
   return { post, state, file, mock };
 }
 
-test('live_reasoning_seam: reasoning stays out of state and traces until inspected', async t => {
+test('live_reasoning_seam: reasoning is saved in the trace at once, and stays out of state and the session log until inspected', async t => {
   const g = await liveGame(t);
   assert.equal((await g.post('interview', { character: 'momo', question: 'Did the keeper say yes?' })).status, 200);
   assert.equal((await g.state()).includes('Mock reasoning'), false);
+  assert.equal(readFileSync(g.file('sessions'), 'utf8').includes('Mock reasoning'), false);
+  const traces = readFileSync(g.file('traces'), 'utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(traces.at(-1).response.reasoning, 'Mock reasoning'); // never inspected, still on disk
   const inspected = await g.post('inspect', { character: 'momo' });
   assert.equal(inspected.status, 200);
   assert.equal(inspected.body.session.inspections[0].reasoning, 'Mock reasoning');
-  const trace = readFileSync(g.file('traces'), 'utf8');
-  assert.equal(trace.includes('Mock reasoning'), false);
 });
 
 test('live_continue_seam: a live thread line carries provenance and prompt version', async t => {

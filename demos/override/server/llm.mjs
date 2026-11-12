@@ -32,6 +32,9 @@ const safe = (fn, label) => (...args) => { try { fn(...args); } catch (error) { 
 const REASONING_CAP = 4000;
 function pickReasoning(message) {
   const text = [message?.reasoning_content, message?.reasoning].find(v => typeof v === 'string' && v.trim());
+  return text || null;
+}
+function capReasoning(text) {
   if (!text) return null;
   return text.length > REASONING_CAP ? `${text.slice(0, REASONING_CAP)}…` : text;
 }
@@ -176,7 +179,8 @@ export class LlmRouter {
       out.usage = data?.usage && typeof data.usage === 'object' ? data.usage : null;
       out.providerModel = typeof data?.model === 'string' ? data.model : null;
       out.content = typeof text === 'string' ? text : null;
-      out.reasoning = pickReasoning(choice?.message);
+      out.reasoningFull = pickReasoning(choice?.message); // the trace keeps all of it; the game gets the capped text
+      out.reasoning = capReasoning(out.reasoningFull);
       if (out.finishReason === 'length') out.code = 'completion_limit';
       else if (out.finishReason === 'content_filter') out.code = 'content_filter';
       else if (typeof text !== 'string' || !text.trim() || text.length > 6000) out.code = 'empty_or_invalid_answer';
@@ -191,7 +195,7 @@ export class LlmRouter {
     const record = {
       schemaVersion: 1, traceId: randomUUID(), ...base, timestamp: this.iso(), endpoint: ep.name, pinned: this.pinned,
       request: { apiBaseHost: ep.host, model: ep.model, messages, params: result.params },
-      response: { status: result.status, content: result.content, finishReason: result.finishReason, usage: result.usage, providerModel: result.providerModel },
+      response: { status: result.status, content: result.content, reasoning: result.reasoningFull ?? null, finishReason: result.finishReason, usage: result.usage, providerModel: result.providerModel },
       providerStatus: result.status, queueMs, durationMs: result.durationMs, error: result.code,
     };
     this.onTrace(record);
