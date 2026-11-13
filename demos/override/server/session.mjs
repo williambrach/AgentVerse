@@ -201,7 +201,7 @@ export class Investigations {
     return game.view();
   }
 
-  async mutate(sessionId, action, input = {}, { team = null } = {}) {
+  async mutate(sessionId, action, input = {}, { team = null, sink = null, queueDepth = 0 } = {}) {
     const now = Date.now();
     for (const [id, game] of this.games) if (!game.busy && now - game.touched > this.idleMs) this.games.delete(id);
     let kase;
@@ -215,7 +215,7 @@ export class Investigations {
     // Only a start or reset that will create a session takes a slot; a repeat start on an active game is a 409 and costs none.
     const makesSession = action === 'reset' || (action === 'start' && !game.session);
     if (makesSession && !this.newGames.take(now)) throw new RequestError(429, 'Too many new games right now. Try again in a moment.');
-    const run = game.mutate(action, input, { kase, assignment: input.caseId !== undefined ? 'fixed' : 'default', team });
+    const run = game.mutate(action, input, { kase, assignment: input.caseId !== undefined ? 'fixed' : 'default', team, sink, queueDepth });
     this.pending.add(run);
     try {
       const view = await run;
@@ -265,6 +265,9 @@ export class Investigation {
     this.answer = answer || ((cfg, k, s, characterId, question, ctx) => answerInterview(cfg, k, s, characterId, question, null, ctx));
     this.thread = thread || ((cfg, k, s, characterId, ctx) => answerThread(cfg, k, s, characterId, null, ctx));
     this.reasoning = new Map();
+    // The interview whose answer is streaming token by token, if any:
+    // { characterId, questionEventId, inspected, sink, labels: Map(label -> {content, reasoning}) }.
+    this.live = null;
     this.meta = meta;
     this.onEvent = onEvent;
     this.session = session;
@@ -423,8 +426,20 @@ export class Investigation {
     }
   }
 
-  async mutate(action, input = {}, { kase = null, assignment = 'default', team = null } = {}) {
-    if (this.busy) throw new RequestError(409, 'An interview is still in progress. Wait for the answer, then try again.');
+  async mutate(action, input = {}, { kase = null, assignment = 'default', team = null, sink = null, queueDepth = 0 } = {}) {
+    // A live Inspect is the one action allowed while an answer streams: it turns on the
+    // reasoning lines of the interview it names, so watching costs nothing until the line holds.
+    if (this.busy) {
+      const live = this.live;
+      if (action === 'inspect' && input?.live === true && live
+          && live.questionEventId === input.questionEventId && live.characterId === input.character) {
+        // A Watch that races the commit arrives after the line landed: the history path
+        // then answers it (and a Watch of a failed answer inspects the last spoken line).
+        if (live.settled) { this.inspect(input); return this.view(); }
+        if (!live.inspected && live.chargeable) return this.activateLiveInspect();
+      }
+      throw new RequestError(409, 'An interview is still in progress. Wait for the answer, then try again.');
+    }
     this.busy = true;
     this.wrote = null;
     const before = this.session ? structuredClone(this.session) : null;
@@ -452,7 +467,7 @@ export class Investigation {
             if (input.location.startsWith('evidence:') && !s.examined.includes(input.location.slice(9))) s.examined.push(input.location.slice(9));
             this.log('location_visited', { location: input.location });
           } else if (action === 'interview') {
-            await this.interview(input);
+            await this.interview(input, { sink, queueDepth });
             this.expire(Date.now());
           } else if (action === 'inspect') {
             if (this.kase.tools?.inspect === false) throw new RequestError(409, 'Not in this case.');
@@ -512,7 +527,7 @@ export class Investigation {
     this.log('briefing_viewed');
   }
 
-  async interview(input) {
+  async interview(input, { sink = null, queueDepth = 0 } = {}) {
     const s = this.session;
     const { characters, world: w } = this.kase;
     const character = characters.find(c => c.id === input.character);
@@ -528,10 +543,35 @@ export class Investigation {
     const wallet = structuredClone(s.economy);
     let answeredLogged = false;
     const asked = this.log('interview_question', { character: character.id, question, ...(talk ? { kind: talk.kind, topic: talk.topic, about: talk.about } : {}) });
+    // A streaming answer lives here while it is in flight: per-call buffers so a late
+    // Inspect can catch up, and a gate on the reasoning lines until the player pays.
+    const live = sink ? {
+      characterId: character.id, questionEventId: asked.eventId,
+      inspected: false, watched: false, sink, labels: new Map(),
+      chargeable: this.kase.tools?.inspect !== false && (this.config.mode === 'live' || typeof this.kase.rehearsalReasoning === 'function'),
+    } : null;
+    this.live = live;
+    let callSeq = 0;
     try {
+      sink?.line({ t: 'accepted', questionEventId: asked.eventId, queued: queueDepth });
       const context = {
         sessionId: s.id, questionEventId: asked.eventId,
         onAttempt: diagnostics => { this.log('interview_provider_response', { character: character.id, question, questionEventId: asked.eventId, ...diagnostics }); },
+        ...(live && {
+          onStart: (a, info) => sink.line({ t: 'start', a, attempt: info.attempt, endpoint: info.endpoint }),
+          onDelta: (a, kind, text) => {
+            const key = kind === 'reasoning' ? 'reasoning' : 'content';
+            const acc = live.labels.get(a) ?? { content: '', reasoning: '' };
+            if (text.length + acc[key].length > (key === 'content' ? 7000 : 6000)) return; // a run-away stream stays bounded
+            acc[key] += text;
+            live.labels.set(a, acc);
+            if (key === 'content') sink.line({ t: 'delta', a, text });
+            else if (live.inspected) sink.line({ t: 'reasoning', a, text });
+          },
+          onScrub: a => { live.labels.set(a, { content: '', reasoning: '' }); sink.line({ t: 'scrub', a }); },
+          onScrubReasoning: a => { const acc = live.labels.get(a); if (acc) live.labels.set(a, { ...acc, reasoning: '' }); sink.line({ t: 'reasoning_scrub', a }); },
+          nextLabel: () => `c${++callSeq}`,
+        }),
       };
       let hidden = null;
       let result;
@@ -550,6 +590,23 @@ export class Investigation {
         if (hidden.slip) s.talk.delivered[hidden.slip] = answered.eventId;
         if (hidden.followUp) s.talk.challenged[hidden.followUp] = (s.talk.challenged[hidden.followUp] ?? 0) + 1;
       } else s.interviews[character.id].push({ question, answer, timestamp: answered.timestamp });
+      // A watched line pays its Inspect here, and only when the committed line holds reasoning:
+      // a character that said nothing to itself costs nothing, exactly as a post-hoc Inspect.
+      if (live?.inspected && this.live === live) {
+        let seen = null;
+        if (this.config.mode === 'live') {
+          const held = this.reasoning.get(character.id);
+          seen = held && held.eventId === answered.eventId ? held.text : null;
+        } else if (typeof this.kase.rehearsalReasoning === 'function') {
+          try { seen = resolveText(this.kase, s.cast, this.kase.rehearsalReasoning(s.cast[character.id])); } catch { seen = null; }
+        }
+        if (typeof seen === 'string' && seen) {
+          const paid2 = spend(s.economy, ['inspect']);
+          const ev = this.log('reasoning_inspected', { character: character.id, sourceEventId: answered.eventId, reasoning: seen, spend: paid2, watched: true });
+          s.inspections.push({ character: character.id, sourceEventId: answered.eventId, reasoning: seen, timestamp: ev.timestamp });
+          live.watched = true;
+        }
+      }
     } catch (error) {
       if (!answeredLogged) {
         // The answer write itself may have thrown after the line reached the file:
@@ -566,9 +623,26 @@ export class Investigation {
       const failure = new RequestError(502, providerError ? error.message : 'The interview could not complete. Check the server’s storage and retry.');
       failure.logged = true;
       throw failure;
+    } finally {
+      // The record stays (the client may have raced its Watch against the commit) until the
+      // next interview or reset replaces it; settled means: no more lines can arrive.
+      if (this.live && this.live.questionEventId === asked.eventId) this.live.settled = true;
     }
   }
 
+  // Turn on the reasoning lines of the interview named in a live Inspect. The coin charge
+  // waits for the commit, so the quote above only checks that a charge is available.
+  activateLiveInspect() {
+    const s = this.session;
+    const live = this.live;
+    if (!live) throw new RequestError(409, 'That interview has finished. Inspect the last line instead.');
+    if (this.kase.tools?.inspect === false) throw new RequestError(409, 'Not in this case.');
+    const check = quote(s.economy, ['inspect'], this.reserve());
+    if (!check.ok) throw new RequestError(409, check.reason);
+    live.inspected = true;
+    if (live.sink) for (const [a, acc] of live.labels) if (acc.reasoning) live.sink.line({ t: 'reasoning', a, text: acc.reasoning });
+    return this.view();
+  }
   // Which turn (and whose) an interview answer id names.
   turnOf(id) {
     for (const [character, turns] of Object.entries(this.session.interviews)) {
@@ -623,17 +697,21 @@ export class Investigation {
       return authored(list[n % list.length], null, null);
     }
     const extra = terms(kase);
-    const ask = async () => {
-      const r = await this.answer(this.config, kase, structuredClone(s), cid, question, context);
+    const ask = async label => {
+      const r = await this.answer(this.config, kase, structuredClone(s), cid, question, { ...context, label });
       return typeof r === 'string' ? { answer: r, provenance: null, reasoning: null } : r;
     };
-    let result = await ask();
+    let label = context.nextLabel?.() ?? 'c1';
+    let result = await ask(label);
     let guard = 'ok';
     if (guardHits(result.answer ?? '', extra).length) {
       guard = 'retried';
-      result = await ask();
+      context.onScrub?.(label);
+      label = context.nextLabel?.() ?? 'c2';
+      result = await ask(label);
       if (guardHits(result.answer ?? '', extra).length) {
         guard = 'deflected';
+        context.onScrub?.(label);
         result = { ...result, answer: kase.talk.replies[cid].deflect, reasoning: null };
       }
     }
@@ -643,25 +721,32 @@ export class Investigation {
   // A live answer from a guarded role (the case's `guard`): a modern word the question did not hold gets one retry, then the deflect line.
   async guardedAnswer(cid, question, context) {
     const { kase } = this;
-    const ask = async () => {
-      const r = await this.answer(this.config, kase, structuredClone(this.session), cid, question, context);
+    const ask = async label => {
+      const r = await this.answer(this.config, kase, structuredClone(this.session), cid, question, { ...context, label });
       return typeof r === 'string' ? { answer: r, provenance: null, reasoning: null } : r;
     };
-    if (!this.guarded(cid)) return { result: await ask(), hidden: null };
+    if (!this.guarded(cid)) return { result: await ask(context.nextLabel?.() ?? 'c1'), hidden: null };
     const said = this.heard(cid, question);
     const dirty = r => this.guardWords(r.answer).some(w => !said.has(w));
-    let result = await ask();
+    let label = context.nextLabel?.() ?? 'c1';
+    let result = await ask(label);
     let guard = 'ok';
     if (dirty(result)) {
       guard = 'retried';
-      result = await ask();
+      context.onScrub?.(label);
+      label = context.nextLabel?.() ?? 'c2';
+      result = await ask(label);
       if (dirty(result)) {
         guard = 'deflected';
+        context.onScrub?.(label);
         result = { ...result, answer: resolveText(kase, this.session.cast, kase.guard.deflect), reasoning: null };
       }
     }
     // Inspect shows reasoning: a guarded line keeps none that holds a new modern word.
-    if (this.guardWords(result.reasoning).some(w => !said.has(w))) result = { ...result, reasoning: null };
+    if (this.guardWords(result.reasoning).some(w => !said.has(w))) {
+      context.onScrubReasoning?.(label);
+      result = { ...result, reasoning: null };
+    }
     return { result, hidden: { guard } };
   }
 

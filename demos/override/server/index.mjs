@@ -31,7 +31,33 @@ const actions = ['start', 'reset', 'visit', 'interview', 'inspect', 'continue', 
 const tabPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export function createApp({ investigations, accessCode = '', secret = randomBytes(32).toString('hex'), trustProxy = false, staticFiles = null, metrics = null, publicDir = resolve(root, 'dist'), onHeartbeat = null, text = () => ({}), teams = createTeams({ file: null }), leaderboard = null }) {
+// One NDJSON writer for a streaming interview. Lines flow as the answer is made; a client
+// that goes away stops the writes, never the interview — the answer still commits.
+export function createNdjsonSink(res) {
+  let opened = false, closed = false, ping = null;
+  res.on('close', () => { closed = true; if (ping) clearInterval(ping); });
+  const sink = {
+    get opened() { return opened; },
+    line(obj) {
+      if (closed) return;
+      if (!opened) {
+        opened = true;
+        res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+        ping = setInterval(() => sink.line({ t: 'ping' }), 15_000);
+        ping.unref?.();
+      }
+      try { res.write(JSON.stringify(obj) + '\n'); } catch { closed = true; }
+    },
+    fail(error) {
+      sink.line({ t: 'fail', status: error instanceof RequestError ? error.status : 500, error: error instanceof RequestError ? error.message : 'The interview could not complete.' });
+      sink.end();
+    },
+    end() { if (ping) clearInterval(ping); if (!closed && !res.writableEnded) res.end(); closed = true; },
+  };
+  return sink;
+}
+
+export function createApp({ investigations, accessCode = '', secret = randomBytes(32).toString('hex'), trustProxy = false, staticFiles = null, metrics = null, publicDir = resolve(root, 'dist'), onHeartbeat = null, text = () => ({}), teams = createTeams({ file: null }), leaderboard = null, queueDepth = () => 0 }) {
   const files = staticFiles || loadStatic(publicDir);
   // Only wrong codes count. Behind a proxy or a shared network, every player
   // arrives from one address, and correct sign-ins must not lock them out.
@@ -118,6 +144,27 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
         }
         if (req.method === 'POST') {
           if (!actions.includes(name)) throw new RequestError(404, 'Unknown endpoint.');
+          // A streaming interview answers in NDJSON lines: accepted, start, delta, reasoning, scrub, then the final view.
+          const cfg = investigations.config;
+          const streaming = name === 'interview' && input.stream === true && !(cfg.mode === 'live' && cfg.stream === false);
+          let sink = null;
+          if (streaming) {
+            sink = createNdjsonSink(res);
+            try {
+              const view = await investigations.mutate(sessionId, name, input, { team: team ? { id: team.id, name: team.name } : null, sink, queueDepth: queueDepth() });
+              sink.line({ t: 'view', ...view });
+              sink.end();
+              return;
+            } catch (error) {
+              if (sink.opened) {
+                const status = error instanceof RequestError ? error.status : 500;
+                if (status === 500) console.error('Streaming interview failed:', error.code || error.name);
+                sink.fail(error);
+                return;
+              }
+              throw error; // nothing was sent yet: answer with the plain JSON error
+            }
+          }
           const view = await investigations.mutate(sessionId, name, input, { team: team ? { id: team.id, name: team.name } : null });
           if (team) { if (view.session.id !== team.sessionId) teams.attach(team.id, view.session.id); }
           else if (view.session.id !== sessionId) setCookie(req, res, 'override_session', view.session.id);
@@ -281,7 +328,7 @@ export async function startServer(env = process.env, { publicDir = resolve(root,
     console.warn('OVERRIDE_SECRET is not set: sign-ins will not survive a restart.');
   }
   const trustProxy = ['1', 'true'].includes(String(env.OVERRIDE_TRUST_PROXY).toLowerCase());
-  server = createApp({ investigations, accessCode: env.OVERRIDE_ACCESS_CODE || '', secret, trustProxy, staticFiles: loadStatic(publicDir), metrics, onHeartbeat: (tab, sid) => monitor?.heartbeat(tab, sid), teams, leaderboard: board, text: () => content.uiText?.() ?? {} });
+  server = createApp({ investigations, accessCode: env.OVERRIDE_ACCESS_CODE || '', secret, trustProxy, staticFiles: loadStatic(publicDir), metrics, onHeartbeat: (tab, sid) => monitor?.heartbeat(tab, sid), teams, leaderboard: board, text: () => content.uiText?.() ?? {}, queueDepth: () => router?.snapshot().queued ?? 0 });
   // Headers and bodies arrive fast; answers take up to 60 s. Keep-alive outlives a proxy's idle timeout.
   server.headersTimeout = 20_000;
   server.requestTimeout = 40_000;
