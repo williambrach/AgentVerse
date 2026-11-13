@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { publicView, listCases, findCase, partOf, identityCast, rolesOf, resolve as resolveText } from './cases.mjs';
 import { cases as registry } from './cases/index.mjs';
-import { answerInterview, answerThread, promptVersion, threadPromptVersion } from './interviews.mjs';
+import { answerInterview, answerThread, promptVersion, streamScripted, threadPromptVersion } from './interviews.mjs';
 import { economyRules, createWallet, quote, spend } from './economy.mjs';
 import { appendJsonl, dataPaths, readJsonl } from './dataset.mjs';
 import { alarmOf, scheduleOf } from './deadline.mjs';
@@ -478,7 +478,7 @@ export class Investigation {
             this.inspect(input);
           } else if (action === 'continue') {
             if (this.kase.tools?.talk === false) throw new RequestError(409, 'Not in this case.');
-            await this.chat();
+            await this.chat({ sink });
             this.expire(Date.now());
           } else if (action === 'verdict') {
             if (this.kase.talk) throw new RequestError(400, 'Accuse the traveller with quotes instead.');
@@ -874,7 +874,7 @@ export class Investigation {
     s.inspections.push({ character: character.id, sourceEventId, reasoning, timestamp: event.timestamp });
   }
 
-  async chat() {
+  async chat({ sink = null } = {}) {
     const s = this.session;
     const { characters } = this.kase;
     const starting = s.chatter.pending === 0;
@@ -899,6 +899,23 @@ export class Investigation {
       ? characters.find(c => c.id === order[done])
       : characters[(characters.findIndex(c => c.id === lastId) + 1) % characters.length];
     const n = s.thread.filter(l => l.character === speaker.id).length;
+    sink?.line({ t: 'speaker', character: speaker.id, round, line, roundLines });
+    // A streamed talk line: content only (no live Watch for thread lines), bounded per model call.
+    let callSeq = 0;
+    const streamed = new Map();
+    const streamContext = label => (sink ? {
+      label,
+      onStart: (a, info) => sink.line({ t: 'start', a, attempt: info.attempt, endpoint: info.endpoint }),
+      onDelta: (a, kind, piece) => {
+        if (kind !== 'content' || typeof piece !== 'string' || !piece) return;
+        const sent = streamed.get(a) ?? 0;
+        // A run-away stream stays bounded; once over the cap the label sends nothing more, so the text never has a gap.
+        if (sent + piece.length > 7000) { streamed.set(a, Infinity); return; }
+        streamed.set(a, sent + piece.length);
+        sink.line({ t: 'delta', a, text: piece });
+      },
+    } : {});
+    let label = null;
     let text;
     let reasoning = null;
     let provenance = null;
@@ -906,9 +923,11 @@ export class Investigation {
     if (this.config.mode === 'live') {
       try {
         const post = async () => {
+          label = `c${++callSeq}`;
           const result = await this.thread(this.config, this.kase, structuredClone(s), speaker.id, {
             sessionId: s.id, lineEventId: null,
             onAttempt: diagnostics => { this.log('chatter_provider_response', { character: speaker.id, round, ...diagnostics }); },
+            ...streamContext(label),
           });
           text = typeof result === 'string' ? result : result.text;
           reasoning = typeof result === 'string' ? null : result.reasoning ?? null;
@@ -923,8 +942,13 @@ export class Investigation {
           guard = 'ok';
           if (fresh(text)) {
             guard = 'retried';
+            sink?.line({ t: 'scrub', a: label });
             await post();
-            if (fresh(text)) { guard = 'deflected'; text = resolveText(this.kase, s.cast, this.kase.guard.quiet); reasoning = null; }
+            if (fresh(text)) {
+              guard = 'deflected';
+              sink?.line({ t: 'scrub', a: label });
+              text = resolveText(this.kase, s.cast, this.kase.guard.quiet); reasoning = null;
+            }
           }
           if (fresh(reasoning)) reasoning = null;
         }
@@ -938,6 +962,10 @@ export class Investigation {
     } else {
       try { const template = this.kase.rehearsalChatter?.(s.cast[speaker.id], n); text = typeof template === 'string' ? resolveText(this.kase, s.cast, template) : null; } catch { text = null; }
       if (typeof text !== 'string' || !text) text = `${speaker.name} has nothing to add.`;
+      if (sink) {
+        const { onStart, onDelta } = streamContext('c1');
+        await streamScripted({ onStart, onDelta, label: 'c1' }, { reasoning: null, answer: text, chunkMs: 25 });
+      }
     }
     const paid = starting ? spend(s.economy, ['continue']) : null;
     const event = this.log('chatter_line', { character: speaker.id, text, round, line, roundLines, order, provenance, threadPromptVersion: this.kase.prompts?.threadVersion ?? threadPromptVersion, spend: paid, ...(guard ? { hidden: { guard } } : {}) });

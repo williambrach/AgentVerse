@@ -148,7 +148,7 @@ function typeChunks(text) {
 }
 
 // A scripted line is streamed piece by piece so rehearsal shows the same performance as live.
-async function streamScripted({ onStart, onDelta, label, sleep }, { reasoning, answer, chunkMs }) {
+export async function streamScripted({ onStart, onDelta, label, sleep }, { reasoning, answer, chunkMs }) {
   const wait = sleep ?? (ms => new Promise(r => setTimeout(r, ms)));
   onStart?.(label, { attempt: 1, endpoint: 'rehearsal' });
   for (const [text, kind] of [[reasoning, 'reasoning'], [answer, 'content']]) {
@@ -216,7 +216,16 @@ export async function answerThread(config, kase, session, characterId, router, c
     const template = kase.rehearsalChatter?.(session.cast[characterId], n);
     return { text: template ? resolve(kase, session.cast, template) : `${name} has nothing to add.`, reasoning: null, provenance: null };
   }
-  const { sessionId, lineEventId, onAttempt } = context;
-  const { content, reasoning = null, provenance } = await router.complete({ messages: buildThreadMessages(kase, session, characterId), sessionId, questionEventId: lineEventId ?? null, onAttempt });
+  const { sessionId, lineEventId, onAttempt, onDelta, onStart, label = 'c1' } = context;
+  // With a streaming context (onDelta present) the line arrives in pieces, as an interview answer does.
+  const streaming = typeof onDelta === 'function' && config.stream !== false;
+  const { content, reasoning = null, provenance } = await router.complete({
+    messages: buildThreadMessages(kase, session, characterId), sessionId, questionEventId: lineEventId ?? null, onAttempt,
+    ...(streaming ? {
+      stream: true,
+      onStart: info => onStart?.(label, info),
+      onDelta: (kind, text) => onDelta(label, kind, text),
+    } : {}),
+  });
   return { text: content, reasoning, provenance };
 }

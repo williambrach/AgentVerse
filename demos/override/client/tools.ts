@@ -118,15 +118,20 @@ export function noThoughtBlock(name: string, line: number): string {
     `<h4>${t('tools.reasoning', { name })}</h4><p>${t('tools.noThought', { name })}</p></article>`;
 }
 
-/** `faces` maps a character id to its portrait classes (e.g. `maya slot-0`); a post whose speaker has one shows that head beside it, chat style. */
-export function threadPanel(thread: ThreadLine[], names: Record<string, string>, pending: number, note = plain('tools.thread.note'), faces: Record<string, string> = {}): string {
+/**
+ * `faces` maps a character id to its portrait classes (e.g. `maya slot-0`); a post whose speaker has one shows that head beside it, chat style.
+ * `live` is the talk line still being typed: one extra post (patched in place by the stream) before the pending note.
+ */
+export function threadPanel(thread: ThreadLine[], names: Record<string, string>, pending: number, note = plain('tools.thread.note'), faces: Record<string, string> = {}, live?: { character: string; text: string }): string {
   const head = (id: string) => faces[id] ? `<span class="thread-face" aria-hidden="true"><i class="monkey-face ${esc(faces[id])}"></i></span>` : '';
   const posts = thread.map((l, n) =>
     `<li class="thread-post" data-motion-key="thread-${n + 1}">${head(l.character)}<h4 class="thread-author">#${n + 1} ${esc(names[l.character] ?? l.character)}</h4>` +
     `<p>${esc(l.text)}</p></li>`).join('');
+  const typing = live ? `<li class="thread-post streaming" data-motion-key="thread-${thread.length + 1}" data-stream-bubble>${head(live.character)}<h4 class="thread-author">#${thread.length + 1} ${esc(names[live.character] ?? live.character)}</h4>` +
+    `<p class="stream-line"><span data-stream="answer">${esc(live.text)}</span><i class="stream-caret" aria-hidden="true"></i></p></li>` : '';
   const wait = pending > 0 ? `<li class="thread-pending" aria-live="polite">${t('tools.thread.pending', { n: pending })}</li>` : '';
   return `<section class="thread-panel"><div class="panel-heading"><span class="eyebrow">${t('tools.thread.eyebrow')}</span><h2>${t('tools.thread.title')}</h2></div>` +
-    `<div class="notebook-content"><ol id="thread-log" role="log" aria-live="polite">${posts}${wait}</ol>` +
+    `<div class="notebook-content"><ol id="thread-log" role="log" aria-live="polite">${posts}${typing}${wait}</ol>` +
     `<p class="fine">${esc(note)}</p></div></section>`;
 }
 

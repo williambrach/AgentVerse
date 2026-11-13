@@ -565,10 +565,13 @@ export class Roundtable extends Phaser.Scene {
     const view = this.actors.get(id);
     if (!view || !this.overlay) return;
     this.speak(id, text);
+    // A bubble that replaces the same friend's bubble (a typed talk line) keeps still instead of popping in again.
+    const same = Boolean(this.overlay.querySelector(`.roundtable-bubble[data-actor="${CSS.escape(id)}"]`));
     this.clearBubbles();
     const el = document.createElement('div');
     el.className = 'roundtable-bubble';
     el.dataset.actor = id;
+    if (same) el.style.animation = 'none';
     const inner = document.createElement('span');
     inner.textContent = text;
     el.append(inner);

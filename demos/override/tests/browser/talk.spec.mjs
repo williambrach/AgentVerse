@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { test, expect } from './team.mjs';
+
+// The friends' thread footnote, from the game text (the chats-private copy).
+const FRIENDS_NOTE = JSON.parse(readFileSync(new URL('../../client/text/worlds.json', import.meta.url), 'utf8'))['worlds.friends.threadNote'];
 
 // "Let them talk" at the roundtable: every friend speaks once per round, the thread is readable,
 // and the speech bubbles never hide under the top bar or cut a line in half.
@@ -36,7 +40,7 @@ test('talk_round_hears_all_five: one press, five friends, the closed notebook op
   await expect(page.locator('#thread-log .thread-post')).toHaveCount(5);
   await expect(page.locator('#continue-button')).toContainText('Let them talk');
   // Friends keep their chats private: the thread says so.
-  await expect(page.locator('.thread-panel .fine')).toHaveText('They only hear what is said at the table, never your private chats.');
+  await expect(page.locator('.thread-panel .fine')).toHaveText(FRIENDS_NOTE);
   // The thread is a strip under the room, and its newest post is in view.
   const vh = page.viewportSize().height;
   const box = await rect(page, '.dossier');
@@ -67,7 +71,8 @@ for (const viewport of [{ width: 1728, height: 864 }, { width: 1440, height: 900
     // A long line from Ken (back row, the least room above his tag).
     const long = 'I keep going over it in my head and I still think the lighting in those old photos is far too perfect. '.repeat(3);
     await page.route('**/api/continue', async route => {
-      const res = await route.fetch();
+      // Ask for the plain JSON view (no stream flag) so the line can be rewritten whole.
+      const res = await route.fetch({ postData: JSON.stringify({ ...route.request().postDataJSON(), stream: false }) });
       const data = await res.json();
       const line = data.session.thread.at(-1);
       if (line) { line.text = long; line.character = 'ken'; }

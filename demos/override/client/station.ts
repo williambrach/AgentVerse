@@ -879,6 +879,8 @@ export class Station extends Phaser.Scene {
   say(characterId: string, text: string) {
     const p = this.stops[characterId];
     if (!p || !this.cast.some(c => c.id === characterId)) return;
+    // A bubble that replaces the same character's bubble (a typed talk line) keeps still instead of popping in again.
+    const same = Boolean(this.overlay?.querySelector(`.station-bubble[data-character="${CSS.escape(characterId)}"]`));
     this.clearBubbles();
     const overlay = this.labelLayer();
     const { left } = placeBubble(p.x, p.y - this.lift(p.y), BUBBLE_WIDTH) /* anchored on the name label's centre */;
@@ -890,6 +892,7 @@ export class Station extends Phaser.Scene {
     const el = document.createElement('div');
     el.className = 'station-bubble';
     el.dataset.character = characterId;
+    if (same) el.style.animation = 'none';
     const inner = document.createElement('span');
     inner.textContent = text;
     el.append(inner);

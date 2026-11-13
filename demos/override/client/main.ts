@@ -27,7 +27,7 @@ import { createStage, type Stage } from './stage';
 import { postHeartbeat, startHeartbeat } from './heartbeat';
 import { worldFor } from './worlds';
 import { hudShell, castCard } from './hud.ts';
-import { readNdjson, createStreamFold, isNdjson } from './stream.ts';
+import { readNdjson, createStreamFold, isNdjson, type StreamLine } from './stream.ts';
 import { createTyper, createThrottle } from './stream-ui.ts';
 import { interviewPanel, briefingPanel, evidencePanel } from './dialogue.ts';
 import { evidenceIdOf } from './hall-layout.ts';
@@ -128,8 +128,10 @@ async function api(path: string, body?: object) {
 }
 
 
-/** The interview being streamed, or null. The fold holds the per-call text; the typer paces what shows. */
+/** The interview or talk line being streamed, or null. The fold holds the per-call text; the typer paces what shows. */
 interface LiveStream {
+  /** An interview answer (dialogue panel, Watch) or a talk line (thread panel, stage bubble only). */
+  kind: 'interview' | 'thread';
   character: string;
   fold: ReturnType<typeof createStreamFold>;
   typer: ReturnType<typeof createTyper>;
@@ -150,11 +152,20 @@ function patchStream() {
   if (!s) return;
   const shown = s.typer.shown();
   const answer = document.querySelector('[data-stream="answer"]');
-  if (answer && answer.textContent !== shown) answer.textContent = shown;
+  if (answer && answer.textContent !== shown) { answer.textContent = shown; if (s.kind === 'thread') scrollThread(); }
   document.querySelector('[data-stream-bubble]')?.classList.toggle('streaming', shown !== '');
   const thought = document.querySelector('[data-stream="reasoning"]');
   const reasoning = s.fold.reasoning();
   if (thought && thought.textContent !== reasoning) thought.textContent = reasoning;
+}
+
+/** Shows the newest thread post: only boxes inside the notebook scroll (scrollIntoView would also move the page in the compact layout). */
+function scrollThread() {
+  const target = document.querySelector<HTMLElement>('#panel');
+  if (!target) return;
+  for (let box = target.querySelector<HTMLElement>('#thread-log'); box && box !== target.parentElement; box = box.parentElement) {
+    if (box.scrollHeight > box.clientHeight) box.scrollTop = box.scrollHeight;
+  }
 }
 
 function stopStream() {
@@ -177,8 +188,11 @@ function onStreamLine(s: LiveStream, line: { t?: string; [key: string]: unknown 
   return null;
 }
 
-/** The interview transport for action(): POSTs with stream:true. A JSON reply is read exactly like api(); NDJSON lines drive the live bubble. */
-async function streamInterview(path: string, body: object): Promise<CaseState> {
+/**
+ * The shared streaming transport: POSTs with stream:true. A JSON reply is read exactly like api() (null stream);
+ * NDJSON lines go to `onLine` with the live stream; `onTick` runs after each typing step.
+ */
+async function streamAction(path: string, body: object, kind: LiveStream['kind'], character: string, onLine: (s: LiveStream, line: StreamLine) => CaseState | null, onTick?: (s: LiveStream) => void): Promise<CaseState> {
   const abort = new AbortController();
   const response = await fetch(`/api/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, stream: true }), signal: abort.signal });
   if (!isNdjson(response.headers.get('Content-Type')) || !response.body) {
@@ -188,20 +202,58 @@ async function streamInterview(path: string, body: object): Promise<CaseState> {
   }
   const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const s: LiveStream = {
-    character: (body as { character: string }).character, fold: createStreamFold(), typer: createTyper(reduced),
-    watching: false, timer: undefined, speakGate: createThrottle(600), spoke: false,
+    kind, character, fold: createStreamFold(), typer: createTyper(reduced),
+    watching: false, timer: undefined, speakGate: createThrottle(kind === 'thread' ? 250 : 600), spoke: false,
   };
-  s.timer = setInterval(() => { if (s.typer.tick()) patchStream(); }, 30);
+  s.timer = setInterval(() => { if (s.typer.tick()) { patchStream(); onTick?.(s); } }, 30);
   liveStream = s;
   let view: CaseState | null = null;
   try {
-    await readNdjson(response.body, line => { const done = onStreamLine(s, line); if (done) view = done; });
+    await readNdjson(response.body, line => { const done = onLine(s, line); if (done) view = done; });
   } catch (error) {
     abort.abort(); // a fail line or a bad read: release the connection and its reader
     throw error;
-  } finally { lastWatched = s.watching; stopStream(); }
+  } finally { if (kind === 'interview') lastWatched = s.watching; stopStream(); }
   if (!view) throw new Error(plain('main.connectionLost'));
   return view;
+}
+
+/** The interview transport for action(): NDJSON lines drive the live dialogue bubble. */
+function streamInterview(path: string, body: object): Promise<CaseState> {
+  return streamAction(path, body, 'interview', (body as { character: string }).character, onStreamLine);
+}
+
+/** The typed talk line on the stage: the bubble follows what is shown, throttled; a scrub that empties it goes back to thinking. */
+function talkBubble(s: LiveStream, force = false) {
+  if (!s.character) return;
+  const shown = s.typer.shown();
+  if (shown) {
+    if (force || s.speakGate(Date.now())) { station.say(s.character, shown); s.spoke = true; }
+  } else if (s.spoke) { station.clearBubbles(); station.think(s.character); s.spoke = false; }
+}
+
+/** One NDJSON line of a talk stream: `speaker` names who is typing; the rest folds and types as an interview does. */
+function onTalkLine(s: LiveStream, line: StreamLine): CaseState | null {
+  if (line.t === 'speaker') {
+    if (typeof line.character !== 'string') return null;
+    s.character = line.character;
+    station.clearBubbles();
+    station.think(s.character);
+    render(); // the thread panel shows the live post
+    return null;
+  }
+  if (line.t === 'view') { const { t: _t, ...view } = line; return view as unknown as CaseState; }
+  if (line.t === 'fail') throw new Error(typeof line.error === 'string' && line.error ? line.error : failed());
+  if (!s.fold.apply(line)) return null;
+  s.typer.set(s.fold.answer());
+  patchStream();
+  talkBubble(s);
+  return null;
+}
+
+/** The talk transport for action('continue'): the thread panel's live post and the stage bubble type the line. */
+function streamTalk(path: string, body: object): Promise<CaseState> {
+  return streamAction(path, body, 'thread', '', onTalkLine, talkBubble);
 }
 
 /** Watch: turns the reasoning lines on for the answer that is streaming. Runs beside the busy interview and sends no revision. */
@@ -212,7 +264,7 @@ function startWatch() {
 }
 
 async function watchRequest() {
-  const s = liveStream;
+  const s = liveStream?.kind === 'interview' ? liveStream : null;
   const eventId = s?.fold.questionEventId();
   if (!s || s.watching || !eventId || state.tools?.inspect === false) return;
   s.watching = true;
@@ -471,7 +523,7 @@ async function onClick(event: MouseEvent) {
   if (button.id === 'inspect-button') {
     stopTalking();
     if (!ids().includes(panel)) return;
-    if (liveStream && liveStream.character === panel) { startWatch(); return; }
+    if (liveStream?.kind === 'interview' && liveStream.character === panel) { startWatch(); return; }
     if (state.session?.inspectable[panel]) await action('inspect', { character: panel });
     else { noThought.add(lineKey(panel)); threadOpen = false; dialogueOpen = true; render(); }
     return;
@@ -588,7 +640,10 @@ function render() {
   const sections: Record<string, string> = { briefing: plain('hud.briefing'), ...Object.fromEntries(state.characters.map(c => [c.id, plain('main.section.chat', { name: c.name })])), evidence: plain('main.nav.evidence'), quotes: plain('main.nav.quotes'), report: plain(session?.status === 'closed' ? 'main.section.solved' : 'main.section.guess') };
   document.querySelector('#notebook-section')!.textContent = threadOpen ? plain('main.section.thread') : sections[panel];
   let markup: string;
-  if (threadOpen && session) markup = threadPanel(session.thread, Object.fromEntries(state.characters.map(c => [c.id, c.name])), session.chatter.pending, world().text.threadNote, Object.fromEntries(state.characters.map(c => [c.id, castClass(c.id)])));
+  if (threadOpen && session) {
+    const live = liveStream?.kind === 'thread' && liveStream.character ? { character: liveStream.character, text: liveStream.typer.shown() } : undefined;
+    markup = threadPanel(session.thread, Object.fromEntries(state.characters.map(c => [c.id, c.name])), session.chatter.pending, world().text.threadNote, Object.fromEntries(state.characters.map(c => [c.id, castClass(c.id)])), live);
+  }
   else if (session?.status === 'closed' && panel === 'report') markup = debriefMarkup();
   else if (panel === 'briefing') markup = briefing();
   else if (panel === 'quotes' && state.talk) markup = quotesPanel(session?.talk?.quotes ?? [], state.characters);
@@ -599,11 +654,7 @@ function render() {
   if (rendered) bindForms();
   // The thread is a capped strip under the room: after a new post, show the newest one rather than #1.
   // Only boxes inside the notebook scroll; scrollIntoView would also move the page in the compact layout.
-  if (rendered && threadOpen) {
-    for (let box = target.querySelector<HTMLElement>('#thread-log'); box && box !== target.parentElement; box = box.parentElement) {
-      if (box.scrollHeight > box.clientHeight) box.scrollTop = box.scrollHeight;
-    }
-  }
+  if (rendered && threadOpen) scrollThread();
   // A box that was hidden loses its scroll position: show the newest turn when it opens.
   const log = target.querySelector<HTMLElement>('#transcript');
   if (log && dialogueOpen && !wasOpen) log.scrollTop = log.scrollHeight;
@@ -673,7 +724,7 @@ function interviewMarkup(characterId: string) {
     character, turns: session?.interviews[characterId] || [], inspections: (session?.inspections || []).filter(n => n.character === characterId),
     noThought: noThought.has(lineKey(characterId)), faceClass: castClass(characterId), closed: session?.status === 'closed', busy, draft: drafts[characterId],
     waitingOn: pendingCharacter === characterId && busy ? characterId : null,
-    ...(liveStream && liveStream.character === characterId ? { streaming: { answer: liveStream.typer.shown(), reasoning: liveStream.watching ? liveStream.fold.reasoning() : null } } : {}),
+    ...(liveStream?.kind === 'interview' && liveStream.character === characterId ? { streaming: { answer: liveStream.typer.shown(), reasoning: liveStream.watching ? liveStream.fold.reasoning() : null } } : {}),
     ...(state.talk ? { talk: { topics: state.talk.topics, asked: session?.talk?.asked[characterId] ?? [], pick: pick && lineOf(characterId, pick.line) ? pick : null } } : {}),
     next: state.characters.find(c => c.id !== characterId && !session?.interviews[c.id].length) || null,
     askLabel: economy ? toolChip(economy, 'ask') : null, askOff: askBlock.reason, hint: HINTS.ask, many: world().text.many,
@@ -765,7 +816,7 @@ function renderTools() {
     const spoken = Boolean(character && session.interviews[character.id].length);
     const inspect = toolBlock(economy, 'inspect', reserveFor(null));
     const inspectOff = state.tools?.inspect === false ? notInCase() : inspect.reason || (!character ? plain('main.inspect.open', { one: world().text.oneWithArticle }) : !spoken ? plain('main.inspect.notSpoken', { name: character.name }) : null);
-    const watch = Boolean(liveStream && character && liveStream.character === character.id);
+    const watch = Boolean(liveStream?.kind === 'interview' && character && liveStream.character === character.id);
     const watchOff = !watch || state.tools?.inspect === false ? inspectOff : inspect.reason || (liveStream!.fold.questionEventId() ? null : plain('main.watch.wait'));
     const block = toolBlock(economy, 'continue', reserveFor(null));
     const talkOff = state.tools?.talk === false;
@@ -802,10 +853,15 @@ async function talk() {
   try {
     while (talking) {
       const before = state.session!.thread.length;
-      if (!(await action('continue'))) break;
+      const ok = await action('continue', {}, undefined, streamTalk);
+      station.think(null);
       const session = state.session!;
       const line = session.thread[session.thread.length - 1];
-      if (session.thread.length > before && line) station.say(line.character, line.text);
+      const grew = session.thread.length > before && Boolean(line);
+      // A failed or aborted line, or a reply that committed nothing, must not leave a half-typed fragment on stage.
+      if (!ok || !grew) station.clearBubbles();
+      if (!ok) break;
+      if (grew) station.say(line.character, line.text);
       if (session.chatter.pending <= 0) break;
       const words = line ? line.text.trim().split(/\s+/).length : 0;
       await pause(Math.min(8000, Math.max(3000, 1500 + 60 * words)));

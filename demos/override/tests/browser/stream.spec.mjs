@@ -177,3 +177,61 @@ test('stream_one_at_a_time: nothing can send a second message while an answer st
   await expect(committed(page)).toHaveCount(before + 2);
   await expect(ASK).toBeEnabled();
 });
+
+test('stream_talk_line: Let them talk types the line into a live thread post, then commits it', async ({ page }) => {
+  await control(page, { mode: 'ok', content: CLEAN, reasoning: null, streamChunkMs: 200, delayMs: [30, 60] });
+  await start(page);
+  await record(page);
+  await expect(page.locator('#continue-button')).toBeEnabled();
+  await page.locator('#continue-button').click();
+  const live = page.locator('#thread-log .thread-post[data-stream-bubble]');
+  await expect(live).toHaveCount(1, { timeout: 10_000 });
+  await expect(live).toHaveClass(/streaming/, { timeout: 10_000 });
+  await expect(live.locator('[data-stream="answer"]')).not.toBeEmpty();
+  await expect(live.locator('.stream-caret')).toHaveCount(1);
+  await expect(live.locator('.thread-author')).toContainText('#1 ');
+  // The stage bubble follows the typed text; no committed post exists yet, and no Watch turns on for a talk line.
+  await expect(page.locator('.station-bubble')).toBeVisible();
+  expect(await page.locator('#thread-log .thread-post:not([data-stream-bubble])').count()).toBe(0);
+  await expect(page.locator('#inspect-button')).not.toContainText('Watch');
+  await expect(page.locator('#thread-log [data-stream-bubble]')).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.locator('#thread-log .thread-post').first()).toContainText(CLEAN.slice(0, 40));
+  const seen = await seenTexts(page);
+  expect(new Set(seen).size).toBeGreaterThanOrEqual(2);
+  expect(seen.some(text => text.length > 0 && text.length < CLEAN.length)).toBe(true);
+});
+
+test('stream_talk_fail: a talk line that fails mid-stream leaves no fragment on stage and Let them talk works again', async ({ page }) => {
+  await control(page, { mode: 'ok', content: CLEAN, reasoning: null, streamChunkMs: 20, delayMs: [10, 20] });
+  const local = await start(page);
+  // /api/continue answers an NDJSON stream from inside the page: speaker, start, a delta, then (after a pause) a fail line.
+  await page.evaluate(speaker => {
+    const real = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      if (!String(input).endsWith('/api/continue')) return real(input, init);
+      const enc = new TextEncoder();
+      const line = obj => enc.encode(JSON.stringify(obj) + '\n');
+      const body = new ReadableStream({
+        async start(ctl) {
+          ctl.enqueue(line({ t: 'speaker', character: speaker, round: 1, line: 1, roundLines: 5 }));
+          ctl.enqueue(line({ t: 'start', a: 'c1', attempt: 1, endpoint: 'a' }));
+          ctl.enqueue(line({ t: 'delta', a: 'c1', text: 'I was about to say something about the' }));
+          await new Promise(r => setTimeout(r, 1500));
+          ctl.enqueue(line({ t: 'fail', status: 502, error: 'The mock thread broke off.' }));
+          ctl.close();
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8' } });
+    };
+  }, local);
+  await expect(page.locator('#continue-button')).toBeEnabled();
+  await page.locator('#continue-button').click();
+  // The fragment really was on stage before the failure.
+  await expect(page.locator('#thread-log [data-stream-bubble]')).toHaveCount(1, { timeout: 5_000 });
+  await expect(page.locator('.station-bubble')).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator('#toast')).toContainText('The mock thread broke off.', { timeout: 10_000 });
+  await expect(page.locator('.station-bubble')).toHaveCount(0);
+  await expect(page.locator('[data-stream-bubble]')).toHaveCount(0);
+  expect(await page.locator('#thread-log .thread-post').count()).toBe(0);
+  await expect(page.locator('#continue-button')).toBeEnabled();
+});

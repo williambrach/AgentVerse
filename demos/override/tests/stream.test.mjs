@@ -29,11 +29,11 @@ const joined = (lines, t, a) => {
   return out;
 };
 
-function liveGames(t, { answer, cases = null, extraConfig = {} } = {}) {
+function liveGames(t, { answer, thread, cases = null, extraConfig = {} } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'override-stream-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const config = modelConfig({ OVERRIDE_LLM_API_KEY: 'k', OVERRIDE_LLM_MODEL: 'm', ...extraConfig });
-  const games = new Investigations({ dataDir: dir, config, cases: cases ?? [kase3], shuffle: ids => [...ids], answer });
+  const games = new Investigations({ dataDir: dir, config, cases: cases ?? [kase3], shuffle: ids => [...ids], answer, thread });
   return { dir, games, config, events: id => readJsonl(join(dir, 'sessions', `${id}.jsonl`)) };
 }
 const kase3 = defineCase(partCase, { worlds: agentWorlds(3) });
@@ -343,4 +343,144 @@ test('a client that hangs up still commits the streamed answer, and a mid-stream
   gate();
   await until(() => readJsonl(join(dir, 'sessions', `${sid}.jsonl`)).some(e => e.type === 'interview_answer' && e.answer === 'Half an answer, fully told.'));
   assert.ok(true, 'the answer committed although no one was reading');
+});
+
+// ---- streaming talk lines (continue) ----
+
+const guardedCase = () => defineCase({ ...partCase, id: 'mini-guarded', version: 'mini-guarded-v1', parts: partCase.parts.map(p => ({ ...p, role: 'villain' })), guard: { roles: ['villain'], deflect: 'I will say no more.', quiet: 'A monkey shrugs.', words: ['phone'] } }, { worlds: agentWorlds(3) });
+// A model call for a thread line that streams its text in two pieces under the label it was given.
+const streamingThread = replies => {
+  let calls = 0;
+  const fn = async (cfg, k, s, cid, ctx) => {
+    const text = replies[Math.min(calls++, replies.length - 1)];
+    const label = ctx.label ?? 'c1';
+    ctx.onStart?.(label, { attempt: 1, endpoint: 'a' });
+    const cut = Math.ceil(text.length / 2);
+    ctx.onDelta?.(label, 'reasoning', 'private thought');
+    ctx.onDelta?.(label, 'content', text.slice(0, cut));
+    ctx.onDelta?.(label, 'content', text.slice(cut));
+    return { text, provenance: { endpoint: 'a' }, reasoning: 'private thought' };
+  };
+  fn.calls = () => calls;
+  return fn;
+};
+
+test('a live talk line streams speaker, start and deltas that join to the committed line', async t => {
+  const thread = streamingThread(['The swing squeaked all night long.']);
+  const { games } = liveGames(t, { thread });
+  const id = await started(games);
+  const sink = collectingSink();
+  const fresh = await games.mutate(id, 'continue', { sessionId: id, revision: 2 }, { sink });
+  const line = fresh.session.thread.at(-1);
+  assert.equal(line.text, 'The swing squeaked all night long.');
+  assert.deepEqual(sink.lines[0], { t: 'speaker', character: line.character, round: 1, line: 1, roundLines: 3 });
+  assert.deepEqual(sink.lines[1], { t: 'start', a: 'c1', attempt: 1, endpoint: 'a' });
+  assert.equal(joined(sink.lines, 'delta', 'c1'), line.text);
+  assert.ok(ts(sink.lines, 'delta').length > 1);
+  assert.equal(ts(sink.lines, 'reasoning').length, 0, 'a talk line never streams its reasoning');
+  assert.equal(ts(sink.lines, 'accepted').length, 0);
+});
+
+test('a guard retry on a talk line scrubs the false start; a deflect scrubs both', async t => {
+  const retry = streamingThread(['My phone rang.', 'I heard nothing.']);
+  const { games, events } = liveGames(t, { cases: [guardedCase()], thread: retry });
+  const id = await started(games);
+  const sink = collectingSink();
+  const fresh = await games.mutate(id, 'continue', { sessionId: id, revision: 2 }, { sink });
+  assert.equal(retry.calls(), 2);
+  assert.equal(fresh.session.thread.at(-1).text, 'I heard nothing.');
+  assert.deepEqual(ts(sink.lines, 'scrub').map(l => l.a), ['c1']);
+  assert.deepEqual(ts(sink.lines, 'start').map(l => l.a), ['c1', 'c2']);
+  assert.equal(joined(sink.lines, 'delta', 'c1'), '');
+  assert.equal(joined(sink.lines, 'delta', 'c2'), 'I heard nothing.');
+  assert.equal(events(id).find(e => e.type === 'chatter_line').hidden.guard, 'retried');
+
+  const deflect = streamingThread(['My phone rang.', 'The phone again.']);
+  const second = liveGames(t, { cases: [guardedCase()], thread: deflect });
+  const id2 = await started(second.games);
+  const sink2 = collectingSink();
+  const view2 = await second.games.mutate(id2, 'continue', { sessionId: id2, revision: 2 }, { sink: sink2 });
+  assert.equal(view2.session.thread.at(-1).text, 'A monkey shrugs.');
+  assert.deepEqual(ts(sink2.lines, 'scrub').map(l => l.a), ['c1', 'c2']);
+  assert.equal(joined(sink2.lines, 'delta', 'c2'), '', 'the quiet line arrives only in the view');
+});
+
+test('a rehearsal talk line with a sink arrives in pieces; without one the log is unchanged', async t => {
+  const chatty = defineCase({ ...partCase, rehearsalChatter: () => 'I watched the old swing squeak all night long under the oak tree by the pond.' }, { worlds: agentWorlds(3) });
+  const make = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'override-stream-talk-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    return { dir, games: new Investigations({ dataDir: dir, config: modelConfig({}), cases: [chatty], shuffle: ids => [...ids] }) };
+  };
+  const a = make(), b = make();
+  const idA = await started(a.games), idB = await started(b.games);
+  const sink = collectingSink();
+  const streamed = await a.games.mutate(idA, 'continue', { sessionId: idA, revision: 2 }, { sink });
+  const plainView = await b.games.mutate(idB, 'continue', { sessionId: idB, revision: 2 });
+  const text = streamed.session.thread.at(-1).text;
+  assert.equal(ts(sink.lines, 'speaker').length, 1);
+  assert.deepEqual(ts(sink.lines, 'start'), [{ t: 'start', a: 'c1', attempt: 1, endpoint: 'rehearsal' }]);
+  assert.ok(ts(sink.lines, 'delta').length > 1, 'the line arrives in pieces');
+  assert.equal(joined(sink.lines, 'delta', 'c1'), text);
+  assert.equal(plainView.session.thread.at(-1).text, text);
+  // The same line logs the same event fields with or without a sink.
+  const strip = e => { const { eventId, sessionId, timestamp, sequence, elapsedMs, ...rest } = e; return rest; };
+  const lineOf = (dir, id) => strip(readJsonl(join(dir, 'sessions', `${id}.jsonl`)).find(e => e.type === 'chatter_line'));
+  assert.deepEqual(lineOf(a.dir, idA), lineOf(b.dir, idB));
+});
+
+test('POST /api/continue with stream: answers in NDJSON and ends with the view', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'override-http-talk-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const games = new Investigations({ dataDir: dir, config: modelConfig({}), cases: [kase3], shuffle: ids => [...ids] });
+  const { base, cookie } = await appWith(t, { investigations: games });
+  const start = await (await fetch(`${base}/api/start`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...cookie }, body: '{}' })).json();
+  const res = await postStream(base, { Cookie: `override_session=${start.session.id}` }, 'continue', { sessionId: start.session.id, revision: start.session.revision, stream: true });
+  assert.equal(res.headers.get('content-type'), 'application/x-ndjson; charset=utf-8');
+  const lines = await readLines(res);
+  assert.equal(lines[0].t, 'speaker');
+  assert.equal(lines.at(-1).t, 'view');
+  const posted = lines.at(-1).session.thread.at(-1);
+  assert.equal(posted.character, lines[0].character);
+  assert.equal(lines.filter(l => l.t === 'delta').map(l => l.text).join(''), posted.text);
+  // Without the flag the same route answers plain JSON.
+  const plain = await postStream(base, { Cookie: `override_session=${start.session.id}` }, 'continue', { sessionId: start.session.id, revision: lines.at(-1).session.revision });
+  assert.match(plain.headers.get('content-type'), /application\/json/);
+  assert.equal((await plain.json()).session.thread.length, 2);
+});
+
+test('a talk line that fails mid-stream over HTTP ends with a fail line carrying the provider message', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'override-http-talk-fail-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const config = modelConfig({ OVERRIDE_LLM_API_KEY: 'k', OVERRIDE_LLM_MODEL: 'm' });
+  const games = new Investigations({ dataDir: dir, config, cases: [kase3], shuffle: ids => [...ids], thread: async (cfg, k, s, cid, ctx) => {
+    ctx.onStart?.(ctx.label, { attempt: 1, endpoint: 'a' });
+    ctx.onDelta?.(ctx.label, 'content', 'Half a ');
+    ctx.onDelta?.(ctx.label, 'content', 'line');
+    throw new InterviewProviderError('timeout', 'too slow', {});
+  } });
+  const { base, cookie } = await appWith(t, { investigations: games });
+  const start = await (await fetch(`${base}/api/start`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...cookie }, body: '{}' })).json();
+  const res = await postStream(base, { Cookie: `override_session=${start.session.id}` }, 'continue', { sessionId: start.session.id, revision: start.session.revision, stream: true });
+  assert.equal(res.headers.get('content-type'), 'application/x-ndjson; charset=utf-8');
+  const lines = await readLines(res); // resolves only once the server closed the stream
+  assert.deepEqual(lines.map(l => l.t), ['speaker', 'start', 'delta', 'delta', 'fail']);
+  // A provider error is a RequestError(502) with the provider's message, so that is what the line carries.
+  assert.deepEqual(lines.at(-1), { t: 'fail', status: 502, error: 'too slow' });
+  const events = readJsonl(join(dir, 'sessions', `${start.session.id}.jsonl`));
+  assert.equal(events.some(e => e.type === 'chatter_failed' && e.reason === 'timeout'), true);
+  assert.equal(events.some(e => e.type === 'chatter_line'), false);
+});
+
+test('a talk label over the 7000-char cap sends nothing more, so the streamed text has no gap', async t => {
+  const big = 'a'.repeat(6990);
+  const { games } = liveGames(t, { thread: async (cfg, k, s, cid, ctx) => {
+    ctx.onStart?.(ctx.label, { attempt: 1, endpoint: 'a' });
+    for (const piece of [big, 'b'.repeat(20), 'c'.repeat(5)]) ctx.onDelta?.(ctx.label, 'content', piece);
+    return { text: `${big}${'b'.repeat(20)}${'c'.repeat(5)}`, provenance: null, reasoning: null };
+  } });
+  const id = await started(games);
+  const sink = collectingSink();
+  await games.mutate(id, 'continue', { sessionId: id, revision: 2 }, { sink });
+  assert.deepEqual(ts(sink.lines, 'delta').map(l => l.text), [big]);
 });

@@ -73,7 +73,8 @@ test('inspect_stays_open_and_says_the_character_did_not_think', async ({ page })
   // Rehearsal always has reasoning, so the first live-style answer is rewritten to have none.
   let first = true;
   await page.route('**/api/interview', async route => {
-    const response = await route.fetch();
+    // Ask for the plain JSON view (no stream flag) so the reply can be rewritten whole.
+    const response = await route.fetch({ postData: JSON.stringify({ ...route.request().postDataJSON(), stream: false }) });
     const json = await response.json();
     if (first) json.session.inspectable.momo = false;
     first = false;

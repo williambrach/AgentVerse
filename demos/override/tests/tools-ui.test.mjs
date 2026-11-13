@@ -61,6 +61,15 @@ test('thread_panel', () => {
   assert.ok(!html.includes('thread-face'));
 });
 
+test('thread_panel_live_post', () => {
+  const lines = [{ character: 'momo', text: 'first', round: 1, timestamp: 't' }];
+  const html = threadPanel(lines, { momo: 'Momo', pip: 'P<p>' }, 1, undefined, { pip: 'pip slot-1' }, { character: 'pip', text: 'half <a' });
+  assert.match(html, /<li class="thread-post streaming" data-motion-key="thread-2" data-stream-bubble><span class="thread-face" aria-hidden="true"><i class="monkey-face pip slot-1"><\/i><\/span><h4 class="thread-author">#2 P&lt;p&gt;<\/h4>/);
+  assert.match(html, /<p class="stream-line"><span data-stream="answer">half &lt;a<\/span><i class="stream-caret" aria-hidden="true"><\/i><\/p><\/li><li class="thread-pending"/);
+  assert.equal((html.match(/data-stream-bubble/g) ?? []).length, 1);
+  assert.ok(!threadPanel(lines, { momo: 'Momo' }, 1).includes('data-stream-bubble'));
+});
+
 test('thread_panel_faces', () => {
   const lines = [{ character: 'momo', text: 'a', round: 1, timestamp: 't' }, { character: 'pip', text: 'b', round: 1, timestamp: 't' }, { character: 'ghost', text: 'c', round: 1, timestamp: 't' }];
   const html = threadPanel(lines, { momo: 'Momo', pip: 'Pip' }, 0, undefined, { momo: 'momo slot-0', pip: 'pip slot-1' });

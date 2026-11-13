@@ -225,7 +225,8 @@ test('speech_bubble_stays_below_the_top_bar', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const long = 'I keep going over it in my head. '.repeat(14);
   await page.route('**/api/continue', async route => {
-    const res = await route.fetch();
+    // Ask for the plain JSON view (no stream flag) so the line can be rewritten whole.
+    const res = await route.fetch({ postData: JSON.stringify({ ...route.request().postDataJSON(), stream: false }) });
     const data = await res.json();
     const line = data.session.thread.at(-1);
     if (line) { line.text = long; line.character = data.characters[0].id; }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { modelConfig, loadEndpoints, buildMessages, buildThreadMessages, answerInterview, InterviewProviderError } from '../server/interviews.mjs';
+import { modelConfig, loadEndpoints, buildMessages, buildThreadMessages, answerInterview, answerThread, InterviewProviderError } from '../server/interviews.mjs';
 import { InterviewProviderError as FromErrors } from '../server/errors.mjs';
 import { LlmRouter } from '../server/llm.mjs';
 import { cases } from '../server/cases/index.mjs';
@@ -262,4 +262,27 @@ test('names are resolved and no placeholder survives in any prompt, under identi
   // Under the shuffle Momo holds the carrier part, so it is told about the planner by that holder's name.
   const m = buildMessages(kase, session({ cast: shuffled }), 'momo', 'Why?')[0].content;
   assert.match(m, /You play Momo \(The carrier\)/);
+});
+
+test('answerThread streams through the router only with an onDelta context', async () => {
+  const live = modelConfig({ OVERRIDE_LLM_API_KEY: 'k', OVERRIDE_LLM_MODEL: 'm' });
+  const seen = [];
+  const router = { complete: async opts => { seen.push(opts); opts.onStart?.({ attempt: 1, endpoint: 'e' }); opts.onDelta?.('content', 'Hi.'); return { content: 'Hi.', reasoning: null, provenance: null }; } };
+  const plain = await answerThread(live, kase, session(), 'momo', router, { sessionId: 's' });
+  assert.equal(plain.text, 'Hi.');
+  assert.equal(seen[0].stream, undefined);
+  assert.equal(seen[0].onDelta, undefined);
+  const calls = [];
+  const streamed = await answerThread(live, kase, session(), 'momo', router, {
+    sessionId: 's', label: 'c2',
+    onStart: (a, info) => calls.push(['start', a, info.endpoint]),
+    onDelta: (a, kind, text) => calls.push(['delta', a, kind, text]),
+  });
+  assert.equal(streamed.text, 'Hi.');
+  assert.equal(seen[1].stream, true);
+  assert.equal(typeof seen[1].onDelta, 'function');
+  assert.deepEqual(calls, [['start', 'c2', 'e'], ['delta', 'c2', 'content', 'Hi.']]);
+  // A config with streaming off never asks the router to stream, even with a streaming context.
+  await answerThread({ ...live, stream: false }, kase, session(), 'momo', router, { onDelta: () => {} });
+  assert.equal(seen[2].stream, undefined);
 });

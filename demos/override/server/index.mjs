@@ -48,8 +48,8 @@ export function createNdjsonSink(res) {
       }
       try { res.write(JSON.stringify(obj) + '\n'); } catch { closed = true; }
     },
-    fail(error) {
-      sink.line({ t: 'fail', status: error instanceof RequestError ? error.status : 500, error: error instanceof RequestError ? error.message : 'The interview could not complete.' });
+    fail(error, fallback = 'The interview could not complete.') {
+      sink.line({ t: 'fail', status: error instanceof RequestError ? error.status : 500, error: error instanceof RequestError ? error.message : fallback });
       sink.end();
     },
     end() { if (ping) clearInterval(ping); if (!closed && !res.writableEnded) res.end(); closed = true; },
@@ -145,8 +145,9 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
         if (req.method === 'POST') {
           if (!actions.includes(name)) throw new RequestError(404, 'Unknown endpoint.');
           // A streaming interview answers in NDJSON lines: accepted, start, delta, reasoning, scrub, then the final view.
+          // A streaming talk line (continue) sends speaker, start, delta, scrub, then the final view.
           const cfg = investigations.config;
-          const streaming = name === 'interview' && input.stream === true && !(cfg.mode === 'live' && cfg.stream === false);
+          const streaming = (name === 'interview' || name === 'continue') && input.stream === true && !(cfg.mode === 'live' && cfg.stream === false);
           let sink = null;
           if (streaming) {
             sink = createNdjsonSink(res);
@@ -158,8 +159,8 @@ export function createApp({ investigations, accessCode = '', secret = randomByte
             } catch (error) {
               if (sink.opened) {
                 const status = error instanceof RequestError ? error.status : 500;
-                if (status === 500) console.error('Streaming interview failed:', error.code || error.name);
-                sink.fail(error);
+                if (status === 500) console.error(name === 'continue' ? 'Streaming talk line failed:' : 'Streaming interview failed:', error.code || error.name);
+                sink.fail(error, name === 'continue' ? 'The thread could not continue.' : undefined);
                 return;
               }
               throw error; // nothing was sent yet: answer with the plain JSON error
