@@ -112,8 +112,8 @@ test('InterviewProviderError is shared with errors.mjs', () => {
 });
 
 test('rehearsal answers carry no provenance and need no router', async () => {
-  const out = await answerInterview(modelConfig({}), kase, session(), 'kiki', 'Did you hear the bell?', null);
-  assert.deepEqual(out, { answer: 'I stayed by the bell like the keeper said. It never rang. I didn’t eat any bananas.', provenance: null, reasoning: null });
+  const out = await answerInterview(modelConfig({}), kase, session(), 'kiki', 'What did you see?', null);
+  assert.deepEqual(out, { answer: 'I saw Pip move the closed basket behind the blanket. Then I saw Nori take the bananas from it.', provenance: null, reasoning: null });
 });
 
 test('answer_passes_context: the router gets the built messages, ids and onAttempt', async () => {

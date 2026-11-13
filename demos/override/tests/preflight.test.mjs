@@ -51,20 +51,20 @@ test('fidelity_row_and_flags', async () => {
     const rows = report.endpoints[0].fidelity;
     // Identity cast on banana: momo planner, pip carrier, nori lookout, kiki minder.
     const kiki = rows.find(r => r.character === 'kiki');
-    assert.deepEqual([kiki.ok, kiki.words, kiki.flags], [true, 12, []]);
+    assert.deepEqual([kiki.ok, kiki.words, kiki.flags], [true, 12, ['minder_missing_observation']]);
     const momo = rows.find(r => r.character === 'momo');
     assert.deepEqual(momo.flags, ['planner_no_admission']);
-    assert.equal(momo.question, 'Did the keeper really say you could take the bananas?');
+    assert.equal(momo.question, 'Did the keeper really ask you to move the basket?');
     assert.deepEqual(rows.find(r => r.character === 'nori').flags, ['lookout_no_admission']);
     assert.deepEqual(rows.find(r => r.character === 'pip').flags, []);
   });
 });
 
-test('flags: carrier_knows_motive and minder_heard_bell', async () => {
+test('flags: carrier_knows_motive and minder_missing_observation', async () => {
   await withMock({ content: 'I heard the bell and I was so hungry that day, honestly.' }, async mock => {
     const rows = (await runPreflight({ endpoints: [endpointFor(mock)], steps: [1] })).endpoints[0].fidelity;
     assert.ok(rows.filter(r => r.character === 'pip').every(r => r.flags.includes('carrier_knows_motive')));
-    assert.ok(rows.find(r => r.character === 'kiki').flags.includes('minder_heard_bell'));
+    assert.ok(rows.find(r => r.character === 'kiki').flags.includes('minder_missing_observation'));
   });
 });
 
@@ -140,4 +140,11 @@ test('flags: lookout_no_admission fires on a lookout who only says they watched'
   const quick = resolveText(cases[0], cast, partOf(cases[0], cast, lookout).quickQuestion);
   assert.deepEqual(flagsFor(lookout, quick, 'I sat by the path and watched all morning, nobody came by at all today.'), ['lookout_no_admission']);
   assert.deepEqual(flagsFor(lookout, quick, 'For the keeper. I knew it was against the rule, but I wanted a banana anyway.'), []);
+});
+
+// The simplified story requires an admission of deception and both witnessed actions.
+test('v4 fidelity accepts the scripted facts', async () => {
+  const { flagsFor } = await import('../scripts/preflight.mjs');
+  assert.deepEqual(flagsFor('nori', 'Did you know the keeper’s instruction was fake?', 'I knew the instruction was fake. I agreed to take the bananas for a share.'), []);
+  assert.deepEqual(flagsFor('kiki', 'What did you see?', 'I saw Pip move the closed basket. Then I saw Nori take the bananas from it.'), []);
 });

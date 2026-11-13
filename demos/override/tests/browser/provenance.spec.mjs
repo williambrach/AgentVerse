@@ -9,8 +9,8 @@ const LEAKS = [
   'Nobody broke the rule.',
   'Right. Nobody broke the rule.',
   'Nobody knowingly broke the rule this time.',
-  'Every role right! You saw who lied, who helped, who was fooled, and who stayed honest.',
-  'The key was who knew the keeper had said wait.',
+  'Every role right! You saw who planned, who knowingly helped, who was fooled, and who told the truth.',
+  'Ask who believed the instruction and who knew it was fake.',
   'Knew the rule. Made up the permission.',
 ];
 
@@ -30,7 +30,7 @@ test('export carries case provenance', async ({ page }) => {
   await page.locator('.verdict-button').click();
   for (const id of ['momo', 'pip', 'nori', 'kiki']) await pickRole(page, id, truth[id]);
   await page.locator('#lock-in').click();
-  await expect(page.locator('#panel .debrief-head h1')).toHaveText(/ made up the permission\.$/);
+  await expect(page.locator('#panel .debrief-head h1')).toHaveText(/ invented the keeper’s instruction\.$/);
 
   const res = await page.request.get('/api/events');
   expect(res.ok()).toBe(true);
@@ -43,7 +43,7 @@ test('export carries case provenance', async ({ page }) => {
   expect(events.find(e => e.type === 'verdict_submitted').verdict).toMatchObject({ roles: truth, score: 4, total: 4, evidenceIds: [] });
   for (const e of events) {
     expect(e.caseId).toBe('banana-mystery');
-    expect(e.caseVersion).toBe('banana-authored-v3.0.0');
+    expect(e.caseVersion).toBe('banana-authored-v4.0.0');
     expect(e.contentHash).toMatch(/^[0-9a-f]{12}$/);
   }
   expect(events.find(e => e.type === 'session_started').assignment).toBe('fixed');

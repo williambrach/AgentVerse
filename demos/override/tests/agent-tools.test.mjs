@@ -217,15 +217,15 @@ test('rehearsal inspect and chatter resolve through a shuffled cast', async t =>
   await ask('momo');
   await act('inspect', { character: 'momo' });
   const reasoning = g.session.inspections[0].reasoning;
-  assert.ok(reasoning.startsWith('Kiki sounded so sure, so I did not stop to wonder.'), reasoning);
+  assert.ok(reasoning.includes('Kiki sounded certain that the keeper wanted something different.'), reasoning);
   assert.doesNotMatch(reasoning, PART_OR_ROLE);
   // The same rotate deals the speaking order: pip, nori, kiki, momo.
   for (let i = 0; i < 4; i++) await act('continue');
   assert.deepEqual(g.session.thread.map(l => l.character), ['pip', 'nori', 'kiki', 'momo']);
   const post = g.session.thread.find(l => l.character === 'momo');
-  assert.equal(post.text, 'Kiki, you told me we could take them, so I did. I never heard a bell, though. Nori, did you? I keep wondering why I did not check with the keeper first.');
+  assert.equal(post.text, 'Kiki, you said the keeper wanted the basket behind our blanket. I believed you. Why is everyone looking at me as though I took the bananas?');
   assert.doesNotMatch(post.text, PART_OR_ROLE);
-  assert.equal(g.session.thread.find(l => l.character === 'pip').text, 'Quiet morning on the path. Nobody came by, not once. Momo, you did all the heavy lifting. Kiki, the picnic looked lovely from where I sat.');
+  assert.equal(g.session.thread.find(l => l.character === 'pip').text, 'Yes, I had the bananas after the basket moved. Momo carried the closed basket, though. That is a different thing from taking what was inside it.');
 });
 
 test('replay of a v3 log restores economy, cast, thread and inspections', async t => {

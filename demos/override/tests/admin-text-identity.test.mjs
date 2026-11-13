@@ -13,7 +13,8 @@ const sha12 = value => createHash('sha256').update(JSON.stringify(value)).digest
 
 // Byte identity with main: with no edits, prompts, publicView and the content hash are unchanged.
 const PINS = {
-  'banana-mystery': { contentHash: '8826bc512257', view: 'fdfbf725a8d6', interview: 'ec52730b9d9c', thread: '31c9a6381a76' },
+  // Banana v4: simplified theft and case-specific role hints.
+  'banana-mystery': {"contentHash":"803702850a68","view":"5572b5855f30","interview":"64b795720908","thread":"406ea14ae492"},
   // Friends v2.1.0 (two answers: conspiracist or not): re-pinned on purpose; prompts differ only by the version string.
   'friends-roundtable': { contentHash: '4759ebe192a4', view: 'e7210defe415', interview: 'dbf2e6248e6f', thread: '8b33f124d5ca' },
   'factory-escape': { contentHash: '3c549c8bb2f9', view: 'e6f5b8e91c13', interview: 'c879fd6e80e6', thread: '612f762dbdc3' },

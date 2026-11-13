@@ -113,7 +113,7 @@ test('banana_carrier_keywords_word_bounded', () => {
   assert.doesNotMatch(r('Did you believe them?'), fooled);
   assert.doesNotMatch(r('Is the planner reliable?'), fooled);
   assert.match(r('Did they lie to you?'), fooled);
-  assert.match(r('The keeper never said yes.'), fooled);
+  assert.match(r('The instruction was fake.'), fooled);
 });
 
 const W3 = agentWorlds(3), W5 = agentWorlds(5);

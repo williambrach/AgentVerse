@@ -34,8 +34,8 @@ export function flagsFor(characterId, question, answer) {
   const part = cast[characterId];
   if (part === 'planner' && question === quick && !/made (it )?up|lied|invent|not true/i.test(answer)) flags.push('planner_no_admission');
   if (part === 'carrier' && /hungry/i.test(answer)) flags.push('carrier_knows_motive');
-  if (part === 'lookout' && question === quick && !/keeper|rule|caught|wrong|against/i.test(answer)) flags.push('lookout_no_admission');
-  if (part === 'minder' && question === quick && !/(never|didn'?t|did not) hear/i.test(answer)) flags.push('minder_heard_bell');
+  if (part === 'lookout' && question === quick && !/fake|lie|lied|wrong|against/i.test(answer)) flags.push('lookout_no_admission');
+  if (part === 'minder' && question === quick && !(/basket/i.test(answer) && /banana/i.test(answer))) flags.push('minder_missing_observation');
   return flags;
 }
 

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cases } from '../server/cases/index.mjs';
+import { defineCase } from '../server/cases.mjs';
+import { partCase, agentWorlds } from './fixtures/minimal-case.mjs';
 import { ROLES } from '../server/roles.mjs';
 import { rawOf, fieldsOf, getPath, setPath, editPathOf } from '../server/content-paths.mjs';
 import talkCase from './fixtures/renaissance-talk.mjs'; // the talk-mode Castelvento v1
@@ -47,7 +49,7 @@ test('walks_every_case', () => {
 });
 
 test('roles_default_materialized', () => {
-  const raw = rawOf(byId('banana-mystery'));
+  const raw = rawOf(defineCase(partCase, { worlds: agentWorlds(3) }));
   assert.deepEqual(raw.roles, ROLES);
   assert.equal(fieldsOf(raw).find(f => f.path === 'roles.villain.label').value, 'Villain');
   assert.equal(raw.world, byId('banana-mystery').world.id);
