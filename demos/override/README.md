@@ -41,7 +41,7 @@ OVERRIDE_LLM_MODEL=zai-org/GLM-5.3-Flash
 OVERRIDE_LLM_REASONING_EFFORT=low
 ```
 
-`OVERRIDE_LLM_REASONING_EFFORT` is sent as `reasoning_effort`; leave it empty for a model that does not accept it. GLM 5.3 Flash takes `low` and `high` and answers `400 Unsupported reasoning effort` to `medium`, which fails every interview. `low` keeps reasoning to a few words, and once a conversation is under way the model often skips it: measured on interview lines on 2026-10-30, `low` returned reasoning on 0 of 24 lines, `high` on 18 of 24, and empty on 12 of 12, with answers about 2.5 times slower. When a line has no reasoning, Inspect stays available and tells the player the character did not think; that costs no coins and no charge. In an endpoints file the field is `reasoningEffort`.
+`OVERRIDE_LLM_REASONING_EFFORT` is sent as `reasoning_effort` and defaults to `low` when unset or empty; set it to `none` for a model that does not accept the field. Do not leave the field off for GLM 5.3 Flash on the SDU endpoint: without it the provider uses `max`, the model can spend the whole token budget thinking, and the line fails or times out. GLM 5.3 Flash takes `low` and `high` and answers `400 Unsupported reasoning effort` to `medium`, which fails every interview. `low` keeps reasoning to a few words, and once a conversation is under way the model often skips it: measured on interview lines on 2026-10-30, `low` returned reasoning on 0 of 24 lines, `high` on 18 of 24, and empty on 12 of 12, with answers about 2.5 times slower. When a line has no reasoning, Inspect stays available and tells the player the character did not think; that costs no coins and no charge. In an endpoints file the field is `reasoningEffort`; it also defaults to `low`, and `null` or `"none"` sends nothing.
 
 Restart the server after changing configuration. Credentials remain on the server and are excluded from the browser bundle, exports, Git, and Docker build context. The server uses native `fetch`; no OpenAI SDK or AgentVerse Python dependencies are required.
 
@@ -325,7 +325,7 @@ It prints a table per endpoint with review flags (empty, length, a character out
 | `OVERRIDE_ENDPOINTS` | unset | Path to the endpoints JSON; replaces the three above. |
 | `OVERRIDE_ENDPOINT_<X>_KEY` | unset | Keys named by `keyEnv` in the endpoints file. |
 | `OVERRIDE_LLM_MAX_COMPLETION_TOKENS` | 2048 | Token budget including reasoning (256 to 8192). |
-| `OVERRIDE_LLM_REASONING_EFFORT` | empty | Sent as `reasoning_effort`; empty sends nothing (see *Live interviews*). |
+| `OVERRIDE_LLM_REASONING_EFFORT` | `low` | Sent as `reasoning_effort`; `none` sends nothing (see *Live interviews*). |
 | `OVERRIDE_LLM_TIMEOUT_MS` | 60000 | Per-question deadline. |
 | `OVERRIDE_LLM_MAX_IN_FLIGHT` | 300 | Global cap on simultaneous LLM calls. A single endpoint set with `OVERRIDE_LLM_API_KEY` is capped at 200 of these. |
 | `OVERRIDE_LLM_FAILOVER_FAILURES` | 5 | Failures that trigger failover. |

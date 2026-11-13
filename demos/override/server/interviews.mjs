@@ -33,6 +33,9 @@ function checkBaseUrl(raw, label = 'The model endpoint') {
 }
 
 const EFFORTS = ['low', 'medium', 'high'];
+// Unset means low: providers such as SDU default to max, which spends the whole budget thinking.
+// "none" (or null in an endpoints file) sends no reasoning_effort, for a model that rejects the field.
+export const DEFAULT_EFFORT = 'low';
 
 // The hash covers everything but the key, so two machines with different keys but the same routing agree.
 const hashEndpoints = endpoints => createHash('sha256')
@@ -60,8 +63,8 @@ export function loadEndpoints(env = process.env, readFile = path => readFileSync
     if (!['max_completion_tokens', 'max_tokens'].includes(tokenParam)) throw new Error(`${label}: tokenParam must be max_completion_tokens or max_tokens.`);
     const temperature = raw.temperature ?? null;
     if (temperature !== null && !(typeof temperature === 'number' && temperature >= 0 && temperature <= 2)) throw new Error(`${label}: temperature must be a number between 0 and 2.`);
-    const reasoningEffort = raw.reasoningEffort ?? null;
-    if (reasoningEffort !== null && !EFFORTS.includes(reasoningEffort)) throw new Error(`${label}: reasoningEffort must be low, medium or high.`);
+    const reasoningEffort = raw.reasoningEffort === undefined ? DEFAULT_EFFORT : raw.reasoningEffort === 'none' ? null : raw.reasoningEffort;
+    if (reasoningEffort !== null && !EFFORTS.includes(reasoningEffort)) throw new Error(`${label}: reasoningEffort must be low, medium, high or none.`);
     return {
       name, baseUrl: checkBaseUrl(raw.baseUrl ?? '', label), model: model.trim(), key, keyEnv,
       maxInFlight: integerSetting(raw.maxInFlight, 200, `${label}: maxInFlight`, 1, 1000), tokenParam,
@@ -81,8 +84,9 @@ export function modelConfig(env = process.env) {
     failures: integerSetting(env.OVERRIDE_LLM_FAILOVER_FAILURES, 5, 'OVERRIDE_LLM_FAILOVER_FAILURES', 1, 1000),
     windowMs: integerSetting(env.OVERRIDE_LLM_FAILOVER_WINDOW_MS, 30_000, 'OVERRIDE_LLM_FAILOVER_WINDOW_MS', 1000, 600_000),
   };
-  const effortRaw = env.OVERRIDE_LLM_REASONING_EFFORT?.trim() || null;
-  if (effortRaw !== null && !EFFORTS.includes(effortRaw)) throw new Error('OVERRIDE_LLM_REASONING_EFFORT must be low, medium or high.');
+  const effortSetting = env.OVERRIDE_LLM_REASONING_EFFORT?.trim() || DEFAULT_EFFORT;
+  const effortRaw = effortSetting === 'none' ? null : effortSetting;
+  if (effortRaw !== null && !EFFORTS.includes(effortRaw)) throw new Error('OVERRIDE_LLM_REASONING_EFFORT must be low, medium, high or none.');
   // Optional: one seed for every game's "Let them talk" order, to replay a run.
   const talkSeed = env.OVERRIDE_TALK_SEED?.trim() || null;
   const shared = { promptVersion, maxCompletionTokens, timeoutMs, maxInFlight, failover, ...(talkSeed ? { talkSeed } : {}) };

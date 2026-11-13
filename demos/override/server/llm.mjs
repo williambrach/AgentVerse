@@ -46,7 +46,7 @@ export class LlmRouter {
   }) {
     this.eps = endpoints.map(e => ({
       ...e, baseUrl: e.baseUrl.replace(/\/$/, ''), host: new URL(e.baseUrl).host, maxInFlight: e.maxInFlight ?? 200,
-      tokenParam: e.tokenParam || 'max_completion_tokens', timeoutMs: e.timeoutMs ?? 25_000, temperature: e.temperature ?? null, reasoningEffort: e.reasoningEffort ?? null,
+      tokenParam: e.tokenParam || 'max_completion_tokens', timeoutMs: e.timeoutMs ?? 25_000, temperature: e.temperature ?? null, reasoningEffort: e.reasoningEffort === undefined ? 'low' : e.reasoningEffort,
       inFlight: 0, failureTimes: [], recent: [], lastSuccessAt: null, lastFailureAt: null, lastFailureReason: null, lastAlertAt: -Infinity,
     }));
     Object.assign(this, { maxInFlight, deadlineMs, maxCompletionTokens, failover, fetcher, now, sleep });

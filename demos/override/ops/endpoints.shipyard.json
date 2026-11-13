@@ -1,0 +1,4 @@
+[
+  { "name": "glm", "baseUrl": "https://ai.cloud.sdu.dk/v1", "model": "zai-org/GLM-5.3-Flash", "keyEnv": "OVERRIDE_LLM_API_KEY", "maxInFlight": 200, "timeoutMs": 30000, "temperature": null, "reasoningEffort": "low", "tokenParam": "max_completion_tokens" },
+  { "name": "deepseek", "baseUrl": "https://ai.cloud.sdu.dk/v1", "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017", "keyEnv": "OVERRIDE_LLM_API_KEY", "maxInFlight": 200, "timeoutMs": 30000, "temperature": null, "reasoningEffort": "low", "tokenParam": "max_completion_tokens" }
+]

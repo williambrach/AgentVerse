@@ -38,7 +38,7 @@ test('complete returns content and provenance for a healthy endpoint', async () 
   assert.equal(out.content, 'Momo told me.');
   assert.deepEqual({ ...out.provenance, traceIds: out.provenance.traceIds.length, durationMs: 0, queueMs: 0 }, {
     endpoint: 'a', apiBaseHost: 'a.test', providerModel: 'model-a', attempts: 1, failedOver: false, pinned: false, queueMs: 0, durationMs: 0,
-    promptTokens: 812, completionTokens: 9, reasoningTokens: null, samplingParams: { max_completion_tokens: 2048, temperature: null }, traceIds: 1, semanticRetry: false,
+    promptTokens: 812, completionTokens: 9, reasoningTokens: null, samplingParams: { max_completion_tokens: 2048, temperature: null, reasoning_effort: 'low' }, traceIds: 1, semanticRetry: false,
   });
   assert.equal(out.provenance.traceIds[0], traces[0].traceId);
 });
@@ -50,7 +50,7 @@ test('request goes to the endpoint with its key, model, token parameter and temp
   const c = f.calls[0];
   assert.equal(c.url, 'https://a.test/v1/chat/completions');
   assert.equal(c.init.headers.Authorization, 'Bearer secret-key-a');
-  assert.deepEqual(c.body, { model: 'model-a', messages: MSGS, max_tokens: 2048, temperature: 0.7 });
+  assert.deepEqual(c.body, { model: 'model-a', messages: MSGS, max_tokens: 2048, temperature: 0.7, reasoning_effort: 'low' });
 });
 
 test('max_two_calls: A 500 and B 500 make exactly 2 fetches', async () => {
@@ -405,12 +405,12 @@ test('an internal throw after a fetch still frees the slot', async () => {
   await r.idle();
 });
 
-test('effort_sent_only_when_set', async () => {
+test('effort_low_by_default_and_off_when_null', async () => {
   const f = fakeFetch({});
-  await new LlmRouter({ endpoints: [ep('a', { reasoningEffort: 'low' })], fetcher: f.fetcher }).complete({ messages: MSGS });
+  await new LlmRouter({ endpoints: [ep('a')], fetcher: f.fetcher }).complete({ messages: MSGS });
   assert.equal(f.calls[0].body.reasoning_effort, 'low');
   const g = fakeFetch({});
-  const out = await new LlmRouter({ endpoints: [ep('a')], fetcher: g.fetcher }).complete({ messages: MSGS });
+  const out = await new LlmRouter({ endpoints: [ep('a', { reasoningEffort: null })], fetcher: g.fetcher }).complete({ messages: MSGS });
   assert.ok(!('reasoning_effort' in g.calls[0].body));
   assert.ok(!('reasoning_effort' in out.provenance.samplingParams));
   let n = 0;

@@ -4,6 +4,7 @@
 # Game:  https://arbitergame.brch.sk (Traefik -> 3001)
 # Admin: https://arbitergame-admin.brch.sk/admin (Traefik -> 3002, admin password only)
 # Text edits published on the admin page land in ./content of this checkout.
+# Model endpoints: ops/endpoints.shipyard.json (GLM-5.3-Flash, then DeepSeek V4.1 Flash).
 services:
   imadacup:
     image: agentverse-override:latest
@@ -26,9 +27,14 @@ services:
       # Admin is reached through Traefik on its own hostname; the limiter keys on the real client.
       OVERRIDE_ADMIN_HOSTS: arbitergame-admin.brch.sk
       OVERRIDE_ADMIN_TRUST_PROXY: "1"
+      # Two SDU models with failover: GLM-5.3-Flash first, DeepSeek V4.1 Flash when it fails (a 5xx, a
+      # timeout, or repeated failures). Both use OVERRIDE_LLM_API_KEY from the .env; the file holds no keys.
+      # With this set, OVERRIDE_LLM_BASE_URL and OVERRIDE_LLM_MODEL in the .env are ignored.
+      OVERRIDE_ENDPOINTS: /app/ops/endpoints.json
     volumes:
       - imadacup-data:/app/data
       - ./content:/app/content
+      - ./ops/endpoints.shipyard.json:/app/ops/endpoints.json:ro
     healthcheck:
       test:
         - CMD
