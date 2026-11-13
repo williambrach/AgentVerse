@@ -4,7 +4,7 @@ html[data-theme="grove"] { --accent: #8CC56A; --sky: #BFE0EE; --ground: #A7CF7E;
 html[data-theme="tower"] { --accent: #B9A2EE; --sky: #DCD3F2; --ground: #A99BD0; }
 html { --accent: #8CC56A; --sky: #BFE0EE; --ground: #A7CF7E; }
 html, body { background: #0F1B22; color: #F4EBD3; }
-body { font-family: 'Pixelify Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+body { font-family: var(--font); font-variant-numeric: tabular-nums; }
 #app { position: relative; display: flex; flex-direction: column; gap: 16px; box-sizing: border-box; height: 100vh; height: 100dvh; padding: 0; overflow: hidden; font-family: inherit; }
 /* Click-through only once the HUD shell is up: the team gate and the access screen render inside #app before it, and must take clicks. */
 #app[data-hud] { padding: 16px; pointer-events: none; }
@@ -95,22 +95,22 @@ body { font-family: 'Pixelify Sans', system-ui, sans-serif; font-variant-numeric
 
 /* Arbiter tools in the rail */
 #toolbelt { display: flex; flex-direction: column; gap: 6px; margin: 0; }
-#toolbelt .toolbelt-label { width: auto; padding: 0 2px; font: 600 11px 'Pixelify Sans', system-ui, sans-serif; letter-spacing: 1px; color: #5CC8F5; }
+#toolbelt .toolbelt-label { width: auto; padding: 0 2px; font: 600 11px var(--font); letter-spacing: 1px; color: #5CC8F5; }
 #toolbelt .toolbelt-cards { display: flex; flex-direction: column; gap: 8px; }
 #toolbelt .tool-card { min-height: 56px; padding: 8px 12px; border: 2px solid #5CC8F5; border-radius: 6px; background: #0F1B22EB; color: #F4EBD3; box-shadow: 0 4px 0 #0A1217; }
 #toolbelt .tool-card:hover { background: #17303C; }
 #toolbelt .tool-card:has(.tool-button:focus-visible) { outline: 3px solid #F4B740; outline-offset: 2px; }
 #toolbelt .tool-icon { width: 30px; height: 30px; background: #5CC8F5; color: #0F1B22; }
-#toolbelt .tool-button { min-height: 24px; font: 600 16px/1.3 'Pixelify Sans', system-ui, sans-serif; color: #F4EBD3; }
+#toolbelt .tool-button { min-height: 24px; font: 600 16px/1.3 var(--font); color: #F4EBD3; }
 #toolbelt .tool-status { font-size: 13px; color: #A9BEC6; }
 #toolbelt .tool-card:not(.off) .tool-chip, #toolbelt .tool-chip { background: #1B3340; color: #F4EBD3; }
 #toolbelt .tool-card.off { border-color: #355A6B; border-style: dashed; background: #0F1B22B3; color: #A9BEC6; box-shadow: none; }
 #toolbelt .tool-card.off .tool-icon { background: #355A6B; color: #A9BEC6; }
 #toolbelt .tool-card.off .tool-button { color: #A9BEC6; }
-#toolbelt .tool-new { top: -10px; left: 44px; background: #F4B740; color: #18252D; font: 700 11px/1.5 'Pixelify Sans', system-ui, sans-serif; letter-spacing: 1px; }
+#toolbelt .tool-new { top: -10px; left: 44px; background: #F4B740; color: #18252D; font: 700 11px/1.5 var(--font); letter-spacing: 1px; }
 #toolbelt .tool-card.fresh { animation: hud-glow 1.4s ease-in-out 4; }
 @keyframes hud-glow { 50% { box-shadow: 0 0 0 5px #F4B74066, 0 4px 0 #0A1217; } }
-#toolbelt .tool-tipbox { left: calc(100% + 12px); bottom: auto; top: 0; z-index: 40; border: 2px solid #355A6B; background: #0F1B22; font: 13px/1.35 'Pixelify Sans', system-ui, sans-serif; color: #F4EBD3; }
+#toolbelt .tool-tipbox { left: calc(100% + 12px); bottom: auto; top: 0; z-index: 40; border: 2px solid #355A6B; background: #0F1B22; font: 13px/1.35 var(--font); color: #F4EBD3; }
 
 /* Verdict button */
 .verdict-button { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 12px 14px; text-align: left; background: #F4B740 !important; border: 2px solid #18252D !important; box-shadow: 0 4px 0 #8A5E10 !important; color: #18252D !important; cursor: pointer; }
@@ -167,7 +167,7 @@ body { font-family: 'Pixelify Sans', system-ui, sans-serif; font-variant-numeric
 /* The dossier frame: parchment for pages (briefing, debrief, thread), none for the dialogue, which draws its own box. */
 .dossier { padding: 0; isolation: auto; }
 .dossier::before { display: none; }
-#notebook-section { display: block; margin: 0; font: 13px/1.2 'Pixelify Sans', system-ui, sans-serif; color: #55646B; }
+#notebook-section { display: block; margin: 0; font: 13px/1.2 var(--font); color: #55646B; }
 #app #panel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; background: none; perspective: none; }
 #app .notebook-page { flex: 1 1 auto; min-height: 0; background: none; box-shadow: none; }
 #app .page-turn-shade { display: none; }
@@ -217,7 +217,7 @@ body { font-family: 'Pixelify Sans', system-ui, sans-serif; font-variant-numeric
 /* The card holds icon + label + chip; Read thread drops to its own row so the full label always fits. */
 #app #toolbelt .tool-card[data-card="continue"] { flex-wrap: wrap; row-gap: 6px; }
 #app #toolbelt .tool-text { flex: 1 1 0; min-width: 0; }
-#app #toolbelt .thread-button { flex: 1 0 100%; margin: 0; padding: 4px 10px; border: 1px solid #5CC8F5; border-radius: 4px; background: #0F1B22; color: #F4EBD3; font: 600 13px/1.3 'Pixelify Sans', system-ui, sans-serif; cursor: pointer; }
+#app #toolbelt .thread-button { flex: 1 0 100%; margin: 0; padding: 4px 10px; border: 1px solid #5CC8F5; border-radius: 4px; background: #0F1B22; color: #F4EBD3; font: 600 13px/1.3 var(--font); cursor: pointer; }
 #app #toolbelt .thread-button:hover:not(:disabled) { background: #1B3340; border-color: #8FD8F8; }
 /* style.css fades every disabled button to .5 opacity, which put the off-state text under 4.5:1 over the card. */
 #app #toolbelt .tool-button:disabled, #app #toolbelt .thread-button:disabled { opacity: 1; cursor: not-allowed; }

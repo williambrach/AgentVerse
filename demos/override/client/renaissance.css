@@ -3,10 +3,10 @@
 #app[data-world="renaissance"] .hud-rail .cast-card { background: #e9d9b3; border-color: #7a2132; color: #3b2a1a; }
 #app[data-world="renaissance"] .hud-rail .cast-card.active, #app[data-world="renaissance"] .hud-rail .cast-card.talking { border-color: #7a2132; box-shadow: 0 0 0 2px #7a213255; }
 #app[data-world="renaissance"] .hud-rail .cast-card small { color: #6b5236; }
-#app[data-world="renaissance"] .panel, #app[data-world="renaissance"] .debrief-page { background: #f1e4c3; color: #3b2a1a; font-family: Georgia, 'Times New Roman', serif; }
+#app[data-world="renaissance"] .panel, #app[data-world="renaissance"] .debrief-page { background: #f1e4c3; color: #3b2a1a; font-family: var(--font); }
 /* The accuse page gets its parchment from the dossier frame, not from a background on .accuse-panel: that panel sits in the scrolling notebook-page inside an overflow:visible dossier, and its own background painted as a blank block over the top of the world (the page is 290px tall at y 468, the block 290px tall at y 38). */
 #app[data-world="renaissance"] .dossier:not(:has(.dialogue)) { background: #f1e4c3; }
-#app[data-world="renaissance"] .accuse-panel { color: #3b2a1a; font-family: Georgia, 'Times New Roman', serif; }
+#app[data-world="renaissance"] .accuse-panel { color: #3b2a1a; font-family: var(--font); }
 #app[data-world="renaissance"] .topic-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 #app[data-world="renaissance"] .topic-chips button { background: #e9d9b3; color: #3b2a1a; border: 1px solid #7a2132; border-radius: 3px; padding: 4px 8px; cursor: pointer; }
 #app[data-world="renaissance"] .topic-chips button:disabled { opacity: .5; }

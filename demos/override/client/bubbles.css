@@ -2,7 +2,7 @@
   position: absolute; box-sizing: border-box; display: flex; align-items: flex-end;
   width: calc(var(--u) * 140); height: auto; max-height: calc(var(--u) * var(--max, 78));
   padding: calc(var(--u) * 4) calc(var(--u) * 5);
-  font: 500 15px / 1.3 'Pixelify Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums;
+  font: 500 15px / 1.3 var(--font); font-variant-numeric: tabular-nums;
   color: var(--label, #40533c); background: var(--label-bg, #fff6dd);
   border: calc(var(--u) * 1.5) solid var(--label, #40533c);
   animation: bubble-in .18s ease-out;
