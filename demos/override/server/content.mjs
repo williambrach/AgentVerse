@@ -10,7 +10,7 @@ import { worlds as liveWorlds } from './worlds.mjs';
 
 const MAX_TEXT = 2000;
 // The rules hold the whole shared prompt, facts everyone knows included, so they get more room.
-const MAX_RULES = 4000;
+const MAX_RULES = 12000;
 const GAME = 'game';
 
 export class ContentError extends Error {

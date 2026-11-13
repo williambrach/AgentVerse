@@ -67,8 +67,8 @@ test('content_store: part rules publish and get the rules size limit', t => {
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const store = createContentStore({ cases: [defineCase(withRules(), { worlds })], dataDir: dir, contentDir: join(dir, 'tracked'), worlds });
   const long = n => `${'x'.repeat(n - '[[knowledge]]'.length)}[[knowledge]]`;
-  store.publish('mini-parts', { 'parts.boss.rules': long(4000) }, { by: 'a', baseRev: 0 });
-  assert.equal(store.current('mini-parts').parts[0].rules.length, 4000);
-  assert.throws(() => store.preview('mini-parts', { 'parts.boss.rules': long(4001) }), e => e instanceof ContentError && e.path === 'parts.boss.rules');
+  store.publish('mini-parts', { 'parts.boss.rules': long(12000) }, { by: 'a', baseRev: 0 });
+  assert.equal(store.current('mini-parts').parts[0].rules.length, 12000);
+  assert.throws(() => store.preview('mini-parts', { 'parts.boss.rules': long(12001) }), e => e instanceof ContentError && e.path === 'parts.boss.rules');
   assert.throws(() => store.preview('mini-parts', { 'parts.boss.rules': 'no token' }), e => e instanceof ContentError && e.path === 'parts.boss.rules');
 });

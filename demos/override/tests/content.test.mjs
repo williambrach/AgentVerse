@@ -87,8 +87,8 @@ test('string_over_2000_chars_400', () => {
 test('rules_hold_up_to_4000_chars', () => {
   const { store } = make();
   const rules = n => `${'x'.repeat(n - '[[knowledge]]'.length)}[[knowledge]]`;
-  assert.equal(store.preview('mini-parts', { rules: rules(4000) }).rules.length, 4000);
-  fail(() => store.preview('mini-parts', { rules: rules(4001) }), 400, 'rules');
+  assert.equal(store.preview('mini-parts', { rules: rules(12000) }).rules.length, 12000);
+  fail(() => store.preview('mini-parts', { rules: rules(12001) }), 400, 'rules');
 });
 
 test('preview_is_not_persisted', () => {
