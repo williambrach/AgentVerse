@@ -150,7 +150,10 @@ export default defineCase({
       if (/keeper|instruction|fake|know|knew|why|plan|permission|lie/.test(q)) return 'I knew the instruction was fake. {planner} told me the plan, and I agreed to take the bananas for a share.';
       return 'I took the bananas after {carrier} moved the basket behind the blanket. {planner} had asked me to take them.';
     }
-    if (/why|knew|know|permission|instruction|plan/.test(q)) return 'I don’t know why {carrier} moved it or what they were told. I only know what I saw. You should ask them.';
+    // A question about what happened gets the observation, even when it says "know" ("Do you know who took the bananas?").
+    const asksWhatHappened = /\bwho (took|stole|moved|carried|had)\b|\b(see|saw|seen)\b|what happened/.test(q);
+    const asksMotive = /\bwhy\b|\btold\b|\bknew\b|\b(did|does) \S+ know\b|instruction|permission|\b(fake|lie|lied|lying)\b/.test(q);
+    if (asksMotive && !asksWhatHappened) return 'I don’t know why {carrier} moved it or what they were told. I only know what I saw. You should ask them.';
     return 'I saw {carrier} move the closed basket behind the blanket. Then I saw {lookout} take the bananas from it.';
   },
   rehearsalReasoning(partId) {

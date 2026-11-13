@@ -148,3 +148,18 @@ test('v4 fidelity accepts the scripted facts', async () => {
   assert.deepEqual(flagsFor('nori', 'Did you know the keeper’s instruction was fake?', 'I knew the instruction was fake. I agreed to take the bananas for a share.'), []);
   assert.deepEqual(flagsFor('kiki', 'What did you see?', 'I saw Pip move the closed basket. Then I saw Nori take the bananas from it.'), []);
 });
+
+// Denials must be flagged even when they repeat words from the question.
+test('v4 fidelity flags denials', () => {
+  const lookoutQuick = 'Did you know the keeper’s instruction was fake?';
+  for (const denial of [
+    'No, I had no idea it was fake. I only found the bananas behind the blanket later.',
+    'No! I honestly believed the keeper really wanted the basket moved, so I just went along.',
+    'I didn’t know it was a lie. Momo only asked me to wait behind the blanket for a while.',
+  ]) assert.deepEqual(flagsFor('nori', lookoutQuick, denial), ['lookout_no_admission'], denial);
+  for (const denial of [
+    'I saw nothing at all, no basket moving and no bananas taken from anywhere today.',
+    'I saw the basket move behind the blanket and later the bananas were gone, nothing more.',
+    'Pip moved the basket and Nori took the bananas, but honestly I did not see anything myself.',
+  ]) assert.deepEqual(flagsFor('kiki', 'What did you see?', denial), ['minder_missing_observation'], denial);
+});

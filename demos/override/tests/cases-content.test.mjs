@@ -42,6 +42,10 @@ test('rehearsal_tables: banana', () => {
   assert.match(r('lookout', 'What happened?'), /I took the bananas/);
   assert.match(r('minder', 'What did you see?'), /saw \{lookout\} take the bananas/);
   assert.match(r('minder', 'Why did the carrier move it?'), /I don’t know why/);
+  assert.match(r('minder', 'Did the carrier know it was fake?'), /I don’t know why/);
+  for (const q of ['Do you know who took the bananas?', 'What do you know?', 'Did you see the planner?']) {
+    assert.match(r('minder', q), /saw \{carrier\} move the closed basket.*saw \{lookout\} take the bananas/, q);
+  }
   for (const p of banana.parts) assert.match(r(p.id, p.quickQuestion), /\S/);
 });
 

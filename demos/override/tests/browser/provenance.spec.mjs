@@ -2,16 +2,18 @@ import { test, expect, joinTeam } from './team.mjs';
 import { castOf, truthOf, sessionIdOf, pickRole } from './cast.mjs';
 
 const LEAKS = [
-  'you wanted the bananas now',
-  'Momo made up the permission.',
+  'That instruction was a lie.',
+  'You knew the instruction was fake',
+  'Do not claim the keeper gave permission.',
+  'knew about the lie and took the bananas from there.',
   'You spotted the made-up permission!',
-  'Do not claim the bell rang',
   'Nobody broke the rule.',
   'Right. Nobody broke the rule.',
   'Nobody knowingly broke the rule this time.',
   'Every role right! You saw who planned, who knowingly helped, who was fooled, and who told the truth.',
   'Ask who believed the instruction and who knew it was fake.',
-  'Knew the rule. Made up the permission.',
+  'Invented the lie. Planned the theft.',
+  'Believed the lie. Unknowingly helped.',
 ];
 
 test('export carries case provenance', async ({ page }) => {
