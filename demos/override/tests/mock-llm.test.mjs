@@ -82,6 +82,30 @@ test('reasoning option adds reasoning_content to ok replies and can be toggled',
   } finally { await mock.close(); }
 });
 
+test('stream: true answers as SSE with deltas and [DONE]', async () => {
+  const mock = await startMockLlm({ delayMs: [0, 0], reasoning: 'A quiet thought.', streamChunkMs: 1 });
+  try {
+    const res = await post(mock, { messages: [], stream: true });
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /text\/event-stream/);
+    const events = (await res.text()).trim().split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim());
+    assert.equal(events.at(-1), '[DONE]');
+    const chunks = events.slice(0, -1).map(l => JSON.parse(l));
+    const thought = chunks.flatMap(c => c.choices[0].delta.reasoning_content ? [c.choices[0].delta.reasoning_content] : []).join('');
+    const text = chunks.flatMap(c => c.choices[0].delta.content ? [c.choices[0].delta.content] : []).join('');
+    assert.equal(thought, 'A quiet thought.');
+    assert.equal(text, 'I never heard the bell, so I guessed it was snack time.');
+    assert.ok(chunks.length > 3, 'the line arrives in pieces');
+    assert.equal(chunks.at(-1).choices[0].finish_reason, 'stop');
+    assert.deepEqual(chunks.at(-1).usage, { prompt_tokens: 120, completion_tokens: 12 });
+    assert.equal(mock.stats.byStatus[200], 1);
+    mock.setMode('error500');
+    const bad = await post(mock, { messages: [], stream: true });
+    assert.equal(bad.status, 500);
+    assert.match(bad.headers.get('content-type'), /application\/json/);
+  } finally { await mock.close(); }
+});
+
 test('until_rejects_on_timeout', async () => {
   await assert.rejects(until(() => false, { timeoutMs: 50 }), /timed out/);
   // A predicate call that never settles is bounded too.

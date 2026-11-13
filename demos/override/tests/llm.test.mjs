@@ -39,6 +39,7 @@ test('complete returns content and provenance for a healthy endpoint', async () 
   assert.deepEqual({ ...out.provenance, traceIds: out.provenance.traceIds.length, durationMs: 0, queueMs: 0 }, {
     endpoint: 'a', apiBaseHost: 'a.test', providerModel: 'model-a', attempts: 1, failedOver: false, pinned: false, queueMs: 0, durationMs: 0,
     promptTokens: 812, completionTokens: 9, reasoningTokens: null, samplingParams: { max_completion_tokens: 2048, temperature: null, reasoning_effort: 'low' }, traceIds: 1, semanticRetry: false,
+    streamed: false, firstTokenMs: null,
   });
   assert.equal(out.provenance.traceIds[0], traces[0].traceId);
 });
@@ -290,7 +291,8 @@ test('reasoning_after_semantic_retry: the final attempt reasoning is returned', 
   const { r, traces } = router(['a', 'b'], { a: bad, b: () => ok('fine', { message: { reasoning_content: 'second' } }) });
   const out = await r.complete({ messages: MSGS });
   assert.equal(out.reasoning, 'second');
-  assert.ok(!JSON.stringify(out.provenance).match(/first|second/));
+  const { firstTokenMs: _ft, streamed: _st, ...provenanceIds } = out.provenance;
+  assert.ok(!JSON.stringify(provenanceIds).match(/first|second/));
   assert.deepEqual(traces.map(t => t.response.reasoning), ['first', 'second']); // every attempt's reasoning is saved
 });
 
@@ -506,4 +508,121 @@ test('test_attempt_event_has_tokens: attempt events carry usage, failed attempts
   const n = router(['a'], { a: ok('y', { body: { usage: undefined } }) });
   await n.r.complete({ messages: MSGS });
   assert.equal(n.events.find(e => e.type === 'attempt').promptTokens, null);
+});
+
+// ---- streaming ----
+const enc = new TextEncoder();
+const sseBody = parts => (async function* () { for (const p of parts) yield enc.encode(typeof p === 'string' ? p : `data: ${JSON.stringify(p)}\n\n`); })();
+const sseResponse = (parts, { type = 'text/event-stream' } = {}) => ({
+  ok: true, status: 200,
+  headers: { get: n => (n.toLowerCase() === 'content-type' ? type : null) },
+  body: sseBody(parts),
+});
+const dContent = t => ({ choices: [{ index: 0, delta: { content: t } }] });
+const dReason = t => ({ choices: [{ index: 0, delta: { reasoning_content: t } }] });
+const dFinish = (f = 'stop') => ({ choices: [{ index: 0, delta: {}, finish_reason: f }] });
+const uChunk = u => ({ choices: [], usage: u });
+const sseStream = parts => new ReadableStream({ start(c) { for (const p of parts) c.enqueue(enc.encode(typeof p === 'string' ? p : `data: ${JSON.stringify(p)}\n\n`)); c.close(); } });
+
+test('streaming: body, deltas, usage, first token and headers', async () => {
+  const deltas = [];
+  const { r, calls, system } = router(['a'], { a: () => sseResponse([
+    dReason('Momo weighs '), dReason('her words.'),
+    dContent('I never '), dContent('heard the bell.'),
+    dFinish('stop'), uChunk({ prompt_tokens: 812, completion_tokens: 9 }),
+    'data: [DONE]\n\n',
+  ]) });
+  const out = await r.complete({ messages: MSGS, stream: true, onDelta: (kind, text) => deltas.push([kind, text]) });
+  assert.equal(out.content, 'I never heard the bell.');
+  assert.equal(out.reasoning, 'Momo weighs her words.');
+  assert.deepEqual(deltas, [['reasoning', 'Momo weighs '], ['reasoning', 'her words.'], ['content', 'I never '], ['content', 'heard the bell.']]);
+  const c = calls[0];
+  assert.equal(c.body.stream, true);
+  assert.deepEqual(c.body.stream_options, { include_usage: true });
+  assert.equal(c.init.headers.Accept, 'text/event-stream');
+  assert.equal(out.provenance.streamed, true);
+  assert.equal(out.provenance.completionTokens, 9);
+  assert.equal(out.provenance.promptTokens, 812);
+  assert.equal(typeof out.provenance.firstTokenMs, 'number');
+  assert.equal(out.provenance.samplingParams.stream, true);
+  assert.equal(system.length, 0);
+});
+
+test('streaming reads a getReader body, comments, blank lines and corrupt data lines', async () => {
+  const { r } = router(['a'], { a: () => sseResponse([
+    ': keep-alive\n\n', '\n', dContent('One '), 'data: {oops\n\n', dContent('token.'), dFinish(), 'data: [DONE]\n\n',
+  ]) });
+  const out = await r.complete({ messages: MSGS, stream: true });
+  assert.equal(out.content, 'One token.');
+});
+
+test('streaming over a ReadableStream (getReader path)', async () => {
+  const { r } = router(['a'], { a: () => ({ ok: true, status: 200, headers: { get: n => (n.toLowerCase() === 'content-type' ? 'text/event-stream; charset=utf-8' : null) }, body: sseStream([dContent('hello'), dFinish(), 'data: [DONE]\n\n']) }) });
+  const out = await r.complete({ messages: MSGS, stream: true });
+  assert.equal(out.content, 'hello');
+});
+
+test('streaming length retries the same endpoint with the doubled budget', async () => {
+  let n = 0;
+  const seen = [];
+  const { r, calls } = router(['a', 'b'], { a: () => (++n === 1
+    ? sseResponse([dContent('cut off'), dFinish('length'), uChunk({ completion_tokens: 2048 })])
+    : sseResponse([dContent('Done.'), dFinish(), uChunk({ completion_tokens: 4 })])) });
+  const out = await r.complete({ messages: MSGS, stream: true, onDelta: (k, t) => seen.push([k, t]) });
+  assert.deepEqual(calls.map(x => [x.name, x.body.max_completion_tokens]), [['a', 2048], ['a', 4096]]);
+  assert.equal(out.content, 'Done.');
+  assert.deepEqual(seen, [['content', 'cut off'], ['content', 'Done.']], 'the partial from the failed attempt was emitted too');
+  assert.equal(out.provenance.semanticRetry, true);
+});
+
+test('a stream request answered with plain JSON is read buffered', async () => {
+  const { r } = router(['a'], { a: () => ok('buffered answer') });
+  const out = await r.complete({ messages: MSGS, stream: true });
+  assert.equal(out.content, 'buffered answer');
+  assert.equal(out.provenance.streamed, false);
+});
+
+test('a stream-rejecting provider goes buffered: marked once, system logged', async () => {
+  const sys = [];
+  let calls = 0;
+  const f = fakeFetch({ a: () => (++calls === 1
+    ? { ok: false, status: 400, headers: { get: () => null }, text: async () => '{"error":"does not support stream"}', json: async () => ({}) }
+    : ok('buffered now')) });
+  const r = new LlmRouter({ endpoints: [ep('a')], fetcher: f.fetcher, onSystem: s => sys.push(s) });
+  await assert.rejects(r.complete({ messages: MSGS, stream: true }), e => e.code === 'request_failed');
+  assert.equal(sys.length, 1); assert.equal(sys[0].type, 'llm_stream_unsupported'); assert.equal(sys[0].endpoint, 'a');
+  const out = await r.complete({ messages: MSGS, stream: true });
+  assert.equal(out.content, 'buffered now');
+  assert.ok(!('stream' in f.calls[1].body), 'the retry asks buffered');
+  assert.equal(sys.length, 1, 'marked once');
+});
+
+test('stream:false endpoints never send the stream flag', async () => {
+  const f = fakeFetch({});
+  await new LlmRouter({ endpoints: [ep('a', { stream: false })], fetcher: f.fetcher }).complete({ messages: MSGS, stream: true });
+  assert.ok(!('stream' in f.calls[0].body));
+});
+
+test('a stream with no events at all or only [DONE] is invalid_response', async () => {
+  const { r } = router(['a', 'b'], { a: () => sseResponse([]) });
+  const out = await r.complete({ messages: MSGS, stream: true }); // b answers buffered
+  assert.equal(out.provenance.endpoint, 'b');
+});
+
+test('a stalled stream is bounded by the endpoint timeout and fails over', async () => {
+  const hang = () => ({ ok: true, status: 200, headers: { get: n => (n.toLowerCase() === 'content-type' ? 'text/event-stream' : null) }, body: { getReader: () => ({ read: () => new Promise(() => {}), releaseLock() {} }) } });
+  const f = fakeFetch({ a: hang, b: () => ok('from b') });
+  const r = new LlmRouter({ endpoints: [ep('a', { timeoutMs: 40 }), ep('b')], fetcher: f.fetcher });
+  const out = await r.complete({ messages: MSGS, stream: true });
+  assert.deepEqual([out.provenance.endpoint, out.provenance.attempts], ['b', 2]);
+});
+
+test('streamed reasoning is traced whole and never lands in provenance', async () => {
+  const secret = 'Worried about the modern word';
+  const { r, traces } = router(['a'], { a: () => sseResponse([dReason(secret), dContent('fine'), dFinish(), 'data: [DONE]\n\n']) });
+  const out = await r.complete({ messages: MSGS, stream: true });
+  assert.equal(out.reasoning, secret);
+  assert.equal(traces[0].response.reasoning, secret);
+  assert.equal(traces[0].response.content, 'fine');
+  assert.ok(!JSON.stringify(out.provenance).includes(secret));
 });

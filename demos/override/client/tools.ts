@@ -106,6 +106,12 @@ export function reasoningBlock(i: Inspection, name: string): string {
     `<h4>${t('tools.reasoning', { name })}</h4><p>${esc(i.reasoning)}</p></article>`;
 }
 
+/** The reasoning card while a stream runs; tokens are written into `[data-stream="reasoning"]` by textContent. */
+export function liveReasoningBlock(name: string, text: string): string {
+  return `<article class="speech reasoning live" data-motion-key="reasoning-live">` +
+    `<h4>${t('tools.reasoning.live', { name })}</h4><p data-stream="reasoning" aria-live="off">${esc(text)}</p></article>`;
+}
+
 /** Inspect's answer when the character's latest line has no reasoning. */
 export function noThoughtBlock(name: string, line: number): string {
   return `<article class="speech reasoning no-thought" data-motion-key="no-thought-${line}">` +

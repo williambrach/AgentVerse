@@ -34,6 +34,58 @@ function pickReasoning(message) {
   const text = [message?.reasoning_content, message?.reasoning].find(v => typeof v === 'string' && v.trim());
   return text || null;
 }
+
+// One streamed answer read from an OpenAI-style SSE body: data: lines with
+// {"choices":[{"delta":{...}}]}, a usage chunk at the end, then [DONE].
+// A data line that is not JSON is ignored; only a stream that said nothing at all is broken.
+async function* bodyChunks(body) {
+  if (!body) return;
+  if (typeof body.getReader === 'function') {
+    const reader = body.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) yield value;
+      }
+    } finally { try { reader.releaseLock(); } catch { /* already released */ } }
+  } else if (typeof body[Symbol.asyncIterator] === 'function') {
+    for await (const value of body) if (value) yield value;
+  }
+}
+
+const FINISHES = ['stop', 'length', 'content_filter', 'tool_calls'];
+
+export async function readCompletion(body, onDelta) {
+  const dec = new TextDecoder();
+  let rest = '', content = '', reasoning = '', sawEvent = false, finishReason = null, usage = null, providerModel = null;
+  const line = raw => {
+    const text = raw.trim();
+    if (!text.startsWith('data:')) return; // a ':' keep-alive comment or a field we do not use
+    const payload = text.slice(5).trim();
+    if (!payload || payload === '[DONE]') return;
+    let chunk;
+    try { chunk = JSON.parse(payload); } catch { return; }
+    sawEvent = true;
+    if (chunk.usage && typeof chunk.usage === 'object') usage = chunk.usage;
+    if (typeof chunk.model === 'string') providerModel = chunk.model;
+    const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : null;
+    if (!choice) return;
+    if (FINISHES.includes(choice.finish_reason)) finishReason = choice.finish_reason;
+    const d = choice.delta ?? {};
+    if (typeof d.content === 'string' && d.content) { content += d.content; onDelta?.('content', d.content); }
+    const think = [d.reasoning_content, d.reasoning].find(v => typeof v === 'string' && v);
+    if (think) { reasoning += think; onDelta?.('reasoning', think); }
+  };
+  for await (const value of bodyChunks(body)) {
+    rest += dec.decode(value, { stream: true });
+    let i;
+    while ((i = rest.indexOf('\n')) >= 0) { line(rest.slice(0, i)); rest = rest.slice(i + 1); }
+  }
+  rest += dec.decode();
+  if (rest) line(rest);
+  return { content, reasoning, sawEvent, finishReason, usage, providerModel };
+}
 function capReasoning(text) {
   if (!text) return null;
   return text.length > REASONING_CAP ? `${text.slice(0, REASONING_CAP)}…` : text;
@@ -47,6 +99,7 @@ export class LlmRouter {
     this.eps = endpoints.map(e => ({
       ...e, baseUrl: e.baseUrl.replace(/\/$/, ''), host: new URL(e.baseUrl).host, maxInFlight: e.maxInFlight ?? 200,
       tokenParam: e.tokenParam || 'max_completion_tokens', timeoutMs: e.timeoutMs ?? 25_000, temperature: e.temperature ?? null, reasoningEffort: e.reasoningEffort === undefined ? 'low' : e.reasoningEffort,
+      stream: e.stream !== false,
       inFlight: 0, failureTimes: [], recent: [], lastSuccessAt: null, lastFailureAt: null, lastFailureReason: null, lastAlertAt: -Infinity,
     }));
     Object.assign(this, { maxInFlight, deadlineMs, maxCompletionTokens, failover, fetcher, now, sleep });
@@ -141,15 +194,23 @@ export class LlmRouter {
     }
   }
 
+  // A provider 4xx that names "stream" says it does not take stream:true: ask it buffered from now on.
+  markStreamUnsupported(ep, detail) {
+    if (!ep.stream) return;
+    ep.stream = false;
+    this.onSystem({ type: 'llm_stream_unsupported', timestamp: this.iso(), endpoint: ep.name, detail: String(detail ?? '').slice(0, 200) });
+  }
+
   // One HTTP call. Never throws: returns {ok, ...} so callers can trace every outcome.
-  async call(idx, messages, budget, deadline) {
+  async call(idx, messages, budget, deadline, { stream = false, onDelta = null } = {}) {
     const ep = this.eps[idx];
-    const params = { [ep.tokenParam]: budget, temperature: ep.temperature, ...(ep.reasoningEffort ? { reasoning_effort: ep.reasoningEffort } : {}) };
-    const body = { model: ep.model, messages, [ep.tokenParam]: budget, ...(ep.temperature === null ? {} : { temperature: ep.temperature }), ...(ep.reasoningEffort ? { reasoning_effort: ep.reasoningEffort } : {}) };
+    const streaming = stream && ep.stream !== false;
+    const params = { [ep.tokenParam]: budget, temperature: ep.temperature, ...(ep.reasoningEffort ? { reasoning_effort: ep.reasoningEffort } : {}), ...(streaming ? { stream: true } : {}) };
+    const body = { model: ep.model, messages, [ep.tokenParam]: budget, ...(ep.temperature === null ? {} : { temperature: ep.temperature }), ...(ep.reasoningEffort ? { reasoning_effort: ep.reasoningEffort } : {}), ...(streaming ? { stream: true, stream_options: { include_usage: true } } : {}) };
     const remaining = Math.max(1, deadline.endsAt - this.now());
     const signal = AbortSignal.any([deadline.signal, AbortSignal.timeout(Math.min(ep.timeoutMs, remaining))]);
     const started = this.now();
-    const out = { deadlineBound: remaining <= ep.timeoutMs, params, status: null, content: null, finishReason: null, usage: null, providerModel: null, code: null };
+    const out = { deadlineBound: remaining <= ep.timeoutMs, params, status: null, content: null, finishReason: null, usage: null, providerModel: null, code: null, streamed: false, firstTokenMs: null };
     try {
       const aborted = new Promise((_, reject) => {
         const fire = () => reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' }));
@@ -157,30 +218,53 @@ export class LlmRouter {
       });
       const work = (async () => {
         const response = await this.fetcher(`${ep.baseUrl}/chat/completions`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ep.key}` }, body: JSON.stringify(body), signal,
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...(streaming ? { Accept: 'text/event-stream' } : {}), Authorization: `Bearer ${ep.key}` }, body: JSON.stringify(body), signal,
         });
         out.status = response.status;
         out.retryAfter = response.headers?.get?.('retry-after') ?? null;
-        out.data = response.ok ? await response.json() : null;
+        const type = response.headers?.get?.('content-type') ?? '';
+        if (response.ok && streaming && type.includes('event-stream')) {
+          out.streamed = true;
+          const acc = await readCompletion(response.body, (kind, text) => {
+            if (kind === 'content' && out.firstTokenMs === null) out.firstTokenMs = this.now() - started;
+            try { onDelta?.(kind, text); } catch { /* a dead listener must not kill the provider read */ }
+          });
+          out.finishReason = acc.finishReason;
+          out.usage = acc.usage;
+          out.providerModel = acc.providerModel;
+          out.content = typeof acc.content === 'string' && acc.content ? acc.content : null;
+          out.reasoningFull = acc.reasoning || null;
+          if (!acc.sawEvent) out.code = 'invalid_response';
+        } else {
+          out.data = response.ok ? await response.json() : null;
+        }
         return response;
       })();
       work.catch(() => {});
       const response = await Promise.race([work, aborted]);
-      if (!response.ok) out.code = [401, 403].includes(response.status) ? 'credentials_rejected' : response.status === 429 ? 'rate_limited' : 'request_failed';
+      if (!response.ok) {
+        out.code = [401, 403].includes(response.status) ? 'credentials_rejected' : response.status === 429 ? 'rate_limited' : 'request_failed';
+        if (streaming && [400, 404, 415, 422].includes(response.status)) {
+          try { const detail = await response.text(); if (/stream/i.test(detail ?? '')) this.markStreamUnsupported(ep, detail); } catch { /* the body is diagnostics only */ }
+        }
+      }
     } catch (error) {
       if (signal.aborted || ['TimeoutError', 'AbortError'].includes(error.name)) out.code = 'timeout';
       else out.code = error instanceof SyntaxError ? 'invalid_response' : 'connection_failed';
     }
-    if (!out.code) {
+    if (!out.code && !out.streamed) {
       const data = out.data;
       const choice = data?.choices?.[0];
       const text = choice?.message?.content;
-      out.finishReason = ['stop', 'length', 'content_filter', 'tool_calls'].includes(choice?.finish_reason) ? choice.finish_reason : null;
+      out.finishReason = FINISHES.includes(choice?.finish_reason) ? choice.finish_reason : null;
       out.usage = data?.usage && typeof data.usage === 'object' ? data.usage : null;
       out.providerModel = typeof data?.model === 'string' ? data.model : null;
       out.content = typeof text === 'string' ? text : null;
       out.reasoningFull = pickReasoning(choice?.message); // the trace keeps all of it; the game gets the capped text
+    }
+    if (!out.code) {
       out.reasoning = capReasoning(out.reasoningFull);
+      const text = out.content;
       if (out.finishReason === 'length') out.code = 'completion_limit';
       else if (out.finishReason === 'content_filter') out.code = 'content_filter';
       else if (typeof text !== 'string' || !text.trim() || text.length > 6000) out.code = 'empty_or_invalid_answer';
@@ -202,14 +286,18 @@ export class LlmRouter {
     return record.traceId;
   }
 
-  async complete({ messages, sessionId = null, questionEventId = null, onAttempt = () => {}, tag = null }) {
+  async complete({ messages, sessionId = null, questionEventId = null, onAttempt = () => {}, tag = null, stream = false, onStart = null, onDelta = null }) {
     this.begin();
     const deadline = new AbortController();
     deadline.endsAt = this.now() + this.deadlineMs;
     const timer = setTimeout(() => deadline.abort(), this.deadlineMs);
     const track = { attempts: 0, traceIds: [], queueMs: 0, durationMs: 0, first: null, last: null, semanticRetry: false };
     try {
-      return await this.run({ messages, sessionId, questionEventId, tag, onAttempt: safe(onAttempt, 'onAttempt') }, { signal: deadline.signal, endsAt: deadline.endsAt }, track);
+      return await this.run({
+        messages, sessionId, questionEventId, tag, stream, onDelta,
+        onAttempt: safe(onAttempt, 'onAttempt'),
+        onStart: onStart ? safe(onStart, 'onStart') : null,
+      }, { signal: deadline.signal, endsAt: deadline.endsAt }, track);
     } finally { clearTimeout(timer); this.end(); }
   }
 
@@ -223,6 +311,7 @@ export class LlmRouter {
       completionTokens: Number.isInteger(u?.completion_tokens) ? u.completion_tokens : null,
       reasoningTokens: Number.isInteger(u?.completion_tokens_details?.reasoning_tokens) ? u.completion_tokens_details.reasoning_tokens : null,
       samplingParams: result?.params ?? { [ep.tokenParam]: null, temperature: ep.temperature, ...(ep.reasoningEffort ? { reasoning_effort: ep.reasoningEffort } : {}) }, traceIds: track.traceIds, semanticRetry: track.semanticRetry,
+      streamed: result?.streamed === true, firstTokenMs: Number.isInteger(result?.firstTokenMs) ? result.firstTokenMs : null,
     };
   }
   fail(code, track, idx, result) {
@@ -254,7 +343,10 @@ export class LlmRouter {
       track.queueMs += queueMs; track.attempts = n; track.first ??= idx;
       let result;
       let held = idx; // slot guard: any throw below must still free the slot
-      try { result = await this.call(idx, req.messages, budget, deadline); } catch (error) { this.release(idx); throw error; }
+      try {
+        req.onStart?.({ attempt: n, endpoint: this.eps[idx].name });
+        result = await this.call(idx, req.messages, budget, deadline, { stream: req.stream === true, onDelta: req.onDelta });
+      } catch (error) { this.release(idx); throw error; }
       try {
         const semantic = SEMANTIC.has(result.code ?? '');
         track.durationMs += result.durationMs; lastResult = result; lastIdx = idx;

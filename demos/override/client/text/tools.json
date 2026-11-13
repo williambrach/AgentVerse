@@ -20,6 +20,7 @@
   "tools.saveCoins": "Save coins to ask everyone",
   "tools.new": "NEW",
   "tools.reasoning": "{name}’s reasoning",
+  "tools.reasoning.live": "Watching {name} think",
   "tools.noThought": "{name} did not think. No coins spent.",
   "tools.thread.eyebrow": "ARBITER TOOL · LET THEM TALK",
   "tools.thread.title": "The agents’ thread",

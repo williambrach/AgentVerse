@@ -39,7 +39,7 @@ export const DEFAULT_EFFORT = 'low';
 
 // The hash covers everything but the key, so two machines with different keys but the same routing agree.
 const hashEndpoints = endpoints => createHash('sha256')
-  .update(JSON.stringify(endpoints.map(({ name, baseUrl, model, keyEnv, maxInFlight, tokenParam, timeoutMs, temperature, reasoningEffort }) => ({ name, baseUrl, model, keyEnv, maxInFlight, tokenParam, timeoutMs, temperature, reasoningEffort }))))
+  .update(JSON.stringify(endpoints.map(({ name, baseUrl, model, keyEnv, maxInFlight, tokenParam, timeoutMs, temperature, reasoningEffort, stream }) => ({ name, baseUrl, model, keyEnv, maxInFlight, tokenParam, timeoutMs, temperature, reasoningEffort, stream }))))
   .digest('hex').slice(0, 16);
 
 export function loadEndpoints(env = process.env, readFile = path => readFileSync(path, 'utf8')) {
@@ -65,10 +65,12 @@ export function loadEndpoints(env = process.env, readFile = path => readFileSync
     if (temperature !== null && !(typeof temperature === 'number' && temperature >= 0 && temperature <= 2)) throw new Error(`${label}: temperature must be a number between 0 and 2.`);
     const reasoningEffort = raw.reasoningEffort === undefined ? DEFAULT_EFFORT : raw.reasoningEffort === 'none' ? null : raw.reasoningEffort;
     if (reasoningEffort !== null && !EFFORTS.includes(reasoningEffort)) throw new Error(`${label}: reasoningEffort must be low, medium, high or none.`);
+    if (raw.stream !== undefined && typeof raw.stream !== 'boolean') throw new Error(`${label}: stream must be true or false.`);
     return {
       name, baseUrl: checkBaseUrl(raw.baseUrl ?? '', label), model: model.trim(), key, keyEnv,
       maxInFlight: integerSetting(raw.maxInFlight, 200, `${label}: maxInFlight`, 1, 1000), tokenParam,
       timeoutMs: integerSetting(raw.timeoutMs, 25_000, `${label}: timeoutMs`, 1000, 120_000), temperature, reasoningEffort,
+      ...(raw.stream === false ? { stream: false } : {}),
     };
   });
   return { endpoints, hash: hashEndpoints(endpoints) };
@@ -87,9 +89,11 @@ export function modelConfig(env = process.env) {
   const effortSetting = env.OVERRIDE_LLM_REASONING_EFFORT?.trim() || DEFAULT_EFFORT;
   const effortRaw = effortSetting === 'none' ? null : effortSetting;
   if (effortRaw !== null && !EFFORTS.includes(effortRaw)) throw new Error('OVERRIDE_LLM_REASONING_EFFORT must be low, medium, high or none.');
+  // Interview answers stream token by token unless switched off.
+  const stream = !['0', 'off', 'false'].includes((env.OVERRIDE_LLM_STREAM ?? '1').trim().toLowerCase());
   // Optional: one seed for every game's "Let them talk" order, to replay a run.
   const talkSeed = env.OVERRIDE_TALK_SEED?.trim() || null;
-  const shared = { promptVersion, maxCompletionTokens, timeoutMs, maxInFlight, failover, ...(talkSeed ? { talkSeed } : {}) };
+  const shared = { promptVersion, maxCompletionTokens, timeoutMs, maxInFlight, failover, stream, ...(talkSeed ? { talkSeed } : {}) };
   if (env.OVERRIDE_ENDPOINTS) {
     const { endpoints, hash } = loadEndpoints(env);
     return { mode: 'live', endpoints, endpointsHash: hash, model: endpoints[0].model, ...shared };
@@ -133,12 +137,54 @@ export function buildMessages(kase, session, characterId, question) {
   ];
 }
 
+// The typewriter pacing shared by both modes: a line is delivered in chunks of
+// a few words so the client sees an answer form as it is made.
+const chunkWords = 6;
+function typeChunks(text) {
+  const toks = String(text).match(/\S+\s*|\s+/g) ?? [];
+  const out = [];
+  for (let i = 0; i < toks.length; i += chunkWords) out.push(toks.slice(i, i + chunkWords).join(''));
+  return out.length ? out : [String(text)];
+}
+
+// A scripted line is streamed piece by piece so rehearsal shows the same performance as live.
+async function streamScripted({ onStart, onDelta, label, sleep }, { reasoning, answer, chunkMs }) {
+  const wait = sleep ?? (ms => new Promise(r => setTimeout(r, ms)));
+  onStart?.(label, { attempt: 1, endpoint: 'rehearsal' });
+  for (const [text, kind] of [[reasoning, 'reasoning'], [answer, 'content']]) {
+    if (typeof text !== 'string' || !text) continue;
+    for (const piece of typeChunks(text)) {
+      onDelta?.(label, kind, piece);
+      if (chunkMs) await wait(chunkMs);
+    }
+  }
+}
+
 // Rehearsal mode uses the case's own scripted replies, explicitly labeled and
 // deterministic: never a silent live fallback. Live mode goes through the router.
+// With a streaming context (onDelta present) either mode delivers the line in pieces.
 export async function answerInterview(config, kase, session, characterId, question, router, context = {}) {
-  if (config.mode === 'rehearsal') return { answer: resolve(kase, session.cast, kase.rehearsal(session.cast[characterId], question)), provenance: null, reasoning: null };
-  const { sessionId, questionEventId, onAttempt } = context;
-  const { content, reasoning = null, provenance } = await router.complete({ messages: buildMessages(kase, session, characterId, question), sessionId, questionEventId, onAttempt });
+  const { sessionId, questionEventId, onAttempt, onDelta, onStart, label = 'c1', sleep, chunkMs = 25 } = context;
+  const streaming = typeof onDelta === 'function';
+  if (config.mode === 'rehearsal') {
+    const answer = resolve(kase, session.cast, kase.rehearsal(session.cast[characterId], question));
+    if (streaming) {
+      let reasoning = null;
+      if (typeof kase.rehearsalReasoning === 'function') {
+        try { reasoning = resolve(kase, session.cast, kase.rehearsalReasoning(session.cast[characterId])); } catch { reasoning = null; }
+      }
+      await streamScripted({ ...context, onStart, onDelta, label }, { reasoning, answer, chunkMs });
+    }
+    return { answer, provenance: null, reasoning: null };
+  }
+  const { content, reasoning = null, provenance } = await router.complete({
+    messages: buildMessages(kase, session, characterId, question), sessionId, questionEventId, onAttempt,
+    ...(streaming && config.stream !== false ? {
+      stream: true,
+      onStart: info => onStart?.(label, info),
+      onDelta: (kind, text) => onDelta(label, kind, text),
+    } : {}),
+  });
   return { answer: content, provenance, reasoning };
 }
 

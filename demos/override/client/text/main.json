@@ -66,5 +66,7 @@
   "main.offline.eyebrow": "CONNECTION UNAVAILABLE",
   "main.offline.title": "The grove is offline.",
   "main.offline.body": "The case server could not be reached. Start the demo server, then reload this page.",
-  "main.offline.retry": "Try again"
+  "main.offline.retry": "Try again",
+  "main.watch": "Watch",
+  "main.watch.wait": "Watch opens once the question is accepted."
 }

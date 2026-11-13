@@ -33,7 +33,7 @@ const okJson = (body, status = 200) => ({ ok: true, status, json: async () => bo
 test('modelConfig defaults to rehearsal', () => {
   assert.deepEqual(modelConfig({}), {
     mode: 'rehearsal', endpoints: [], endpointsHash: null, model: null, promptVersion: 'interview-v6', maxCompletionTokens: 2048, timeoutMs: 60000,
-    maxInFlight: 300, failover: { failures: 5, windowMs: 30000 },
+    maxInFlight: 300, failover: { failures: 5, windowMs: 30000 }, stream: true,
   });
 });
 
