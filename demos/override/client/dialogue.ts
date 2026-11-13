@@ -1,6 +1,6 @@
 import type { Character, Inspection, Turn, CaseCopy, EvidenceCard } from './types.ts';
 // The .ts extension keeps `node --test` resolving this file.
-import { noThoughtBlock, reasoningBlock } from './tools.ts';
+import { liveReasoningBlock, noThoughtBlock, reasoningBlock } from './tools.ts';
 import { escape as esc, heading } from './html.ts';
 import { wordTokens } from './talk-ui.ts';
 import { plain, t } from './text.ts';
@@ -22,6 +22,8 @@ export interface InterviewView {
   draft: string;
   /** Truthy while an answer is pending; `draft` then holds the question being asked. */
   waitingOn: string | null;
+  /** Live answer while the stream runs; null reasoning means no live reasoning card. Absent: markup is unchanged. */
+  streaming?: { answer: string; reasoning: string | null };
   next: { id: string; name: string } | null;
   /** Price shown on the Ask button, null when the session has no economy. */
   askLabel: string | null;
@@ -103,8 +105,13 @@ export function interviewPanel(v: InterviewView): string {
     ...turns.map((t, i) => ({ at: t.timestamp, order: 0, html: `<div class="speech investigator${latestOf(i === lastTurn && !pending)}" data-motion-key="question-${i}"><p>${asked(t.question)}</p></div><div class="speech character${latestOf(i === lastTurn && !pending)}" data-motion-key="answer-${i}"><span>${name}</span>${v.talk && (t as { id?: string }).id ? talkLine(v, (t as { id: string }).id, t.answer) : `<p>${esc(t.answer)}</p>`}</div>` })),
     ...v.inspections.map(n => ({ at: n.timestamp, order: 1, html: reasoningBlock(n, character.name) })),
   ].sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.order - b.order);
+  const live = v.streaming;
+  const liveReasoning = live && live.reasoning !== null ? liveReasoningBlock(character.name, live.reasoning) : '';
+  const liveBubble = live
+    ? `<div class="speech character waiting latest${live.answer ? ' streaming' : ''}" data-motion-key="waiting" data-stream-bubble><span>${name}</span>${live.answer ? '' : `<p class="thinking">${t('dialogue.thinking')}<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></p>`}<p class="stream-line"><span data-stream="answer">${esc(live.answer)}</span><i class="stream-caret" aria-hidden="true"></i></p></div>${liveReasoning}`
+    : '';
   const waiting = pending
-    ? `<div class="speech investigator latest" data-motion-key="question-${turns.length}"><p>${asked(v.draft)}</p></div><div class="speech character waiting latest" data-motion-key="waiting"><span>${name}</span><p class="thinking">${t('dialogue.thinking')}<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></p></div>`
+    ? `<div class="speech investigator latest" data-motion-key="question-${turns.length}"><p>${asked(v.draft)}</p></div>${live ? liveBubble : `<div class="speech character waiting latest" data-motion-key="waiting"><span>${name}</span><p class="thinking">${t('dialogue.thinking')}<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></p></div>`}`
     : '';
   const blocked = busy || !!v.askOff;
   const hasEconomy = v.askLabel !== null && v.askLabel !== undefined;

@@ -171,3 +171,25 @@ test('briefing: stock steps are byte-identical, and a steps option replaces only
   const custom = '<ol class="task-list"><li><b>X</b></li></ol>';
   assert.equal(briefingPanel({ ...v, steps: custom }), stock.replace(list, custom));
 });
+
+test('streaming markup', () => {
+  const base = { busy: true, waitingOn: 'pip', draft: 'Hmm?' };
+  const empty = interviewPanel(view({ ...base, streaming: { answer: '', reasoning: null } }));
+  assert.match(empty, /thinking-dots/);
+  assert.match(empty, /data-stream-bubble/);
+  assert.match(empty, /<span data-stream="answer"><\/span>/);
+  assert.match(empty, /stream-caret/);
+  assert.doesNotMatch(empty, /data-stream="reasoning"/);
+  const hi = interviewPanel(view({ ...base, streaming: { answer: 'Hi <i>', reasoning: 'hm' } }));
+  assert.doesNotMatch(hi, /thinking-dots/);
+  assert.equal(hi.match(/data-stream="answer"/g).length, 1);
+  assert.match(hi, /data-stream="answer">Hi &lt;i&gt;</);
+  assert.match(hi, /data-stream="reasoning"[^>]*>hm</);
+  assert.equal(interviewPanel(view(base)), interviewPanel(view({ ...base, streaming: undefined })));
+  assert.doesNotMatch(interviewPanel(view(base)), /data-stream/);
+});
+
+test('stream css', () => {
+  assert.match(css, /\[data-stream-bubble\]\.streaming \.thinking \{ display: none/);
+  assert.match(css, /prefers-reduced-motion: reduce\) \{[^@]*\.stream-caret \{ animation: none/);
+});

@@ -27,6 +27,8 @@ import { createStage, type Stage } from './stage';
 import { postHeartbeat, startHeartbeat } from './heartbeat';
 import { worldFor } from './worlds';
 import { hudShell, castCard } from './hud.ts';
+import { readNdjson, createStreamFold, isNdjson } from './stream.ts';
+import { createTyper, createThrottle } from './stream-ui.ts';
 import { interviewPanel, briefingPanel, evidencePanel } from './dialogue.ts';
 import { evidenceIdOf } from './hall-layout.ts';
 import { lineupPanel, countOff, lockCount } from './lineup.ts';
@@ -125,14 +127,123 @@ async function api(path: string, body?: object) {
   return data;
 }
 
+
+/** The interview being streamed, or null. The fold holds the per-call text; the typer paces what shows. */
+interface LiveStream {
+  character: string;
+  fold: ReturnType<typeof createStreamFold>;
+  typer: ReturnType<typeof createTyper>;
+  watching: boolean;
+  timer: ReturnType<typeof setInterval> | undefined;
+  speakGate: (now: number) => boolean;
+  spoke: boolean;
+}
+let liveStream: LiveStream | null = null;
+/** Whether the last streamed interview was watched; read by askQuestion once the stream is gone. */
+let lastWatched = false;
+/** The Watch request in flight, so askQuestion can wait for its inspection before it judges the no-thought note. */
+let watchInFlight: Promise<void> | null = null;
+
+/** Writes the typed answer and the live reasoning into their existing nodes; never calls render(). */
+function patchStream() {
+  const s = liveStream;
+  if (!s) return;
+  const shown = s.typer.shown();
+  const answer = document.querySelector('[data-stream="answer"]');
+  if (answer && answer.textContent !== shown) answer.textContent = shown;
+  document.querySelector('[data-stream-bubble]')?.classList.toggle('streaming', shown !== '');
+  const thought = document.querySelector('[data-stream="reasoning"]');
+  const reasoning = s.fold.reasoning();
+  if (thought && thought.textContent !== reasoning) thought.textContent = reasoning;
+}
+
+function stopStream() {
+  if (liveStream?.timer) clearInterval(liveStream.timer);
+  liveStream = null;
+}
+
+/** Applies one NDJSON line. Returns the final view for a `view` line; a `fail` line throws its error. */
+function onStreamLine(s: LiveStream, line: { t?: string; [key: string]: unknown }): CaseState | null {
+  if (line.t === 'view') { const { t: _t, ...view } = line; return view as unknown as CaseState; }
+  if (line.t === 'fail') throw new Error(typeof line.error === 'string' && line.error ? line.error : failed());
+  const before = s.fold.questionEventId();
+  if (!s.fold.apply(line)) return null;
+  s.typer.set(s.fold.answer());
+  if (s.fold.questionEventId() !== before) render(); // the Watch card turns on once the question has an id
+  patchStream();
+  if (s.typer.received()) {
+    if (s.speakGate(Date.now())) { station.speak(s.character, s.typer.received()); s.spoke = true; }
+  } else if (s.spoke) { station.think(s.character); s.spoke = false; }
+  return null;
+}
+
+/** The interview transport for action(): POSTs with stream:true. A JSON reply is read exactly like api(); NDJSON lines drive the live bubble. */
+async function streamInterview(path: string, body: object): Promise<CaseState> {
+  const abort = new AbortController();
+  const response = await fetch(`/api/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, stream: true }), signal: abort.signal });
+  if (!isNdjson(response.headers.get('Content-Type')) || !response.body) {
+    const data = await response.json().catch(() => null);
+    if (!response.ok || data === null) throw new Error(data?.error || failed());
+    return data;
+  }
+  const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const s: LiveStream = {
+    character: (body as { character: string }).character, fold: createStreamFold(), typer: createTyper(reduced),
+    watching: false, timer: undefined, speakGate: createThrottle(600), spoke: false,
+  };
+  s.timer = setInterval(() => { if (s.typer.tick()) patchStream(); }, 30);
+  liveStream = s;
+  let view: CaseState | null = null;
+  try {
+    await readNdjson(response.body, line => { const done = onStreamLine(s, line); if (done) view = done; });
+  } catch (error) {
+    abort.abort(); // a fail line or a bad read: release the connection and its reader
+    throw error;
+  } finally { lastWatched = s.watching; stopStream(); }
+  if (!view) throw new Error(plain('main.connectionLost'));
+  return view;
+}
+
+/** Watch: turns the reasoning lines on for the answer that is streaming. Runs beside the busy interview and sends no revision. */
+function startWatch() {
+  const run = watchRequest();
+  watchInFlight = run;
+  void run.finally(() => { if (watchInFlight === run) watchInFlight = null; });
+}
+
+async function watchRequest() {
+  const s = liveStream;
+  const eventId = s?.fold.questionEventId();
+  if (!s || s.watching || !eventId || state.tools?.inspect === false) return;
+  s.watching = true;
+  errorMessage = '';
+  render();
+  try {
+    const response = await fetch('/api/inspect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: state.session?.id, character: s.character, live: true, questionEventId: eventId }) });
+    const data: CaseState | null = await response.json().catch(() => null);
+    if (!response.ok || data === null) throw new Error((data as { error?: string } | null)?.error || failed());
+    if (liveStream !== s) {
+      // The interview ended first. Its view is newer unless this reply (a Watch that raced the commit) carries a later revision.
+      if (data.session?.id === state.session?.id && (data.session?.revision ?? 0) > (state.session?.revision ?? 0) && !receive(data)) { state = data; render(); }
+      return;
+    }
+    if (!receive(data)) state = data;
+  } catch (error) {
+    if (liveStream !== s) return; // the interview ended first: a late refusal is noise
+    s.watching = false; // a refusal (409) does not end the stream; Watch may be tried again
+    errorMessage = error instanceof Error ? error.message : plain('main.connectionLost');
+  }
+  render();
+}
+
 /** Runs one player action. Returns false when it failed or when the reply started the escape; onSuccess runs for any reply the server accepted. */
-async function action(name: string, payload: object = {}, onSuccess?: () => void) {
+async function action(name: string, payload: object = {}, onSuccess?: () => void, send: (path: string, body: object) => Promise<any> = api) {
   if (busy || escaping) return false;
   busy = true;
   errorMessage = '';
   render();
   try {
-    const fresh: CaseState = await api(name, { sessionId: state.session?.id, revision: state.session?.revision, ...payload });
+    const fresh: CaseState = await send(name, { sessionId: state.session?.id, revision: state.session?.revision, ...payload });
     // A reply is a fresh view like a poll: a warning mark or the escape may have passed while it was in flight.
     const tookOver = receive(fresh);
     if (!tookOver) state = fresh;
@@ -348,6 +459,7 @@ function go(location: LocationId) {
 }
 
 async function onClick(event: MouseEvent) {
+  if (liveStream && (event.target as HTMLElement).closest('[data-stream-bubble]')) { liveStream.typer.revealAll(); patchStream(); return; }
   if (state?.talk && await onTalkClick(event.target as HTMLElement)) return;
   const button = (event.target as HTMLElement).closest<HTMLElement>('button');
   if (!button || (button as HTMLButtonElement).disabled) return;
@@ -359,6 +471,7 @@ async function onClick(event: MouseEvent) {
   if (button.id === 'inspect-button') {
     stopTalking();
     if (!ids().includes(panel)) return;
+    if (liveStream && liveStream.character === panel) { startWatch(); return; }
     if (state.session?.inspectable[panel]) await action('inspect', { character: panel });
     else { noThought.add(lineKey(panel)); threadOpen = false; dialogueOpen = true; render(); }
     return;
@@ -560,6 +673,7 @@ function interviewMarkup(characterId: string) {
     character, turns: session?.interviews[characterId] || [], inspections: (session?.inspections || []).filter(n => n.character === characterId),
     noThought: noThought.has(lineKey(characterId)), faceClass: castClass(characterId), closed: session?.status === 'closed', busy, draft: drafts[characterId],
     waitingOn: pendingCharacter === characterId && busy ? characterId : null,
+    ...(liveStream && liveStream.character === characterId ? { streaming: { answer: liveStream.typer.shown(), reasoning: liveStream.watching ? liveStream.fold.reasoning() : null } } : {}),
     ...(state.talk ? { talk: { topics: state.talk.topics, asked: session?.talk?.asked[characterId] ?? [], pick: pick && lineOf(characterId, pick.line) ? pick : null } } : {}),
     next: state.characters.find(c => c.id !== characterId && !session?.interviews[c.id].length) || null,
     askLabel: economy ? toolChip(economy, 'ask') : null, askOff: askBlock.reason, hint: HINTS.ask, many: world().text.many,
@@ -651,13 +765,15 @@ function renderTools() {
     const spoken = Boolean(character && session.interviews[character.id].length);
     const inspect = toolBlock(economy, 'inspect', reserveFor(null));
     const inspectOff = state.tools?.inspect === false ? notInCase() : inspect.reason || (!character ? plain('main.inspect.open', { one: world().text.oneWithArticle }) : !spoken ? plain('main.inspect.notSpoken', { name: character.name }) : null);
+    const watch = Boolean(liveStream && character && liveStream.character === character.id);
+    const watchOff = !watch || state.tools?.inspect === false ? inspectOff : inspect.reason || (liveStream!.fold.questionEventId() ? null : plain('main.watch.wait'));
     const block = toolBlock(economy, 'continue', reserveFor(null));
     const talkOff = state.tools?.talk === false;
     const can = open && !talkOff && (chatter.pending > 0 || block.enabled);
     const heardAll = ids().every(id => session.interviews[id].length);
     markup = toolCard({
-      tool: 'inspect', id: 'inspect-button', label: plain('tools.inspect'), target: inspectOff ? '' : character!.name,
-      chip: inspectOff || toolChip(economy, 'inspect'), enabled: open && !inspectOff, busy, fresh: open && !inspectOff && !session.inspections.length,
+      tool: 'inspect', id: 'inspect-button', label: plain(watch ? 'main.watch' : 'tools.inspect'), target: (watch ? watchOff : inspectOff) ? '' : character!.name,
+      chip: (watch ? watchOff : inspectOff) || toolChip(economy, 'inspect'), enabled: open && !(watch ? watchOff : inspectOff) && !(watch && liveStream!.watching), busy: busy && !watch, fresh: open && !inspectOff && !watch && !session.inspections.length,
     }) + toolCard({
       tool: 'continue', id: 'continue-button', label: talking ? plain('main.listening') : chatter.pending > 0 ? plain('main.keepListening', { n: chatter.pending }) : plain('tools.talk'), target: '',
       chip: talkOff ? notInCase() : chatter.pending > 0 ? plain('main.free') : block.reason || toolChip(economy, 'continue'), enabled: can, busy: busy || talking,
@@ -712,8 +828,18 @@ async function askQuestion(how: { topic?: string; about?: { line: string; text: 
   detectiveSync();
   setTimeout(detectiveSync, 1250);
   const body = how.topic ? { character, topic: how.topic } : how.about ? { character, about: how.about } : { character, question: drafts[character] };
-  const asked = await action('interview', body, () => { if (!how.topic && !how.about) drafts[character] = ''; if (how.about) { pick = null; pickClicks = 0; } });
+  const inspectedBefore = (state.session?.inspections ?? []).filter(n => n.character === character).length;
+  let watched = false;
+  lastWatched = false;
+  const asked = await action('interview', body, () => {
+    watched = lastWatched;
+    if (!how.topic && !how.about) drafts[character] = '';
+    if (how.about) { pick = null; pickClicks = 0; }
+  }, streamInterview);
   station.think(null);
+  if (watchInFlight) await watchInFlight;
+  // A watched line that left no reasoning behind (no charge was made) shows the no-thought note.
+  if (asked && watched && (state.session?.inspections ?? []).filter(n => n.character === character).length <= inspectedBefore) { noThought.add(lineKey(character)); render(); }
   if (asked) {
     const turns = state.session?.interviews[character];
     const answer = turns?.[turns.length - 1]?.answer;

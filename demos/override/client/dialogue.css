@@ -90,10 +90,15 @@
 .dialogue button:focus-visible, .dialogue textarea:focus-visible { outline: 2px solid #F4B740; outline-offset: 3px; }
 .dialogue .ask-button:focus-visible, .dialogue .next-monkey:focus-visible { outline-color: #F4B740; box-shadow: 0 0 0 2px #18252D; }
 .thinking-dots i { animation: dialogue-dot 1.2s infinite; }
+[data-stream-bubble].streaming .thinking { display: none; }
+.stream-line { margin: 0; }
+.stream-caret { display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: text-bottom; background: currentColor; animation: stream-blink 1s steps(1) infinite; }
+@keyframes stream-blink { 50% { opacity: 0; } }
 @keyframes dialogue-dot { 50% { opacity: .25; } }
 
 @media (prefers-reduced-motion: reduce) {
   .thinking-dots i { animation: none; }
+  .stream-caret { animation: none; }
 }
 @media (max-width: 560px) {
   .dialogue { padding: 24px 16px 16px; gap: 16px; }

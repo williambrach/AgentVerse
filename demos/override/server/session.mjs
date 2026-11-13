@@ -450,7 +450,11 @@ export class Investigation {
         if (kase) this.kase = kase;
         this.start(assignment, team);
       } else {
-        this.ensureCurrent(input);
+        // A Watch that lands just after the commit carries no revision (the client never sends one for it):
+        // it names the settled line, so it is current by construction. Nothing else skips the check.
+        const lateWatch = action === 'inspect' && input.live === true && input.revision === undefined && this.live?.settled
+          && this.live.questionEventId === input.questionEventId && this.live.characterId === input.character;
+        this.ensureCurrent(lateWatch ? { ...input, revision: this.session?.revision } : input);
         const s = this.session;
         const { characters } = this.kase;
         this.expire(Date.now());

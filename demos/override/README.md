@@ -136,6 +136,8 @@ One server process serves every player. Each browser’s game lives in memory wh
 
 A session can carry two `contentHash` values when content was published while it was in progress and later replayed. The `admin_action` records with `action: "content_published"` in `system.jsonl` (with `by`, `caseId`, `rev`, `contentHash` and `fields`) join them.
 
+Interview answers stream. The interview request is answered as NDJSON (`application/x-ndjson`): the server sends `accepted`, `start`, `delta`, `scrub`, `reasoning`, `reasoning_scrub`, `ping`, `fail` and finally `view` lines, and the browser types the answer into the speech bubble as it arrives instead of waiting for the whole line. The player can press Watch while the answer is still arriving to see the character's reasoning live; that Watch is charged only when the line commits, and a line with no reasoning costs nothing. When the answer guard rejects a line and retries, a `scrub` line wipes the false start from the bubble before the new attempt types. `OVERRIDE_LLM_STREAM` (default on) switches the provider requests to streaming; `0`, `off` or `false` returns to one buffered response and a plain JSON reply, which the client still reads. An endpoints-file entry may set `"stream": false`, and an endpoint that refuses streaming is switched to buffered automatically. Chatter lines do not stream.
+
 ## LLM fallback
 
 For several providers, point `OVERRIDE_ENDPOINTS` at a JSON array (see [ops/endpoints.example.json](ops/endpoints.example.json)). Each entry is `{name, baseUrl, model, keyEnv, maxInFlight=200, tokenParam='max_completion_tokens', timeoutMs=25000, temperature=null}`. `keyEnv` names the environment variable holding that endpoint's key, so keys never live in the file. The endpoint order is the priority order; `a` is used first.
@@ -327,6 +329,7 @@ It prints a table per endpoint with review flags (empty, length, a character out
 | `OVERRIDE_LLM_MAX_COMPLETION_TOKENS` | 2048 | Token budget including reasoning (256 to 8192). |
 | `OVERRIDE_LLM_REASONING_EFFORT` | `low` | Sent as `reasoning_effort`; `none` sends nothing (see *Live interviews*). |
 | `OVERRIDE_LLM_TIMEOUT_MS` | 60000 | Per-question deadline. |
+| `OVERRIDE_LLM_STREAM` | `1` | Interview answers stream as NDJSON (typewriter, live Watch). `0`, `off` or `false` = one buffered plain JSON response. |
 | `OVERRIDE_LLM_MAX_IN_FLIGHT` | 300 | Global cap on simultaneous LLM calls. A single endpoint set with `OVERRIDE_LLM_API_KEY` is capped at 200 of these. |
 | `OVERRIDE_LLM_FAILOVER_FAILURES` | 5 | Failures that trigger failover. |
 | `OVERRIDE_LLM_FAILOVER_WINDOW_MS` | 30000 | Window for that count. |

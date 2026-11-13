@@ -162,6 +162,63 @@ test('a live watch must name the interview in flight: wrong id, wrong character 
   assert.equal(late.session.economy.charges.inspect.used, 1);
 });
 
+async function settledLine(t, reasoning) {
+  const { games } = liveGames(t, { answer: async (cfg, k, s, cid, q, ctx) => {
+    ctx.onDelta?.('c1', 'content', 'Hi.');
+    return { answer: 'Hi.', provenance: { endpoint: 'a' }, reasoning };
+  } });
+  const id = await started(games);
+  const sink = collectingSink();
+  await games.mutate(id, 'interview', { sessionId: id, revision: 2, character: 'momo', question: 'What?' }, { sink });
+  return { games, id, qe: ts(sink.lines, 'accepted')[0].questionEventId };
+}
+
+test('a late live Watch without a revision inspects the settled line: one charge with reasoning, none without', async t => {
+  const a = await settledLine(t, 'I did think');
+  const v = await a.games.mutate(a.id, 'inspect', { sessionId: a.id, character: 'momo', live: true, questionEventId: a.qe });
+  assert.equal(v.session.economy.charges.inspect.used, 1);
+  assert.equal(v.session.inspections.length, 1);
+  const b = await settledLine(t, null);
+  await assert.rejects(b.games.mutate(b.id, 'inspect', { sessionId: b.id, character: 'momo', live: true, questionEventId: b.qe }), e => e.status === 409 && /did not think/.test(e.message));
+  const w = b.games.find(b.id).session;
+  assert.equal(w.economy.charges.inspect.used, 0);
+  assert.equal(w.inspections.length, 0);
+});
+
+test('a repeat late Watch behaves like a repeat Inspect', async t => {
+  const a = await settledLine(t, 'I did think');
+  const input = { sessionId: a.id, character: 'momo', live: true, questionEventId: a.qe };
+  await a.games.mutate(a.id, 'inspect', input);
+  const first = a.games.find(a.id).session.revision;
+  const again = await a.games.mutate(a.id, 'inspect', { sessionId: a.id, revision: first, character: 'momo' }).then(v => v, e => e);
+  const repeat = await a.games.mutate(a.id, 'inspect', input).then(v => v, e => e);
+  assert.equal(repeat instanceof Error, again instanceof Error);
+  if (repeat instanceof Error) assert.equal(repeat.status, again.status);
+  else assert.equal(repeat.session.economy.charges.inspect.used, again.session.economy.charges.inspect.used);
+  assert.equal(a.games.find(a.id).session.economy.charges.inspect.used, 1, 'never charged twice');
+});
+
+test('an interview during a streaming answer gets 409 and the first answer commits intact; a non-live inspect without revision is 409', async t => {
+  let gate;
+  const release = new Promise(resolve => { gate = resolve; });
+  const { games } = liveGames(t, { answer: async (cfg, k, s, cid, q, ctx) => {
+    ctx.onDelta?.('c1', 'content', 'First answer.');
+    await release;
+    return { answer: 'First answer.', provenance: { endpoint: 'a' }, reasoning: null };
+  } });
+  const id = await started(games);
+  const sink = collectingSink();
+  const pending = games.mutate(id, 'interview', { sessionId: id, revision: 2, character: 'momo', question: 'What?' }, { sink });
+  await until(() => ts(sink.lines, 'accepted')[0]?.questionEventId);
+  await assert.rejects(games.mutate(id, 'interview', { sessionId: id, revision: 2, character: 'pip', question: 'And you?' }), e => e.status === 409);
+  gate();
+  const fresh = await pending;
+  assert.equal(fresh.session.interviews.momo[0].answer, 'First answer.');
+  assert.equal(joined(sink.lines, 'delta', 'c1'), 'First answer.');
+  await assert.rejects(games.mutate(id, 'inspect', { sessionId: id, character: 'momo' }), e => e.status === 409 && /changed in another window/.test(e.message));
+  await assert.rejects(games.mutate(id, 'inspect', { sessionId: id, character: 'momo', live: true, questionEventId: 'nope' }), e => e.status === 409 && /changed in another window/.test(e.message));
+});
+
 test('a guard retry scrubs the streamed false start and keeps the clean answer', async t => {
   const guarded = defineCase({ ...partCase, id: 'mini-guarded', version: 'mini-guarded-v1', parts: partCase.parts.map(p => ({ ...p, role: 'villain' })), guard: { roles: ['villain'], deflect: 'I will say no more.', quiet: 'A monkey shrugs.', words: ['phone'] } }, { worlds: agentWorlds(3) });
   let calls = 0;
