@@ -7,7 +7,7 @@
 .cell.playing { border-style: dashed; border-color: #A9BEC6; color: #A9BEC6; }
 
 .board-screen { --gold: #F4B740; --muted: #A9BEC6; --cream: #F4EBD3; --rule: #1E3442; min-height: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; padding: 32px 48px 28px; overflow: auto;
-  background: #0B151B; color: var(--cream); font-family: 'Pixelify Sans', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  background: #0B151B; color: var(--cream); font-family: var(--font); font-variant-numeric: tabular-nums; }
 .board-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 40px; }
 .board-title { display: flex; flex-direction: column; gap: 6px; }
 .board-screen h1 { margin: 0; font-family: inherit; font-size: 44px; font-weight: 700; line-height: 1; letter-spacing: 1px; }
