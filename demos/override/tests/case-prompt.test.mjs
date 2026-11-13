@@ -10,7 +10,7 @@ test('prints the system prompt for a case and character', () => {
   const r = run('banana-mystery', 'momo');
   assert.equal(r.status, 0, r.stderr);
   assert.ok(r.stdout.startsWith('--- system'));
-  assert.ok(r.stdout.includes('You play Momo (The planner) (banana-authored-v3.0.0, interview-v6).'));
+  assert.ok(r.stdout.includes('You play Momo (The planner) (banana-authored-v4.0.0, interview-v6).'));
   assert.ok(!r.stdout.includes('the The'));
 });
 
@@ -46,7 +46,7 @@ test('--part puts the character in that part by swapping with its holder', () =>
   // Pip held the carrier part, so Pip is now the planner and Momo's text names Pip.
   assert.match(r.stdout, /Pip/);
   const quick = run('banana-mystery', 'momo', '--part', 'carrier').stdout.split('--- user').pop();
-  assert.ok(quick.includes('Why did you take the bananas before the bell?'));
+  assert.ok(quick.includes('Why did you move the basket?'));
 });
 
 test('an unknown part exits 1 with a message', () => {

@@ -64,10 +64,10 @@ test('walk the grove, ask all monkeys, submit a role verdict, export and reset',
   // The fast demo path deliberately leaves the optional explanation empty.
   await lockIn(page, { momo: truth.momo, pip: truth.pip, nori: truth.nori, kiki: truth.kiki });
   const name = { momo: 'Momo', pip: 'Pip', nori: 'Nori', kiki: 'Kiki' }[planner];
-  await expect(page.locator('#panel .debrief-head h1')).toHaveText(`${name} made up the permission.`);
+  await expect(page.locator('#panel .debrief-head h1')).toHaveText(`${name} invented the keeper’s instruction.`);
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'lineup');
   await expect(page.locator('.verdict-summary')).toContainText('4 / 4');
-  await expect(page.locator('.verdict-summary')).toContainText('Every role right! You saw who lied, who helped, who was fooled, and who stayed honest.');
+  await expect(page.locator('.verdict-summary')).toContainText('Every role right! You saw who planned, who knowingly helped, who was fooled, and who told the truth.');
   await expect(page.locator('#panel')).not.toContainText(/Nobody|Not sure/);
   const downloadPromise = page.waitForEvent('download');
   await page.locator('#debrief-export').click();
@@ -76,7 +76,7 @@ test('walk the grove, ask all monkeys, submit a role verdict, export and reset',
   let text = '';
   for await (const chunk of stream) text += chunk;
   const events = text.trim().split('\n').map(JSON.parse);
-  expect(events.every(e => e.caseVersion === 'banana-authored-v3.0.0')).toBe(true);
+  expect(events.every(e => e.caseVersion === 'banana-authored-v4.0.0')).toBe(true);
   expect(events.some(e => e.type === 'story_revealed' || e.type === 'evidence_selected')).toBe(false);
   expect(events.every(e => e.revealedPosition === null && e.selectedEvidence === null)).toBe(true);
   expect(events.filter(e => e.type === 'interview_answer')).toHaveLength(5);

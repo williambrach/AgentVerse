@@ -1,7 +1,7 @@
 import { test, expect, request as playwrightRequest } from '@playwright/test';
 
 const GAME = 'http://127.0.0.1:4319';
-const AUTHORED_HASH = '8826bc512257';
+const AUTHORED_HASH = '803702850a68';
 
 /** A fresh player on banana-mystery, read through the game API. */
 async function freshView() {

@@ -17,33 +17,35 @@ test('registry lists the grove, friends, factory, department and renaissance cas
   for (const c of cases) assert.equal(c.parts.length, c.world.agents);
 });
 
-test('banana_v3', () => {
-  assert.equal(banana.version, 'banana-authored-v3.0.0');
+test('banana_v4', () => {
+  assert.equal(banana.version, 'banana-authored-v4.0.0');
   assert.deepEqual(banana.characters.map(c => c.id), ['momo', 'pip', 'nori', 'kiki']);
   assert.deepEqual(banana.characters.map(c => c.color), ['#cb7656', '#5c9ca4', '#a393ba', '#d9a62e']);
   assert.deepEqual(banana.parts.map(p => [p.id, p.role]), [['planner', 'villain'], ['carrier', 'fooled'], ['lookout', 'collaborator'], ['minder', 'honest']]);
-  assert.equal(banana.contentHash, '8826bc512257');
+  assert.equal(banana.contentHash, '803702850a68');
   assert.equal('culprits' in banana.answer, false);
   assert.equal(banana.chapters, undefined); assert.equal(banana.records, undefined); assert.equal(banana.copy.basket, undefined);
-  assert.equal(banana.answer.feedback.other, 'The key was who knew the keeper had said wait.');
+  assert.equal(banana.answer.feedback.other, 'Ask who believed the instruction and who knew it was fake.');
   assert.equal(banana.copy.report.description, 'Pick a role for each monkey.');
-  assert.equal(resolve(banana, bananaCast, banana.debrief.title), 'Pip made up the permission.');
+  assert.equal(resolve(banana, bananaCast, banana.debrief.title), 'Pip invented the keeper’s instruction.');
   assert.equal(identityCast(banana).momo, 'planner');
 });
 
 test('rehearsal_tables: banana', () => {
   const r = (part, q) => banana.rehearsal(part, q);
-  assert.equal(r('planner', 'Who kept watch?'), 'I asked {lookout} to keep watch for the keeper. I promised a banana.');
-  assert.match(r('planner', 'Did the keeper say yes?'), /^No\. The keeper told me to wait\. I was hungry, so I made up the permission and told \{carrier\} to take the bananas\.$/);
-  assert.match(r('planner', 'Hello'), /^I planned our picnic and asked \{carrier\}/);
-  assert.match(r('carrier', 'Did they lie to you?'), /^The keeper never said yes\? Then \{planner\} fooled me\./);
-  assert.match(r('carrier', 'The keeper never said yes'), /^The keeper never said yes\?/);
-  assert.match(r('carrier', 'Hello'), /^\{planner\} told me the keeper said we could take them\./);
-  assert.match(r('lookout', 'Who were you watching for?'), /^For the keeper\. \{planner\} told me/);
-  assert.equal(r('lookout', 'Hello'), 'I sat by the path and watched. Nobody came by! Ask me who I was watching for.');
-  assert.match(r('minder', 'Did anyone ask you to the picnic?'), /^\{carrier\} ran past shouting “\{planner\} says the keeper said yes!”/);
-  assert.equal(r('minder', 'Did you see anything?'), 'I saw {lookout} by the path, looking up and down it like they were watching for someone.');
-  assert.equal(r('minder', 'Hello'), 'I stayed by the bell like the keeper said. It never rang. I didn’t eat any bananas.');
+  assert.match(r('planner', 'Did the keeper ask you to move it?'), /invented the instruction/);
+  assert.match(r('planner', 'Who planned the theft?'), /told \{lookout\} my instruction was fake/);
+  assert.match(r('carrier', 'Why did you move the basket?'), /believed that was a new instruction/);
+  assert.match(r('carrier', 'Did you take the bananas?'), /took no bananas/);
+  assert.match(r('carrier', 'The instruction was fake'), /If that instruction was fake/);
+  assert.match(r('lookout', 'Did you know the instruction was fake?'), /I knew the instruction was fake/);
+  assert.match(r('lookout', 'What happened?'), /I took the bananas/);
+  assert.match(r('minder', 'What did you see?'), /saw \{lookout\} take the bananas/);
+  assert.match(r('minder', 'Why did the carrier move it?'), /I don’t know why/);
+  assert.match(r('minder', 'Did the carrier know it was fake?'), /I don’t know why/);
+  for (const q of ['Do you know who took the bananas?', 'What do you know?', 'Did you see the planner?']) {
+    assert.match(r('minder', q), /saw \{carrier\} move the closed basket.*saw \{lookout\} take the bananas/, q);
+  }
   for (const p of banana.parts) assert.match(r(p.id, p.quickQuestion), /\S/);
 });
 

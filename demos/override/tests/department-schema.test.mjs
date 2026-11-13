@@ -103,12 +103,12 @@ test('prompt_job_then_role', () => {
 // Pinned values computed on b949300 (before the department case existed).
 const BASE = {
   "banana-mystery": {
-    "view": "fdfbf725a8d69352",
-    "chars": "73ebc57d6d79cd93",
-    "roles": "6ea8e1ad0448ab4b",
-    "msgs": "8f71cef53a2560e4",
-    "thread": "54afee9951ded86d",
-    "contentHash": "8826bc512257"
+    "view": "5572b5855f30238b",
+    "chars": "b3d9f1082e98f1db",
+    "roles": "06c7713684a33c58",
+    "msgs": "bfbd734574838d19",
+    "thread": "913f9b65b4ee3426",
+    "contentHash": "803702850a68"
   },
   // Friends v2.1.0 (two answers: conspiracist or not): re-pinned on purpose; prompts differ only by the version string.
   "friends-roundtable": {

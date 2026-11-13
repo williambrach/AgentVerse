@@ -12,7 +12,7 @@ const roles = [
 const cast = [
   { id: 'momo', name: 'Momo', part: 'The planner', faceClass: 'momo slot-0' },
   { id: 'pip', name: 'Pip', part: 'The carrier', faceClass: 'pip slot-1' },
-  { id: 'nori', name: 'Nori', part: 'The lookout', faceClass: 'nori slot-2' },
+  { id: 'nori', name: 'Nori', part: 'The accomplice', faceClass: 'nori slot-2' },
 ];
 const view = (o = {}) => ({ title: 'The Banana Mystery', noun: 'monkey', time: '02:31', spent: 14, roles, cast, picks: {}, confidence: 70, explanation: '', busy: false, hint: '', ...o });
 const count = (html, re) => (html.match(re) || []).length;

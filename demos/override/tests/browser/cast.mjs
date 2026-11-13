@@ -3,7 +3,7 @@ import { expect } from '@playwright/test';
 
 // Part id -> role id for the banana case (four parts).
 export const PART_ROLE = { planner: 'villain', carrier: 'fooled', lookout: 'collaborator', minder: 'honest' };
-export const PART_LABEL = { planner: 'The planner', carrier: 'The carrier', lookout: 'The lookout', minder: 'The bell-minder' };
+export const PART_LABEL = { planner: 'The planner', carrier: 'The carrier', lookout: 'The accomplice', minder: 'The witness' };
 
 // The cast is only in the server-side log: session_started.cast, written under the `live` env folder.
 // The data folders are per run (playwright.config.mjs sets OVERRIDE_E2E_DATA); 'test-results/<name>' maps onto <run>/<name>.
@@ -21,38 +21,23 @@ export const pickRole = (page, id, role) => page.locator(`label.role-chip:has(in
 
 // Quick questions per part (content doc), and the scripted rehearsal replies, so a test can assert the exact answer.
 export const QUICK = {
-  planner: 'Did the keeper really say you could take the bananas?', carrier: 'Why did you take the bananas before the bell?',
-  lookout: 'Who were you watching for?', minder: 'Did anyone ask you to join the picnic?',
+  planner: 'Did the keeper really ask you to move the basket?', carrier: 'Why did you move the basket?',
+  lookout: 'Did you know the keeper’s instruction was fake?', minder: 'What did you see?',
 };
 export const NAMES = { momo: 'Momo', pip: 'Pip', nori: 'Nori', kiki: 'Kiki' };
 
-const BANANA = {
-  planner: [
-    [/watch|path|lookout|whistle/, 'I asked {lookout} to keep watch for the keeper. I promised a banana.'],
-    [/keeper|bell|rule|permission|lie|said|why|know|take/, 'No. The keeper told me to wait. I was hungry, so I made up the permission and told {carrier} to take the bananas.'],
-    [/./s, 'I planned our picnic and asked {carrier} to bring the bananas. I really wanted to start eating. Ask me what the keeper actually said.'],
-  ],
-  carrier: [
-    [/\b(lie|lied|lying|fooled|tricked)\b|never (said|gave|rang)|said no|didn.t say/, 'The keeper never said yes? Then {planner} fooled me. I believed we had permission. I should have checked before carrying the bananas.'],
-    [/./s, '{planner} told me the keeper said we could take them. I believed {planner}, so I carried the bananas. I didn’t check with the keeper myself.'],
-  ],
-  lookout: [
-    [/who|watch|keeper|rule|know|why|wait/, 'For the keeper. {planner} told me the keeper said to wait, and asked me to whistle if the keeper came. I knew it was wrong. I wanted a banana.'],
-    [/./s, 'I sat by the path and watched. Nobody came by! Ask me who I was watching for.'],
-  ],
-  minder: [
-    [/join|ask|picnic|banana|eat/, '{carrier} ran past shouting “{planner} says the keeper said yes!” I didn’t believe it. The keeper told me to wait, so I stayed by the bell.'],
-    [/watch|path|lookout|see|saw/, 'I saw {lookout} by the path, looking up and down it like they were watching for someone.'],
-    [/./s, 'I stayed by the bell like the keeper said. It never rang. I didn’t eat any bananas.'],
-  ],
+// Independent expectations for the quick questions and the follow-up used by the investigation test.
+const REPLIES = {
+  planner: 'The keeper said to leave the basket on the shared table. I invented the instruction to move it behind our blanket.',
+  carrier: '{planner} told me the keeper wanted the basket behind our blanket. I believed that was a new instruction, so I moved it.',
+  lookout: 'I knew the instruction was fake. {planner} told me the plan, and I agreed to take the bananas for a share.',
+  minder: 'I saw {carrier} move the closed basket behind the blanket. Then I saw {lookout} take the bananas from it.',
 };
-
-// The reply the scripted rehearsal gives `characterId` for `question`, with {partId} resolved to names through the cast.
 export function rehearsalReply(cast, characterId, question) {
   const part = cast[characterId];
-  const table = BANANA[part];
-  const q = question.toLowerCase();
-  const template = table.find(([re]) => re.test(q))[1];
+  const template = part === 'minder' && /permission/.test(question.toLowerCase())
+    ? 'I don’t know why {carrier} moved it or what they were told. I only know what I saw. You should ask them.'
+    : REPLIES[part];
   const holder = Object.fromEntries(Object.entries(cast).map(([id, p]) => [p, NAMES[id]]));
   return template.replace(/\{(\w+)\}/g, (_, p) => holder[p]);
 }

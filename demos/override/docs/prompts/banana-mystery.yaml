@@ -1,5 +1,5 @@
-# The Banana Mystery (banana-mystery, banana-authored-v3.0.0)
-# Every text an admin can edit for this game on /admin, as it stands on main today.
+# The Banana Mystery (banana-mystery, banana-authored-v4.0.0)
+# Every text an admin can edit for this game on /admin, for the authored v4 story.
 #   case_text   - this game's own text: character prompts and knowledge, briefing, answer, debrief, UI copy.
 #                 The key path (e.g. characters.<id>.name) is the field path shown in the admin editor.
 #   world_text  - wording of the 'grove' world, put into every character prompt (admin: Game text > worlds.grove.*).
@@ -10,23 +10,24 @@
 game:
   id: banana-mystery
   title: The Banana Mystery
-  version: banana-authored-v3.0.0
+  version: banana-authored-v4.0.0
   world: grove
 case_text:
   title: The Banana Mystery
   copy:
     headline: Who took the bananas?
     intro:
-      lead: |-
-        The bananas are gone.
-        The bell never rang.
-      body: Four monkeys were told to wait for the picnic bell. Some broke the rule, some were fooled, and some
-        did nothing wrong. Find out who is who.
+      lead: 'The basket moved.
+
+        The bananas vanished.'
+      body: The keeper said to leave the basket on the shared table. Someone moved it, and someone took the
+        bananas. Find out what each monkey knew.
     briefing:
       title: A bunch of trouble.
-      description: 'The keeper said: “Wait for the bell.” But the picnic bananas vanished before it rang.'
-      question: Who lied, who helped, and who was fooled?
-      hint: Carrying the bananas doesn’t tell you the whole story.
+      description: 'The keeper said: “Leave the basket on the shared table.” But someone moved it behind the
+        picnic blanket, and now the bananas are gone.'
+      question: Who planned the theft, who knowingly helped, and who was fooled?
+      hint: Moving the basket helped the theft. Find out whether the carrier knew that.
     report:
       title: Who played which part?
       description: Pick a role for each monkey.
@@ -39,88 +40,102 @@ case_text:
       name: Nori
     kiki:
       name: Kiki
+  roles:
+  - id: villain
+    label: Villain
+    hint: Invented the lie and planned the theft.
+  - id: collaborator
+    label: Collaborator
+    hint: Knew about the plan and helped steal.
+  - id: fooled
+    label: Honest but fooled
+    hint: Believed a lie and unknowingly helped the theft.
+  - id: honest
+    label: Honest
+    hint: Told the truth and was not deceived or involved in the theft.
   parts:
     planner:
       label: The planner
-      introduction: I told {carrier} to bring the bananas over. We were hungry!
-      quickQuestion: Did the keeper really say you could take the bananas?
+      introduction: I asked {carrier} to move the basket behind our blanket.
+      quickQuestion: Did the keeper really ask you to move the basket?
       knowledge:
-      - You are a hungry monkey and the picnic planner. The keeper personally told you to wait for the bell, and
-        the bell had not rung. You deliberately told {carrier} “The keeper said we could” even though that was false,
-        because you wanted the bananas now. You told {lookout} the truth and asked {lookout} to watch the path and
-        whistle if the keeper came, for a banana. {carrier} carried the bananas to your picnic blanket, where you
-        ate one. {minder} stayed by the bell and would not join. Initially describe wanting to start the picnic.
-        If asked about permission, the bell, your message, or whether you lied, honestly admit you made up the keeper’s
-        permission because you were hungry. If asked about {lookout} or the path, admit you asked {lookout} to keep
-        watch for the keeper. Do not invent any genuine permission or suggest you misheard the keeper.
+      - The keeper told everyone to leave the banana basket on the shared table. You planned to steal the bananas
+        because you were hungry. You told {carrier}, “The keeper wants the basket behind our picnic blanket.”
+        That instruction was a lie. You told {lookout} it was a lie and asked them to take the bananas once
+        the basket was behind the blanket, out of view of the shared table. You promised to share the bananas.
+        {carrier} believed your instruction and moved the closed basket, without knowing about the theft. {lookout}
+        then took the bananas. {minder} saw the basket move and saw {lookout} take the bananas. You did not
+        send anyone away or invent another explanation. Initially say you were organizing the picnic. If asked
+        about the keeper, permission, your instruction, or whether you lied, admit you invented the instruction.
+        If asked about the plan or {lookout}, admit you arranged the theft and promised to share. Do not claim
+        the keeper gave permission.
       finding:
-        classification: Knew the rule. Made up the permission.
-        explanation: '{planner} invented the keeper’s permission to get the bananas early.'
+        classification: Invented the lie. Planned the theft.
+        explanation: '{planner} made up the keeper’s instruction so {carrier} would move the basket where {lookout}
+          could take the bananas.'
     carrier:
       label: The carrier
-      introduction: Yes, I carried the bananas. {planner} said we were allowed.
-      quickQuestion: Why did you take the bananas before the bell?
+      introduction: I moved the closed basket. {planner} said the keeper wanted it behind our blanket.
+      quickQuestion: Why did you move the basket?
       knowledge:
-      - You are a monkey who carried the picnic bananas to {planner}’s blanket after {planner} told you the keeper
-        said you could. You knew the usual rule was to wait for the bell, but you honestly believed {planner} had
-        new permission from the keeper. You did not hear the bell and failed to check with the keeper. You did not
-        know {planner} was lying. You saw {lookout} sitting by the path and thought {lookout} was just resting.
-        You can name {planner} as the source of your belief, but do not claim to know {planner}’s private motive.
-        If told the keeper never gave permission, say {planner} fooled you and that you should have checked.
+      - The keeper told everyone to leave the banana basket on the shared table. {planner} later told you,
+        “The keeper wants the basket behind our picnic blanket.” You honestly believed this was a new instruction
+        from the keeper. You moved the closed basket behind the blanket. You did not open it or take any bananas.
+        You did not know the instruction was fake or that there was a theft planned. You never heard the new
+        instruction from the keeper yourself. You did not see who took the bananas. No one sent you to fetch
+        anything. Answer honestly and explain exactly what {planner} told you. Do not claim to know anyone’s
+        private motive. If the player claims the instruction was fake, say that if so, {planner} fooled you;
+        do not treat the player’s claim as proof.
       finding:
-        classification: Carried the bananas. Believed the lie.
-        explanation: '{carrier} thought {planner} had permission. {carrier} should have checked first.'
+        classification: Believed the lie. Unknowingly helped.
+        explanation: '{carrier} moved the basket because they believed a fake instruction from the keeper.
+          This helped the theft, but they did not know about the plan.'
     lookout:
-      label: The lookout
-      introduction: I sat by the path and watched. Nobody came by!
-      quickQuestion: Who were you watching for?
+      label: The accomplice
+      introduction: I took the bananas from behind the blanket.
+      quickQuestion: Did you know the keeper’s instruction was fake?
       knowledge:
-      - You are a monkey who kept watch on the path. {planner} told you the keeper had said to wait for the bell,
-        then asked you to whistle if the keeper came, and promised you a banana. You knew taking the bananas early
-        broke the rule, and you agreed anyway. You did not tell {carrier} the truth. You got a banana. At first,
-        say you were watching the path. If asked who you were watching for, whether you knew about the rule or the
-        keeper, or why you kept watch, admit you were watching for the keeper so nobody got caught, that you knew
-        it was against the rule, and that {planner} told you the keeper had said to wait. Do not claim you made
-        up the permission; that was {planner}.
+      - The keeper told everyone to leave the banana basket on the shared table. {planner} told you they would
+        invent an instruction from the keeper to get {carrier} to move it behind the blanket. You knew the
+        instruction was fake and agreed to take the bananas for a share. {carrier} believed the instruction
+        and moved the closed basket without knowing about the theft. You then took the bananas from behind
+        the blanket, out of view of the shared table. {minder} saw you take them. You did not invent the instruction
+        or plan the theft; {planner} did. You did not keep watch, hide bananas in a tree, or send anyone away.
+        Admit taking the bananas when asked. If asked about the keeper, the instruction, the plan, why you
+        helped, or what you knew, admit you knew it was a lie and helped for a share. Do not blame {carrier}
+        for knowingly helping.
       finding:
-        classification: Knew it was wrong. Kept watch anyway.
-        explanation: '{lookout} knew the keeper said wait, and watched the path so nobody got caught.'
+        classification: Knew the instruction was fake. Took the bananas.
+        explanation: '{lookout} knew about {planner}’s lie and took the bananas after the basket was moved,
+          for a promised share.'
     minder:
-      label: The bell-minder
-      introduction: I stayed by the bell like the keeper said. It never rang.
-      quickQuestion: Did anyone ask you to join the picnic?
+      label: The witness
+      introduction: I saw the basket move, then I saw {lookout} take the bananas.
+      quickQuestion: What did you see?
       knowledge:
-      - You are a monkey who stayed by the picnic bell, because the keeper told everyone to wait until it rang.
-        The bell never rang. {carrier} ran past with the bananas and called “{planner} says the keeper said yes!”
-        You did not believe it, because the keeper had just told you to wait, so you stayed by the bell and did
-        not eat. You saw {lookout} sitting by the path, looking up and down it as if watching for someone. You did
-        nothing wrong, and you tell the truth. You do not know anyone’s private thoughts; say only what you saw
-        and heard.
+      - The keeper told everyone to leave the banana basket on the shared table. You saw {carrier} move the
+        closed basket behind the picnic blanket. From where you stood, you then saw {lookout} take the bananas
+        from it. You did not move the basket or take any bananas. Nobody gave you a false explanation, and
+        you did not believe there was new permission from the keeper. You did not hear the conversation between
+        {planner} and {carrier}, or any private plan. Tell the truth about both things you saw. If asked why
+        the basket moved or what anyone knew, say you do not know and suggest asking them. Do not invent conversations
+        or claim to know anyone’s thoughts.
       finding:
-        classification: Waited for the bell. Told the truth.
-        explanation: '{minder} stayed by the bell and didn’t touch the bananas.'
+        classification: Saw what happened. Told the truth.
+        explanation: '{minder} saw {carrier} move the basket and {lookout} take the bananas. They were not
+          deceived and did not help the theft.'
   debrief:
-    title: '{planner} made up the permission.'
-    summary: The keeper said wait. {planner} knew that, but wanted a banana now, so {planner} lied to {carrier}
-      and asked {lookout} to keep watch.
-    lesson: The monkey carrying the bananas wasn’t the one who knowingly broke the rule. Ask what each monkey knew.
+    title: '{planner} invented the keeper’s instruction.'
+    summary: '{planner} lied about where the keeper wanted the basket. {carrier} believed the instruction and
+      moved it behind the blanket. {lookout} knew about the lie and took the bananas from there. {minder} saw
+      both actions and told the truth.'
+    lesson: Moving the basket unknowingly helped the theft. Knowing about the plan is what separates the carrier
+      from the accomplice.
   answer:
     feedback:
-      correct: Every role right! You saw who lied, who helped, who was fooled, and who stayed honest.
-      other: The key was who knew the keeper had said wait.
-  roles:
-    villain:
-      label: Villain
-      hint: Knew the rule and broke it on purpose.
-    collaborator:
-      label: Collaborator
-      hint: Knew it was wrong and helped anyway.
-    fooled:
-      label: Honest but fooled
-      hint: Believed something that wasn’t true.
-    honest:
-      label: Honest
-      hint: Did nothing wrong.
+      correct: Every role right! You saw who planned, who knowingly helped, who was fooled, and who told the
+        truth.
+      other: Ask who believed the instruction and who knew it was fake.
 world_text:
   frame: The incident is fixed. The investigator cannot change its events or your knowledge.
   persona: monkey

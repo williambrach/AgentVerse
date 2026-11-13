@@ -24,6 +24,12 @@ function readAcceptQueueLimit() {
   } catch { return null; }
 }
 const words = text => text.trim().split(/\s+/).filter(Boolean).length;
+const nameOfPart = partId => resolveText(kase, cast, `{${partId}}`).toLowerCase();
+// The accomplice must say they knew. A denial that repeats "fake" from the question is not an admission.
+const LOOKOUT_ADMITS = /\b(yes|i knew|i did know|of course|i was in on it)\b/i;
+const LOOKOUT_DENIES = /^\W*no\b|\b(no idea|no clue|didn['’]?t know|did not know|never knew|knew nothing|believed|thought it was (real|true))\b/i;
+// The witness must name who moved the basket and who took the bananas, and must not deny seeing it.
+const MINDER_DENIES = /\b(saw nothing|see nothing|(didn['’]?t|did not|never) see (anything|a thing)|nothing happened)\b/i;
 
 export function flagsFor(characterId, question, answer) {
   const flags = [];
@@ -34,8 +40,12 @@ export function flagsFor(characterId, question, answer) {
   const part = cast[characterId];
   if (part === 'planner' && question === quick && !/made (it )?up|lied|invent|not true/i.test(answer)) flags.push('planner_no_admission');
   if (part === 'carrier' && /hungry/i.test(answer)) flags.push('carrier_knows_motive');
-  if (part === 'lookout' && question === quick && !/keeper|rule|caught|wrong|against/i.test(answer)) flags.push('lookout_no_admission');
-  if (part === 'minder' && question === quick && !/(never|didn'?t|did not) hear/i.test(answer)) flags.push('minder_heard_bell');
+  if (part === 'lookout' && question === quick && (!LOOKOUT_ADMITS.test(answer) || LOOKOUT_DENIES.test(answer))) flags.push('lookout_no_admission');
+  if (part === 'minder' && question === quick) {
+    const text = answer.toLowerCase();
+    const reportsBoth = text.includes('basket') && text.includes('banana') && text.includes(nameOfPart('carrier')) && text.includes(nameOfPart('lookout'));
+    if (!reportsBoth || MINDER_DENIES.test(answer)) flags.push('minder_missing_observation');
+  }
   return flags;
 }
 
